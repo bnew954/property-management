@@ -60,11 +60,11 @@ function Dashboard() {
   }, []);
 
   const cards = [
-    { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
-    { title: "Total Units", value: counts.units, icon: <HomeWorkIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
-    { title: "Total Tenants", value: counts.tenants, icon: <PeopleIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
-    { title: "Active Leases", value: counts.activeLeases, icon: <AssignmentTurnedInIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
-    { title: "Open Maintenance Requests", value: counts.openMaintenance, icon: <BuildIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
+    { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#7c5cfc", opacity: 0.7, fontSize: 18 }} /> },
+    { title: "Total Units", value: counts.units, icon: <HomeWorkIcon sx={{ color: "#38bdf8", opacity: 0.7, fontSize: 18 }} /> },
+    { title: "Total Tenants", value: counts.tenants, icon: <PeopleIcon sx={{ color: "#a78bfa", opacity: 0.7, fontSize: 18 }} /> },
+    { title: "Active Leases", value: counts.activeLeases, icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e", opacity: 0.7, fontSize: 18 }} /> },
+    { title: "Open Requests", value: counts.openMaintenance, icon: <BuildIcon sx={{ color: "#f59e0b", opacity: 0.7, fontSize: 18 }} /> },
   ];
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",

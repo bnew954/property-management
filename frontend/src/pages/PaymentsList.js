@@ -33,7 +33,7 @@ const toLabel = (value) => value.replaceAll("_", " ");
 const headerCellSx = {
   color: "text.secondary",
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.06em",
   fontSize: "11px",
   borderBottom: "1px solid rgba(255,255,255,0.06)",
 };
@@ -146,7 +146,11 @@ function PaymentsList() {
           sx={{
             borderColor: "rgba(255,255,255,0.1)",
             color: "#e0e0e0",
-            "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "transparent" },
+            "&:hover": {
+              borderColor: "primary.main",
+              color: "primary.main",
+              backgroundColor: "rgba(124,92,252,0.08)",
+            },
           }}
         >
           <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
@@ -224,6 +228,23 @@ function PaymentsList() {
             ) : null}
           </TableBody>
         </Table>
+        {!loading && payments.length < 6 ? (
+          <Box
+            sx={{
+              mx: 1.2,
+              mb: 1.2,
+              mt: 0.4,
+              border: "1px dashed rgba(255,255,255,0.12)",
+              borderRadius: 1,
+              py: 1,
+              textAlign: "center",
+              color: "text.secondary",
+              fontSize: 12,
+            }}
+          >
+            No more records
+          </Box>
+        ) : null}
       </TableContainer>
       <Snackbar
         open={snackbar.open}

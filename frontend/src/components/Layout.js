@@ -74,7 +74,7 @@ function Layout({ children }) {
             </Typography>
           </Toolbar>
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
-          <List sx={{ py: 1.3, flexGrow: 1 }}>
+          <List sx={{ py: 1.3, flexGrow: 1, minHeight: 0 }}>
             {navItems.map((item) => {
               const active = isActive(item.path);
               return (
@@ -83,11 +83,13 @@ function Layout({ children }) {
                     component={Link}
                     to={item.path}
                     sx={{
-                      borderRadius: 1,
+                      borderRadius: 0.75,
+                      ml: 0.5,
+                      mr: 0.5,
                       px: 2,
                       py: 0.75,
-                      borderLeft: active ? "2px solid #7c5cfc" : "2px solid transparent",
                       backgroundColor: active ? "rgba(124,92,252,0.1)" : "transparent",
+                      boxShadow: active ? "inset 2px 0 0 #7c5cfc" : "none",
                       "&:hover": {
                         backgroundColor: "rgba(255,255,255,0.04)",
                         "& .MuiListItemIcon-root": { color: "#fff" },
@@ -112,7 +114,7 @@ function Layout({ children }) {
             })}
           </List>
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
-          <Box sx={{ px: 1.8, py: 1.2 }}>
+          <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
               <Avatar sx={{ width: 26, height: 26, bgcolor: "#2a2a2a", fontSize: "0.75rem", color: "#a1a1aa" }}>A</Avatar>
               <Box>
