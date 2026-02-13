@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { Box, Card, CardContent, Grid, Typography } from "@mui/material";
+import ApartmentIcon from "@mui/icons-material/Apartment";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
+import BuildIcon from "@mui/icons-material/Build";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
+import PeopleIcon from "@mui/icons-material/People";
+import { Box, Card, CardContent, Grid, Paper, Typography } from "@mui/material";
 import {
   getLeases,
   getMaintenanceRequests,
@@ -55,17 +60,26 @@ function Dashboard() {
   }, []);
 
   const cards = [
-    { title: "Total Properties", value: counts.properties, accent: "#2563eb" },
-    { title: "Total Units", value: counts.units, accent: "#0ea5e9" },
-    { title: "Total Tenants", value: counts.tenants, accent: "#7c3aed" },
-    { title: "Active Leases", value: counts.activeLeases, accent: "#16a34a" },
-    { title: "Open Maintenance Requests", value: counts.openMaintenance, accent: "#f97316" },
+    { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#38bdf8" }} /> },
+    { title: "Total Units", value: counts.units, icon: <HomeWorkIcon sx={{ color: "#60a5fa" }} /> },
+    { title: "Total Tenants", value: counts.tenants, icon: <PeopleIcon sx={{ color: "#a78bfa" }} /> },
+    { title: "Active Leases", value: counts.activeLeases, icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e" }} /> },
+    { title: "Open Maintenance Requests", value: counts.openMaintenance, icon: <BuildIcon sx={{ color: "#f59e0b" }} /> },
   ];
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
-        Dashboard
+      <Typography variant="h4" sx={{ fontWeight: 800 }}>
+        Welcome back, Admin
+      </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
+        {today}
       </Typography>
       {loading ? <Typography sx={{ mb: 2 }}>Loading...</Typography> : null}
       {error ? (
@@ -76,22 +90,47 @@ function Dashboard() {
           <Grid item xs={12} sm={6} md={4} key={card.title}>
             <Card
               sx={{
-                borderLeft: `6px solid ${card.accent}`,
-                boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
+                bgcolor: "#111827",
+                position: "relative",
+                overflow: "hidden",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 5,
+                  background: "linear-gradient(180deg, #38bdf8 0%, #6366f1 100%)",
+                },
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+                },
               }}
             >
-              <CardContent>
-                <Typography color="text.secondary" variant="body2">
-                  {card.title}
-                </Typography>
-                <Typography variant="h4" sx={{ mt: 1, fontWeight: 700 }}>
+              <CardContent sx={{ pl: 2.3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  {card.icon}
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
                   {card.value}
+                </Typography>
+                <Typography color="text.secondary" variant="body2" sx={{ mt: 0.8 }}>
+                  {card.title}
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
         ))}
       </Grid>
+      <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#111827" }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+          Recent Activity
+        </Typography>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          No recent activity
+        </Typography>
+      </Paper>
     </Box>
   );
 }

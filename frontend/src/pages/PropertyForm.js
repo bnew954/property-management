@@ -140,19 +140,23 @@ function PropertyForm() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
         {isEditMode ? "Edit Property" : "Add Property"}
       </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
+        Properties &gt; {isEditMode ? "Edit" : "Add New"}
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
         >
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Name"
+                variant="outlined"
                 value={values.name}
                 onChange={handleChange("name")}
                 error={Boolean(errors.name)}
@@ -177,6 +181,7 @@ function PropertyForm() {
               <TextField
                 fullWidth
                 label="Address Line 1"
+                variant="outlined"
                 value={values.address_line1}
                 onChange={handleChange("address_line1")}
                 error={Boolean(errors.address_line1)}
@@ -188,6 +193,7 @@ function PropertyForm() {
               <TextField
                 fullWidth
                 label="Address Line 2"
+                variant="outlined"
                 value={values.address_line2}
                 onChange={handleChange("address_line2")}
               />
@@ -196,6 +202,7 @@ function PropertyForm() {
               <TextField
                 fullWidth
                 label="City"
+                variant="outlined"
                 value={values.city}
                 onChange={handleChange("city")}
                 error={Boolean(errors.city)}
@@ -207,6 +214,7 @@ function PropertyForm() {
               <TextField
                 fullWidth
                 label="State"
+                variant="outlined"
                 value={values.state}
                 onChange={handleChange("state")}
                 error={Boolean(errors.state)}
@@ -218,6 +226,7 @@ function PropertyForm() {
               <TextField
                 fullWidth
                 label="Zip Code"
+                variant="outlined"
                 value={values.zip_code}
                 onChange={handleChange("zip_code")}
                 error={Boolean(errors.zip_code)}
@@ -229,6 +238,7 @@ function PropertyForm() {
               <TextField
                 fullWidth
                 label="Description"
+                variant="outlined"
                 value={values.description}
                 onChange={handleChange("description")}
                 multiline
@@ -237,10 +247,10 @@ function PropertyForm() {
             </Grid>
           </Grid>
           <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting}>
+            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
               {isEditMode ? "Update Property" : "Create Property"}
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/properties")}>
+            <Button variant="outlined" onClick={() => navigate("/properties")} sx={{ flex: 1 }}>
               Cancel
             </Button>
           </Box>

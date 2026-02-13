@@ -133,19 +133,23 @@ function UnitForm() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
         {isEditMode ? "Edit Unit" : "Add Unit"}
       </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
+        Properties &gt; Units &gt; {isEditMode ? "Edit" : "Add New"}
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
         >
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Unit Number"
+                variant="outlined"
                 value={values.unit_number}
                 onChange={handleChange("unit_number")}
                 error={Boolean(errors.unit_number)}
@@ -158,6 +162,7 @@ function UnitForm() {
                 fullWidth
                 type="number"
                 label="Bedrooms"
+                variant="outlined"
                 value={values.bedrooms}
                 onChange={handleChange("bedrooms")}
                 error={Boolean(errors.bedrooms)}
@@ -171,6 +176,7 @@ function UnitForm() {
                 type="number"
                 inputProps={{ step: "0.5" }}
                 label="Bathrooms"
+                variant="outlined"
                 value={values.bathrooms}
                 onChange={handleChange("bathrooms")}
                 error={Boolean(errors.bathrooms)}
@@ -183,6 +189,7 @@ function UnitForm() {
                 fullWidth
                 type="number"
                 label="Square Feet"
+                variant="outlined"
                 value={values.square_feet}
                 onChange={handleChange("square_feet")}
                 error={Boolean(errors.square_feet)}
@@ -196,6 +203,7 @@ function UnitForm() {
                 type="number"
                 inputProps={{ step: "0.01" }}
                 label="Rent Amount"
+                variant="outlined"
                 value={values.rent_amount}
                 onChange={handleChange("rent_amount")}
                 error={Boolean(errors.rent_amount)}
@@ -218,10 +226,10 @@ function UnitForm() {
             </Grid>
           </Grid>
           <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting}>
+            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
               {isEditMode ? "Update Unit" : "Create Unit"}
             </Button>
-            <Button variant="outlined" onClick={() => navigate(`/properties/${id}`)}>
+            <Button variant="outlined" onClick={() => navigate(`/properties/${id}`)} sx={{ flex: 1 }}>
               Cancel
             </Button>
           </Box>

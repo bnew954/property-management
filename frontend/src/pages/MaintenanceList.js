@@ -19,20 +19,21 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deleteMaintenanceRequest, getMaintenanceRequests } from "../services/api";
 
 const statusStyles = {
-  submitted: { bgcolor: "#dbeafe", color: "#1d4ed8" },
-  in_progress: { bgcolor: "#ffedd5", color: "#c2410c" },
-  completed: { bgcolor: "#dcfce7", color: "#15803d" },
-  cancelled: { bgcolor: "#fee2e2", color: "#b91c1c" },
+  submitted: { bgcolor: "#3b82f6", color: "#dbeafe" },
+  in_progress: { bgcolor: "#f59e0b", color: "#1f2937" },
+  completed: { bgcolor: "#22c55e", color: "#052e16" },
+  cancelled: { bgcolor: "#ef4444", color: "#fef2f2" },
 };
 
 const priorityStyles = {
-  low: { bgcolor: "#f1f5f9", color: "#334155" },
-  medium: { bgcolor: "#dbeafe", color: "#1d4ed8" },
-  high: { bgcolor: "#ffedd5", color: "#c2410c" },
-  emergency: { bgcolor: "#fee2e2", color: "#b91c1c" },
+  low: { bgcolor: "#6b7280", color: "#f3f4f6" },
+  medium: { bgcolor: "#3b82f6", color: "#dbeafe" },
+  high: { bgcolor: "#f59e0b", color: "#1f2937" },
+  emergency: { bgcolor: "#ef4444", color: "#fef2f2" },
 };
 
 const toLabel = (value) => value.replaceAll("_", " ");
@@ -101,37 +102,43 @@ function MaintenanceList() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+      <Box sx={{ mb: 1.5 }}>
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
           Maintenance Requests
         </Typography>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          Track issues, priorities, and completion status
+        </Typography>
+      </Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
         <Button component={Link} to="/maintenance/new" variant="contained">
+          <AddRoundedIcon sx={{ mr: 0.8 }} fontSize="small" />
           Add Request
         </Button>
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 2.5, bgcolor: "#111827" }}>
         <Table>
-          <TableHead>
+          <TableHead sx={{ bgcolor: "#1e2538" }}>
             <TableRow>
-              <TableCell>Title</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell>Priority</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Title</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Unit</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Priority</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Status</TableCell>
+              <TableCell align="right" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {requests.map((request) => (
-              <TableRow key={request.id} hover>
+              <TableRow key={request.id} hover sx={{ "&:hover": { bgcolor: "#1a1f35" } }}>
                 <TableCell>{request.title}</TableCell>
                 <TableCell>{request.unit_detail?.unit_number || request.unit}</TableCell>
                 <TableCell>
-                  <Chip size="small" label={toLabel(request.priority)} sx={chipSx(priorityStyles, request.priority)} />
+                  <Chip size="small" variant="filled" label={toLabel(request.priority)} sx={chipSx(priorityStyles, request.priority)} />
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" label={toLabel(request.status)} sx={chipSx(statusStyles, request.status)} />
+                  <Chip size="small" variant="filled" label={toLabel(request.status)} sx={chipSx(statusStyles, request.status)} />
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end">

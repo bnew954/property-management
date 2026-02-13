@@ -1,4 +1,9 @@
-from rest_framework import viewsets
+from django.contrib.auth.models import User
+from django.db import IntegrityError
+from rest_framework import status, viewsets
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import Lease, MaintenanceRequest, Payment, Property, Tenant, Unit
 from .serializers import (
@@ -56,3 +61,62 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
         if unit_id:
             queryset = queryset.filter(unit_id=unit_id)
         return queryset
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        username = (request.data.get("username") or "").strip()
+        email = (request.data.get("email") or "").strip()
+        password = request.data.get("password") or ""
+        first_name = (request.data.get("first_name") or "").strip()
+        last_name = (request.data.get("last_name") or "").strip()
+
+        errors = {}
+        if not username:
+            errors["username"] = "Username is required."
+        if not email:
+            errors["email"] = "Email is required."
+        if not password:
+            errors["password"] = "Password is required."
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {"username": "Username already exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"email": "Email already exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "Unable to create user with provided details."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            },
+            status=status.HTTP_201_CREATED,
+        )

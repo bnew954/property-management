@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deleteProperty, getProperties } from "../services/api";
 
 function PropertyList() {
@@ -78,30 +79,36 @@ function PropertyList() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+      <Box sx={{ mb: 1.5 }}>
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
           Properties
         </Typography>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          Manage your property portfolio
+        </Typography>
+      </Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
         <Button component={Link} to="/properties/new" variant="contained" color="primary">
+          <AddRoundedIcon sx={{ mr: 0.8 }} fontSize="small" />
           Add Property
         </Button>
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 2.5, bgcolor: "#111827" }}>
         <Table>
-          <TableHead>
+          <TableHead sx={{ bgcolor: "#1e2538" }}>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>City</TableCell>
-              <TableCell>State</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Name</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>City</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>State</TableCell>
+              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Type</TableCell>
+              <TableCell align="right" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {properties.map((property) => (
-              <TableRow key={property.id} hover>
+              <TableRow key={property.id} hover sx={{ "&:hover": { bgcolor: "#1a1f35" } }}>
                 <TableCell>
                   <Link to={`/properties/${property.id}`} style={{ color: "#2563eb", fontWeight: 600 }}>
                     {property.name}

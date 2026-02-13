@@ -122,19 +122,23 @@ function TenantForm() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
         {isEditMode ? "Edit Tenant" : "Add Tenant"}
       </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
+        Tenants &gt; {isEditMode ? "Edit" : "Add New"}
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
         >
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="First Name"
+                variant="outlined"
                 value={values.first_name}
                 onChange={handleChange("first_name")}
                 error={Boolean(errors.first_name)}
@@ -146,6 +150,7 @@ function TenantForm() {
               <TextField
                 fullWidth
                 label="Last Name"
+                variant="outlined"
                 value={values.last_name}
                 onChange={handleChange("last_name")}
                 error={Boolean(errors.last_name)}
@@ -157,6 +162,7 @@ function TenantForm() {
               <TextField
                 fullWidth
                 label="Email"
+                variant="outlined"
                 type="email"
                 value={values.email}
                 onChange={handleChange("email")}
@@ -169,6 +175,7 @@ function TenantForm() {
               <TextField
                 fullWidth
                 label="Phone"
+                variant="outlined"
                 value={values.phone}
                 onChange={handleChange("phone")}
                 error={Boolean(errors.phone)}
@@ -181,6 +188,7 @@ function TenantForm() {
                 fullWidth
                 type="date"
                 label="Date of Birth"
+                variant="outlined"
                 value={values.date_of_birth}
                 onChange={handleChange("date_of_birth")}
                 InputLabelProps={{ shrink: true }}
@@ -188,10 +196,10 @@ function TenantForm() {
             </Grid>
           </Grid>
           <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting}>
+            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
               {isEditMode ? "Update Tenant" : "Create Tenant"}
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/tenants")}>
+            <Button variant="outlined" onClick={() => navigate("/tenants")} sx={{ flex: 1 }}>
               Cancel
             </Button>
           </Box>

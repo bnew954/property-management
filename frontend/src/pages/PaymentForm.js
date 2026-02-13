@@ -172,13 +172,16 @@ function PaymentForm() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
         {isEditMode ? "Edit Payment" : "Add Payment"}
       </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
+        Payments &gt; {isEditMode ? "Edit" : "Add New"}
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
         >
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
@@ -199,6 +202,7 @@ function PaymentForm() {
                 type="number"
                 inputProps={{ step: "0.01" }}
                 label="Amount"
+                variant="outlined"
                 value={values.amount}
                 onChange={handleChange("amount")}
                 error={Boolean(errors.amount)}
@@ -211,6 +215,7 @@ function PaymentForm() {
                 fullWidth
                 type="date"
                 label="Payment Date"
+                variant="outlined"
                 value={values.payment_date}
                 onChange={handleChange("payment_date")}
                 error={Boolean(errors.payment_date)}
@@ -253,16 +258,17 @@ function PaymentForm() {
                 multiline
                 minRows={4}
                 label="Notes"
+                variant="outlined"
                 value={values.notes}
                 onChange={handleChange("notes")}
               />
             </Grid>
           </Grid>
           <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting}>
+            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
               {isEditMode ? "Update Payment" : "Create Payment"}
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/payments")}>
+            <Button variant="outlined" onClick={() => navigate("/payments")} sx={{ flex: 1 }}>
               Cancel
             </Button>
           </Box>

@@ -166,13 +166,16 @@ function LeaseForm() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
         {isEditMode ? "Edit Lease" : "Add Lease"}
       </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
+        Leases &gt; {isEditMode ? "Edit" : "Add New"}
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
         >
           <Grid container spacing={2}>
             <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
@@ -204,6 +207,7 @@ function LeaseForm() {
                 fullWidth
                 type="date"
                 label="Start Date"
+                variant="outlined"
                 value={values.start_date}
                 onChange={handleChange("start_date")}
                 error={Boolean(errors.start_date)}
@@ -218,6 +222,7 @@ function LeaseForm() {
                 fullWidth
                 type="date"
                 label="End Date"
+                variant="outlined"
                 value={values.end_date}
                 onChange={handleChange("end_date")}
                 error={Boolean(errors.end_date)}
@@ -233,6 +238,7 @@ function LeaseForm() {
                 type="number"
                 inputProps={{ step: "0.01" }}
                 label="Monthly Rent"
+                variant="outlined"
                 value={values.monthly_rent}
                 onChange={handleChange("monthly_rent")}
                 error={Boolean(errors.monthly_rent)}
@@ -247,6 +253,7 @@ function LeaseForm() {
                 type="number"
                 inputProps={{ step: "0.01" }}
                 label="Security Deposit"
+                variant="outlined"
                 value={values.security_deposit}
                 onChange={handleChange("security_deposit")}
                 error={Boolean(errors.security_deposit)}
@@ -270,10 +277,10 @@ function LeaseForm() {
             </Grid>
           </Grid>
           <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting}>
+            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
               {isEditMode ? "Update Lease" : "Create Lease"}
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/leases")}>
+            <Button variant="outlined" onClick={() => navigate("/leases")} sx={{ flex: 1 }}>
               Cancel
             </Button>
           </Box>

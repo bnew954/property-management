@@ -168,13 +168,16 @@ function MaintenanceForm() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
         {isEditMode ? "Edit Maintenance Request" : "Add Maintenance Request"}
       </Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
+        Maintenance &gt; {isEditMode ? "Edit" : "Add New"}
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
         >
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
@@ -205,6 +208,7 @@ function MaintenanceForm() {
               <TextField
                 fullWidth
                 label="Title"
+                variant="outlined"
                 value={values.title}
                 onChange={handleChange("title")}
                 error={Boolean(errors.title)}
@@ -218,6 +222,7 @@ function MaintenanceForm() {
                 multiline
                 minRows={4}
                 label="Description"
+                variant="outlined"
                 value={values.description}
                 onChange={handleChange("description")}
                 error={Boolean(errors.description)}
@@ -251,10 +256,10 @@ function MaintenanceForm() {
             </Grid>
           </Grid>
           <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting}>
+            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
               {isEditMode ? "Update Request" : "Create Request"}
             </Button>
-            <Button variant="outlined" onClick={() => navigate("/maintenance")}>
+            <Button variant="outlined" onClick={() => navigate("/maintenance")} sx={{ flex: 1 }}>
               Cancel
             </Button>
           </Box>
