@@ -6,6 +6,21 @@ import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
 import { Box, Card, CardContent, Paper, Typography } from "@mui/material";
+import { Link } from "react-router-dom";
+import {
+  Area,
+  Bar,
+  BarChart,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   getLeases,
   getMaintenanceRequests,
@@ -28,6 +43,12 @@ function Dashboard() {
     myMaintenance: 0,
     myLeaseInfo: 0,
   });
+  const [revenueData, setRevenueData] = useState([]);
+  const [occupancyData, setOccupancyData] = useState([
+    { name: "Occupied", value: 0, color: "#7c5cfc" },
+    { name: "Vacant", value: 0, color: "#2a2a2a" },
+  ]);
+  const [maintenanceStatusData, setMaintenanceStatusData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -64,16 +85,19 @@ function Dashboard() {
             myLeaseInfo: leaseItems.filter((item) => item.is_active).length,
           }));
         } else {
-          const [propertiesRes, unitsRes, tenantsRes, leasesRes, maintenanceRes] = await Promise.all([
+          const [propertiesRes, unitsRes, tenantsRes, leasesRes, maintenanceRes, paymentsRes] = await Promise.all([
             getProperties(),
             getUnits(),
             getTenants(),
             getLeases(),
             getMaintenanceRequests(),
+            getPayments(),
           ]);
 
+          const units = unitsRes.data || [];
           const maintenanceItems = maintenanceRes.data || [];
           const leaseItems = leasesRes.data || [];
+          const paymentItems = paymentsRes.data || [];
           const openMaintenance = maintenanceItems.filter(
             (item) => item.status !== "completed" && item.status !== "cancelled"
           ).length;
@@ -89,6 +113,74 @@ function Dashboard() {
             myMaintenance: 0,
             myLeaseInfo: 0,
           });
+
+          const occupiedUnits = units.filter((item) => !item.is_available).length;
+          const vacantUnits = Math.max(units.length - occupiedUnits, 0);
+          setOccupancyData([
+            { name: "Occupied", value: occupiedUnits, color: "#7c5cfc" },
+            { name: "Vacant", value: vacantUnits, color: "#2a2a2a" },
+          ]);
+
+          const statusCounts = {
+            submitted: 0,
+            in_progress: 0,
+            completed: 0,
+            cancelled: 0,
+          };
+          maintenanceItems.forEach((item) => {
+            if (statusCounts[item.status] !== undefined) {
+              statusCounts[item.status] += 1;
+            }
+          });
+          setMaintenanceStatusData([
+            { status: "Submitted", count: statusCounts.submitted, color: "#3b82f6" },
+            { status: "In Progress", count: statusCounts.in_progress, color: "#f59e0b" },
+            { status: "Completed", count: statusCounts.completed, color: "#22c55e" },
+            { status: "Cancelled", count: statusCounts.cancelled, color: "#ef4444" },
+          ]);
+
+          const monthBuckets = new Map();
+          const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
+          const fullMonthFormatter = new Intl.DateTimeFormat("en-US", {
+            month: "short",
+            year: "numeric",
+          });
+          const now = new Date();
+          const months = [];
+          for (let i = 11; i >= 0; i -= 1) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            months.push({
+              key,
+              label: monthFormatter.format(d),
+              fullLabel: fullMonthFormatter.format(d),
+            });
+            monthBuckets.set(key, 0);
+          }
+
+          paymentItems.forEach((payment) => {
+            if (!payment.payment_date) {
+              return;
+            }
+            const d = new Date(`${payment.payment_date}T00:00:00`);
+            if (Number.isNaN(d.getTime())) {
+              return;
+            }
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            if (!monthBuckets.has(key)) {
+              return;
+            }
+            const next = Number(monthBuckets.get(key) || 0) + Number(payment.amount || 0);
+            monthBuckets.set(key, next);
+          });
+
+          setRevenueData(
+            months.map((month) => ({
+              month: month.label,
+              fullMonth: month.fullLabel,
+              total: Number(monthBuckets.get(month.key) || 0),
+            }))
+          );
         }
       } catch (err) {
         setError("Unable to load dashboard data.");
@@ -100,12 +192,31 @@ function Dashboard() {
     loadDashboard();
   }, [role]);
 
+  const totalUnits = occupancyData.reduce((sum, item) => sum + item.value, 0);
+  const occupiedUnits = occupancyData.find((item) => item.name === "Occupied")?.value || 0;
+  const occupancyRate = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+
   const cards =
     role === "tenant"
       ? [
-          { title: "My Payments", value: counts.myPayments, icon: <PaymentIcon sx={{ color: "#7c5cfc", opacity: 0.7, fontSize: 18 }} /> },
-          { title: "My Maintenance Requests", value: counts.myMaintenance, icon: <BuildIcon sx={{ color: "#f59e0b", opacity: 0.7, fontSize: 18 }} /> },
-          { title: "My Lease Info", value: counts.myLeaseInfo, icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e", opacity: 0.7, fontSize: 18 }} /> },
+          {
+            title: "My Payments",
+            value: counts.myPayments,
+            path: "/payments",
+            icon: <PaymentIcon sx={{ color: "#7c5cfc", opacity: 0.7, fontSize: 18 }} />,
+          },
+          {
+            title: "My Maintenance Requests",
+            value: counts.myMaintenance,
+            path: "/maintenance",
+            icon: <BuildIcon sx={{ color: "#f59e0b", opacity: 0.7, fontSize: 18 }} />,
+          },
+          {
+            title: "My Lease Info",
+            value: counts.myLeaseInfo,
+            path: "/my-lease",
+            icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e", opacity: 0.7, fontSize: 18 }} />,
+          },
         ]
       : [
           { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#7c5cfc", opacity: 0.7, fontSize: 18 }} /> },
@@ -122,7 +233,15 @@ function Dashboard() {
   });
 
   return (
-    <Box>
+    <Box
+      sx={{
+        "@keyframes dashboardFadeIn": {
+          from: { opacity: 0, transform: "translateY(8px)" },
+          to: { opacity: 1, transform: "translateY(0)" },
+        },
+        animation: "dashboardFadeIn 0.35s ease",
+      }}
+    >
       <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
         Welcome back, {user?.first_name || user?.username || "User"}
       </Typography>
@@ -141,7 +260,19 @@ function Dashboard() {
         }}
       >
         {cards.map((card) => (
-          <Card key={card.title} sx={{ bgcolor: "#141414" }}>
+          <Card
+            key={card.title}
+            component={card.path ? Link : "div"}
+            to={card.path || undefined}
+            sx={{
+              bgcolor: "#141414",
+              textDecoration: "none",
+              cursor: card.path ? "pointer" : "default",
+              "&:hover": card.path
+                ? { borderColor: "rgba(124,92,252,0.45)", backgroundColor: "rgba(255,255,255,0.01)" }
+                : undefined,
+            }}
+          >
             <CardContent sx={{ p: 1.8 }}>
               <Box sx={{ mb: 1 }}>{card.icon}</Box>
               <Typography sx={{ fontSize: 24, lineHeight: 1.1, fontWeight: 600, color: "#fff" }}>
@@ -154,6 +285,184 @@ function Dashboard() {
           </Card>
         ))}
       </Box>
+      {role === "landlord" ? (
+        <Box sx={{ mt: 2, display: "grid", gap: 1.5 }}>
+          <Paper sx={{ p: 2, bgcolor: "#141414", borderRadius: 1 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.3 }}>
+              Revenue Overview
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>
+              Monthly payment totals for the last 12 months
+            </Typography>
+            {revenueData.some((item) => item.total > 0) ? (
+              <Box sx={{ width: "100%", height: 280 }}>
+                <ResponsiveContainer>
+                  <LineChart data={revenueData}>
+                    <defs>
+                      <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#7c5cfc" stopOpacity={0.28} />
+                        <stop offset="100%" stopColor="#7c5cfc" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      tickLine={false}
+                      width={60}
+                      tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#141414",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 8,
+                        color: "#e0e0e0",
+                        fontSize: 12,
+                      }}
+                      formatter={(value) => [
+                        Number(value || 0).toLocaleString("en-US", {
+                          style: "currency",
+                          currency: "USD",
+                        }),
+                        "Revenue",
+                      ]}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.fullMonth || ""}
+                    />
+                    <Area type="monotone" dataKey="total" stroke="none" fill="url(#revenueFill)" />
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      stroke="#7c5cfc"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Typography sx={{ fontSize: 12, color: "text.secondary", py: 4 }}>
+                No payment data available yet.
+              </Typography>
+            )}
+          </Paper>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+              gap: 1.5,
+            }}
+          >
+            <Paper sx={{ p: 2, bgcolor: "#141414", borderRadius: 1 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.3 }}>
+                Occupancy Rate
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>
+                Occupied vs vacant units
+              </Typography>
+              <Box sx={{ width: "100%", height: 240, position: "relative" }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={occupancyData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={62}
+                      outerRadius={88}
+                      stroke="none"
+                      paddingAngle={2}
+                    >
+                      {occupancyData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "#141414",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 8,
+                        color: "#e0e0e0",
+                        fontSize: 12,
+                      }}
+                      formatter={(value) => [value, "Units"]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "column",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <Typography sx={{ fontSize: 24, fontWeight: 600, color: "#fff" }}>
+                    {occupancyRate}%
+                  </Typography>
+                  <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
+                    Occupied
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
+            <Paper sx={{ p: 2, bgcolor: "#141414", borderRadius: 1 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.3 }}>
+                Maintenance Overview
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>
+                Request volume by status
+              </Typography>
+              <Box sx={{ width: "100%", height: 240 }}>
+                <ResponsiveContainer>
+                  <BarChart data={maintenanceStatusData} layout="vertical">
+                    <XAxis
+                      type="number"
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="status"
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={80}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#141414",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 8,
+                        color: "#e0e0e0",
+                        fontSize: 12,
+                      }}
+                      formatter={(value) => [value, "Requests"]}
+                    />
+                    <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+                      {maintenanceStatusData.map((entry) => (
+                        <Cell key={entry.status} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </Paper>
+          </Box>
+        </Box>
+      ) : null}
       <Paper sx={{ mt: 2, p: 2, bgcolor: "#141414" }}>
         <Typography sx={{ fontSize: 13, fontWeight: 500, mb: 0.8 }}>
           Recent Activity

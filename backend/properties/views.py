@@ -151,6 +151,7 @@ class MeView(APIView):
                 "first_name": request.user.first_name,
                 "last_name": request.user.last_name,
                 "role": profile.role,
+                "tenant_id": profile.tenant_id,
             }
         )
 

@@ -9,6 +9,7 @@ import MaintenanceForm from "./pages/MaintenanceForm";
 import LeaseForm from "./pages/LeaseForm";
 import LeaseList from "./pages/LeaseList";
 import Login from "./pages/Login";
+import MyLease from "./pages/MyLease";
 import PaymentForm from "./pages/PaymentForm";
 import PaymentsList from "./pages/PaymentsList";
 import PropertyDetail from "./pages/PropertyDetail";
@@ -152,6 +153,7 @@ function App() {
               <Route path="/payments" element={<PaymentsList />} />
               <Route path="/payments/new" element={<PaymentForm />} />
               <Route path="/payments/:id/edit" element={<PaymentForm />} />
+              <Route path="/my-lease" element={<MyLease />} />
               <Route path="/maintenance" element={<MaintenanceList />} />
               <Route path="/maintenance/new" element={<MaintenanceForm />} />
               <Route path="/maintenance/:id/edit" element={<MaintenanceForm />} />

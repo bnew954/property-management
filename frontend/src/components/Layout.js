@@ -1,4 +1,5 @@
 import ApartmentIcon from "@mui/icons-material/Apartment";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import BuildIcon from "@mui/icons-material/Build";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DescriptionIcon from "@mui/icons-material/Description";
@@ -27,6 +28,7 @@ const drawerWidth = 240;
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: <DashboardIcon /> },
+  { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
   { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
@@ -41,8 +43,10 @@ function Layout({ children }) {
 
   const visibleNavItems =
     role === "tenant"
-      ? navItems.filter((item) => ["/", "/payments", "/maintenance"].includes(item.path))
-      : navItems;
+      ? navItems.filter((item) =>
+          ["/", "/my-lease", "/payments", "/maintenance"].includes(item.path)
+        )
+      : navItems.filter((item) => item.path !== "/my-lease");
 
   const isActive = (path) => {
     if (path === "/") {
