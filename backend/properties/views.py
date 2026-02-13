@@ -191,21 +191,36 @@ class OrganizationUsersView(APIView):
         organization = getattr(profile, "organization", None)
         if not organization:
             return Response(
-                [],
+                {"users": [], "tenants": []},
                 status=status.HTTP_200_OK,
             )
-        users = User.objects.filter(profile__organization=organization).order_by("username")
-        payload = [
+        users = (
+            User.objects.filter(profile__organization=organization)
+            .select_related("profile")
+            .order_by("first_name", "last_name", "username")
+        )
+        user_payload = [
             {
                 "id": user.id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
+                "name": (f"{user.first_name} {user.last_name}".strip() or user.username),
                 "email": user.email,
+                "type": "user",
             }
             for user in users
         ]
-        return Response(payload)
+        tenants = Tenant.objects.filter(organization=organization).order_by(
+            "first_name", "last_name"
+        )
+        tenant_payload = [
+            {
+                "id": tenant.id,
+                "name": f"{tenant.first_name} {tenant.last_name}".strip(),
+                "email": tenant.email,
+                "type": "tenant",
+            }
+            for tenant in tenants
+        ]
+        return Response({"users": user_payload, "tenants": tenant_payload})
 
 
 class OrganizationInvitationsView(APIView):
@@ -421,11 +436,26 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         queryset = super().get_queryset()
         if not queryset:
             return queryset
-        queryset = queryset.select_related("sender", "recipient", "parent").filter(
-            Q(recipient=self.request.user) | Q(sender=self.request.user)
+
+        queryset = queryset.select_related(
+            "sender", "recipient", "recipient_tenant", "parent"
         )
+        profile = getattr(self.request.user, "profile", None)
+        tenant_id = getattr(profile, "tenant_id", None)
+
         if self.action == "list":
-            queryset = queryset.filter(recipient=self.request.user)
+            if profile and profile.role == UserProfile.ROLE_TENANT and tenant_id:
+                queryset = queryset.filter(
+                    Q(recipient=self.request.user) | Q(recipient_tenant_id=tenant_id)
+                )
+            else:
+                queryset = queryset.filter(recipient=self.request.user)
+        else:
+            queryset = queryset.filter(
+                Q(sender=self.request.user)
+                | Q(recipient=self.request.user)
+                | Q(recipient_tenant_id=tenant_id)
+            )
         return queryset.order_by("-created_at")
 
     def create(self, request, *args, **kwargs):
@@ -435,12 +465,19 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 {"detail": "No organization assigned to this user."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        recipient_id = request.data.get("recipient")
+
+        recipient_user_id = request.data.get("recipient")
+        recipient_tenant_id = request.data.get("recipient_tenant")
         subject = (request.data.get("subject") or "").strip()
         body = (request.data.get("body") or "").strip()
-        if not recipient_id:
+
+        if (not recipient_user_id and not recipient_tenant_id) or (
+            recipient_user_id and recipient_tenant_id
+        ):
             return Response(
-                {"recipient": "Recipient is required."},
+                {
+                    "recipient": "Specify exactly one of 'recipient' or 'recipient_tenant'."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not subject:
@@ -453,29 +490,47 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 {"body": "Message body is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        try:
-            recipient = User.objects.get(id=recipient_id)
-        except User.DoesNotExist:
-            return Response(
-                {"recipient": "Recipient not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
 
-        organization = resolve_request_organization(self.request)
-        recipient_profile = getattr(recipient, "profile", None)
-        if not recipient_profile or recipient_profile.organization_id != organization.id:
-            return Response(
-                {"recipient": "Recipient must be in your organization."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        message_kwargs = {
+            "sender": request.user,
+            "subject": subject,
+            "body": body,
+            "organization": organization,
+        }
 
-        message = Message.objects.create(
-            sender=request.user,
-            recipient=recipient,
-            subject=subject,
-            body=body,
-            organization=organization,
-        )
+        if recipient_tenant_id:
+            try:
+                recipient_tenant = Tenant.objects.get(
+                    id=recipient_tenant_id, organization=organization
+                )
+            except Tenant.DoesNotExist:
+                return Response(
+                    {"recipient_tenant": "Recipient tenant not found in your organization."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            message_kwargs["recipient_tenant"] = recipient_tenant
+        else:
+            try:
+                recipient = User.objects.get(id=recipient_user_id)
+            except User.DoesNotExist:
+                return Response(
+                    {"recipient": "Recipient not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if recipient.id == request.user.id:
+                return Response(
+                    {"recipient": "You cannot message yourself."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            recipient_profile = getattr(recipient, "profile", None)
+            if not recipient_profile or recipient_profile.organization_id != organization.id:
+                return Response(
+                    {"recipient": "Recipient must be in your organization."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            message_kwargs["recipient"] = recipient
+
+        message = Message.objects.create(**message_kwargs)
         return Response(self.get_serializer(message).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="sent")
@@ -483,18 +538,42 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         queryset = Message.objects.filter(
             sender=request.user,
             organization=resolve_request_organization(request),
-        ).select_related("sender", "recipient", "parent")
+        ).select_related("sender", "recipient", "recipient_tenant", "parent")
         return Response(self.get_serializer(queryset, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="users")
     def users(self, request):
         organization = resolve_request_organization(self.request)
         if not organization:
-            return Response([])
-        queryset = User.objects.filter(
-            profile__organization=organization,
-        ).order_by("username")
-        return Response(UserSummarySerializer(queryset, many=True).data)
+            return Response({"users": [], "tenants": []})
+        users = (
+            User.objects.filter(profile__organization=organization)
+            .select_related("profile")
+            .order_by("first_name", "last_name", "username")
+        )
+        tenants = Tenant.objects.filter(organization=organization).order_by(
+            "first_name", "last_name"
+        )
+
+        user_payload = [
+            {
+                "id": user.id,
+                "name": (f"{user.first_name} {user.last_name}".strip() or user.username),
+                "email": user.email,
+                "type": "user",
+            }
+            for user in users
+        ]
+        tenant_payload = [
+            {
+                "id": tenant.id,
+                "name": f"{tenant.first_name} {tenant.last_name}".strip(),
+                "email": tenant.email,
+                "type": "tenant",
+            }
+            for tenant in tenants
+        ]
+        return Response({"users": user_payload, "tenants": tenant_payload})
 
     @action(detail=True, methods=["patch"], url_path="mark-read")
     def mark_read(self, request, pk=None):
@@ -512,6 +591,7 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 {"detail": "No organization assigned to this user."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
         body = (request.data.get("body") or "").strip()
         subject = (
             request.data.get("subject") or f"Re: {original.subject}"
@@ -522,21 +602,48 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        profile = getattr(request.user, "profile", None)
+        tenant_id = getattr(profile, "tenant_id", None)
+
+        recipient_user_id = None
+        recipient_tenant_id = None
         if request.user.id == original.sender_id:
-            recipient = original.recipient
+            if original.recipient_id is not None:
+                recipient_user_id = original.recipient_id
+            elif original.recipient_tenant_id is not None:
+                recipient_tenant_id = original.recipient_tenant_id
+            else:
+                return Response(
+                    {"detail": "Original message is missing a valid recipient."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif (
+            original.recipient_id == request.user.id
+            or (tenant_id and original.recipient_tenant_id == tenant_id)
+        ):
+            recipient_user_id = original.sender_id
         else:
-            recipient = original.sender
+            return Response(
+                {"detail": "You can only reply to messages that you sent or received."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        root_parent = original.parent or original
+        reply_kwargs = {
+            "sender": request.user,
+            "subject": subject,
+            "body": body,
+            "parent": original.parent or original,
+            "organization": organization,
+        }
 
-        reply_message = Message.objects.create(
-            sender=request.user,
-            recipient=recipient,
-            subject=subject,
-            body=body,
-            parent=root_parent,
-            organization=organization,
-        )
+        if recipient_tenant_id:
+            reply_kwargs["recipient_tenant_id"] = recipient_tenant_id
+            reply_kwargs["recipient"] = None
+        else:
+            reply_kwargs["recipient"] = User.objects.get(id=recipient_user_id)
+            reply_kwargs["recipient_tenant"] = None
+
+        reply_message = Message.objects.create(**reply_kwargs)
         return Response(
             self.get_serializer(reply_message).data,
             status=status.HTTP_201_CREATED,

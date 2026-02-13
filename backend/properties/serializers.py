@@ -149,8 +149,45 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
+    recipient = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), required=False, allow_null=True
+    )
+    recipient_tenant = serializers.PrimaryKeyRelatedField(
+        queryset=Tenant.objects.all(), required=False, allow_null=True
+    )
     sender_detail = UserSummarySerializer(source="sender", read_only=True)
     recipient_detail = UserSummarySerializer(source="recipient", read_only=True)
+    recipient_tenant_detail = TenantSerializer(source="recipient_tenant", read_only=True)
+    recipient_name = serializers.SerializerMethodField()
+    recipient_tenant_has_account = serializers.SerializerMethodField()
+
+    def get_recipient_name(self, obj):
+        if obj.recipient:
+            user = obj.recipient
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            return full_name or user.username
+        if obj.recipient_tenant:
+            return f"{obj.recipient_tenant.first_name} {obj.recipient_tenant.last_name}".strip()
+        return None
+
+    def get_recipient_tenant_has_account(self, obj):
+        if not obj.recipient_tenant_id:
+            return None
+        return UserProfile.objects.filter(tenant=obj.recipient_tenant).exists()
+
+    def validate(self, attrs):
+        recipient = attrs.get("recipient")
+        recipient_tenant = attrs.get("recipient_tenant")
+        has_recipient_field = "recipient" in attrs
+        has_tenant_field = "recipient_tenant" in attrs
+        if not (has_recipient_field or has_tenant_field):
+            return attrs
+
+        if bool(recipient) == bool(recipient_tenant):
+            raise serializers.ValidationError(
+                "Message must include either recipient or recipient_tenant, but not both."
+            )
+        return attrs
 
     class Meta:
         model = Message

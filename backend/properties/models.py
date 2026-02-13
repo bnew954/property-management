@@ -1,5 +1,6 @@
 ﻿from django.contrib.auth.models import User
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.template.defaultfilters import slugify
 from django.utils.timezone import now
@@ -379,7 +380,14 @@ class Message(models.Model):
         User, on_delete=models.CASCADE, related_name="sent_messages"
     )
     recipient = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="received_messages"
+        User, on_delete=models.CASCADE, related_name="received_messages", null=True, blank=True
+    )
+    recipient_tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="tenant_messages",
+        null=True,
+        blank=True,
     )
     organization = models.ForeignKey(
         Organization,
@@ -403,8 +411,21 @@ class Message(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+    def clean(self):
+        has_user_recipient = self.recipient_id is not None
+        has_tenant_recipient = self.recipient_tenant_id is not None
+
+        if has_user_recipient == has_tenant_recipient:
+            raise ValidationError(
+                "Message must have exactly one recipient: either recipient or recipient_tenant."
+            )
+
     def __str__(self):
-        return f"{self.subject} ({self.sender.username} -> {self.recipient.username})"
+        if self.recipient:
+            return f"{self.subject} ({self.sender.username} -> {self.recipient.username})"
+        if self.recipient_tenant:
+            return f"{self.subject} ({self.sender.username} -> {self.recipient_tenant})"
+        return f"{self.subject} ({self.sender.username} -> unassigned)"
 
 
 class ScreeningRequest(models.Model):
