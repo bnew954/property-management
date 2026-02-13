@@ -3,7 +3,7 @@ import axios from "axios";
 let accessToken = null;
 let refreshToken = null;
 
-const AUTH_BASE_URL = "http://localhost:8000/api/";
+const AUTH_BASE_URL = (process.env.REACT_APP_API_URL || "http://localhost:8000/api/").replace(/\/?$/, "/");
 
 const setTokens = (tokens) => {
   accessToken = tokens?.access || null;

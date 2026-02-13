@@ -29,7 +29,9 @@ import {
 } from "../services/api";
 import { useUser } from "../services/userContext";
 
-const stripePromise = loadStripe("pk_test_placeholder");
+const stripePromise = loadStripe(
+  process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder"
+);
 
 const formatCurrency = (value) =>
   Number(value || 0).toLocaleString("en-US", {
