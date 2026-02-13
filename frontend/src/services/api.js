@@ -105,6 +105,17 @@ export const getScreenings = () => api.get("screenings/");
 export const getScreening = (id) => api.get(`screenings/${id}/`);
 export const createScreening = (data) => api.post("screenings/", data);
 export const runScreening = (id) => api.post(`screenings/${id}/run-screening/`);
+export const getDocuments = (params = {}) => api.get("documents/", { params });
+export const getDocument = (id) => api.get(`documents/${id}/`);
+export const uploadDocument = (formData, onUploadProgress) =>
+  api.post("documents/", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress,
+  });
+export const updateDocument = (id, data) => api.patch(`documents/${id}/`, data);
+export const deleteDocument = (id) => api.delete(`documents/${id}/`);
+export const downloadDocument = (id) =>
+  api.get(`documents/${id}/download/`, { responseType: "blob" });
 
 export const getPayments = () => api.get("payments/");
 export const getPayment = (id) => api.get(`payments/${id}/`);

@@ -7,6 +7,7 @@ from .payment_views import (
     PaymentHistoryView,
 )
 from .views import (
+    DocumentViewSet,
     LeaseViewSet,
     MaintenanceRequestViewSet,
     MessageViewSet,
@@ -29,6 +30,7 @@ router.register("payments", PaymentViewSet, basename="payment")
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("messages", MessageViewSet, basename="message")
 router.register("screenings", ScreeningRequestViewSet, basename="screening")
+router.register("documents", DocumentViewSet, basename="document")
 router.register(
     "maintenance-requests",
     MaintenanceRequestViewSet,

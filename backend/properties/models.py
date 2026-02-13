@@ -339,3 +339,71 @@ class ScreeningRequest(models.Model):
 
     def __str__(self):
         return f"Screening #{self.id} for {self.tenant}"
+
+
+class Document(models.Model):
+    TYPE_LEASE_AGREEMENT = "lease_agreement"
+    TYPE_INSPECTION_REPORT = "inspection_report"
+    TYPE_INSURANCE = "insurance"
+    TYPE_TAX_DOCUMENT = "tax_document"
+    TYPE_NOTICE = "notice"
+    TYPE_RECEIPT = "receipt"
+    TYPE_PHOTO = "photo"
+    TYPE_OTHER = "other"
+    TYPE_CHOICES = [
+        (TYPE_LEASE_AGREEMENT, "Lease Agreement"),
+        (TYPE_INSPECTION_REPORT, "Inspection Report"),
+        (TYPE_INSURANCE, "Insurance"),
+        (TYPE_TAX_DOCUMENT, "Tax Document"),
+        (TYPE_NOTICE, "Notice"),
+        (TYPE_RECEIPT, "Receipt"),
+        (TYPE_PHOTO, "Photo"),
+        (TYPE_OTHER, "Other"),
+    ]
+
+    name = models.CharField(max_length=255)
+    file = models.FileField(upload_to="documents/")
+    document_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    description = models.TextField(blank=True)
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="documents_uploaded"
+    )
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    unit = models.ForeignKey(
+        Unit,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    lease = models.ForeignKey(
+        Lease,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    is_template = models.BooleanField(default=False)
+    file_size = models.IntegerField(null=True)
+    file_type = models.CharField(max_length=20, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.document_type})"

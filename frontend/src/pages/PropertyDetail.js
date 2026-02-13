@@ -17,7 +17,8 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { getProperty, getUnits } from "../services/api";
+import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
+import { downloadDocument, getDocuments, getProperty, getUnits } from "../services/api";
 
 function PropertyDetail() {
   const { id } = useParams();
@@ -25,6 +26,7 @@ function PropertyDetail() {
   const navigate = useNavigate();
   const [property, setProperty] = useState(null);
   const [units, setUnits] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [snackbar, setSnackbar] = useState({
@@ -42,6 +44,8 @@ function PropertyDetail() {
         ]);
         setProperty(propertyRes.data);
         setUnits(unitsRes.data || []);
+        const docsRes = await getDocuments({ property_id: id });
+        setDocuments(docsRes.data || []);
       } catch (err) {
         setError("Unable to load property details.");
       } finally {
@@ -162,6 +166,67 @@ function PropertyDetail() {
               </TableBody>
             </Table>
           </TableContainer>
+
+          <Paper sx={{ mt: 1.2, p: 1.2, bgcolor: "#141414" }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+              Documents
+            </Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={headerCellSx}>Name</TableCell>
+                    <TableCell sx={headerCellSx}>Type</TableCell>
+                    <TableCell sx={headerCellSx}>Date</TableCell>
+                    <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {documents.map((doc) => (
+                    <TableRow key={doc.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+                      <TableCell>{doc.name}</TableCell>
+                      <TableCell sx={{ textTransform: "capitalize" }}>
+                        {String(doc.document_type || "").replaceAll("_", " ")}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(doc.created_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="text"
+                          size="small"
+                          onClick={async () => {
+                            const response = await downloadDocument(doc.id);
+                            const url = URL.createObjectURL(response.data);
+                            const a = window.document.createElement("a");
+                            a.href = url;
+                            a.download = doc.file?.split("/").pop() || doc.name;
+                            window.document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                          }}
+                          sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                        >
+                          <CloudDownloadIcon sx={{ mr: 0.4, fontSize: 15 }} />
+                          Download
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!loading && documents.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4}>No documents linked to this property.</TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
         </>
       ) : null}
       <Snackbar

@@ -5,6 +5,7 @@ import random
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.db.models import Q
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -18,6 +19,7 @@ from .models import (
     MaintenanceRequest,
     Message,
     Notification,
+    Document,
     Payment,
     Property,
     ScreeningRequest,
@@ -31,6 +33,7 @@ from .serializers import (
     MaintenanceRequestSerializer,
     MessageSerializer,
     NotificationSerializer,
+    DocumentSerializer,
     PaymentSerializer,
     PropertySerializer,
     ScreeningRequestSerializer,
@@ -384,6 +387,70 @@ class ScreeningRequestViewSet(viewsets.ModelViewSet):
         }
         screening.save()
         return Response(self.get_serializer(screening).data)
+
+
+class DocumentViewSet(viewsets.ModelViewSet):
+    queryset = Document.objects.select_related(
+        "uploaded_by", "property", "unit", "tenant", "lease"
+    )
+    serializer_class = DocumentSerializer
+
+    def get_queryset(self):
+        queryset = Document.objects.select_related(
+            "uploaded_by", "property", "unit", "tenant", "lease"
+        )
+        profile = getattr(self.request.user, "profile", None)
+        if profile and profile.role == UserProfile.ROLE_TENANT:
+            tenant_id = profile.tenant_id
+            lease_ids = []
+            if tenant_id:
+                lease_ids = list(
+                    Lease.objects.filter(tenant_id=tenant_id).values_list("id", flat=True)
+                )
+            queryset = queryset.filter(
+                Q(tenant_id=tenant_id) | Q(lease_id__in=lease_ids)
+            )
+
+        params = self.request.query_params
+        property_id = params.get("property_id")
+        unit_id = params.get("unit_id")
+        tenant_id = params.get("tenant_id")
+        lease_id = params.get("lease_id")
+        document_type = params.get("document_type")
+        is_template = params.get("is_template")
+
+        if property_id:
+            queryset = queryset.filter(property_id=property_id)
+        if unit_id:
+            queryset = queryset.filter(unit_id=unit_id)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        if lease_id:
+            queryset = queryset.filter(lease_id=lease_id)
+        if document_type:
+            queryset = queryset.filter(document_type=document_type)
+        if is_template is not None:
+            normalized = str(is_template).lower()
+            if normalized in {"true", "1", "yes"}:
+                queryset = queryset.filter(is_template=True)
+            elif normalized in {"false", "0", "no"}:
+                queryset = queryset.filter(is_template=False)
+        return queryset
+
+    def get_permissions(self):
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [IsLandlord()]
+        return [IsAuthenticated()]
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        document = self.get_object()
+        file_handle = document.file.open("rb")
+        return FileResponse(
+            file_handle,
+            as_attachment=True,
+            filename=document.file.name.rsplit("/", 1)[-1],
+        )
 
 
 class MeView(APIView):

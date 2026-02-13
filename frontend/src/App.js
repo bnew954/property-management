@@ -4,6 +4,7 @@ import "./App.css";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
+import Documents from "./pages/Documents";
 import MaintenanceList from "./pages/MaintenanceList";
 import MaintenanceForm from "./pages/MaintenanceForm";
 import LeaseForm from "./pages/LeaseForm";
@@ -23,6 +24,7 @@ import ScreeningList from "./pages/ScreeningList";
 import ScreeningRequest from "./pages/ScreeningRequest";
 import TenantForm from "./pages/TenantForm";
 import TenantList from "./pages/TenantList";
+import Templates from "./pages/Templates";
 import UnitForm from "./pages/UnitForm";
 import { UserProvider } from "./services/userContext";
 
@@ -164,6 +166,8 @@ function App() {
               <Route path="/pay-rent" element={<PayRent />} />
               <Route path="/my-lease" element={<MyLease />} />
               <Route path="/messages" element={<Messages />} />
+              <Route path="/documents" element={<Documents />} />
+              <Route path="/templates" element={<Templates />} />
               <Route path="/maintenance" element={<MaintenanceList />} />
               <Route path="/maintenance/new" element={<MaintenanceForm />} />
               <Route path="/maintenance/:id/edit" element={<MaintenanceForm />} />

@@ -5,6 +5,7 @@ import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DescriptionIcon from "@mui/icons-material/Description";
+import FolderIcon from "@mui/icons-material/Folder";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
@@ -40,6 +41,7 @@ const navItems = [
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
   { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
   { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
+  { label: "Documents", path: "/documents", icon: <FolderIcon /> },
   { label: "Messages", path: "/messages", icon: <ChatBubbleOutlineIcon />, utility: true },
 ];
 
@@ -51,7 +53,7 @@ function Layout({ children }) {
   const visibleNavItems =
     role === "tenant"
       ? navItems.filter((item) =>
-          ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance", "/messages"].includes(item.path)
+          ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance", "/documents", "/messages"].includes(item.path)
         )
       : navItems.filter((item) => item.path !== "/my-lease" && item.path !== "/pay-rent");
   const primaryNavItems = visibleNavItems.filter((item) => !item.utility);
@@ -67,6 +69,8 @@ function Layout({ children }) {
     if (location.pathname.startsWith("/pay-rent")) return "Pay Rent";
     if (location.pathname.startsWith("/my-lease")) return "My Lease";
     if (location.pathname.startsWith("/maintenance")) return "Maintenance";
+    if (location.pathname.startsWith("/documents")) return "Documents";
+    if (location.pathname.startsWith("/templates")) return "Templates";
     if (location.pathname.startsWith("/messages")) return "Messages";
     return "Onyx";
   })();

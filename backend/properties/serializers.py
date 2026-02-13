@@ -11,6 +11,7 @@ from .models import (
     ScreeningRequest,
     Tenant,
     Unit,
+    Document,
 )
 
 
@@ -88,3 +89,28 @@ class ScreeningRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScreeningRequest
         fields = "__all__"
+
+
+class DocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_detail = UserSummarySerializer(source="uploaded_by", read_only=True)
+    property_detail = PropertySerializer(source="property", read_only=True)
+    unit_detail = UnitSerializer(source="unit", read_only=True)
+    tenant_detail = TenantSerializer(source="tenant", read_only=True)
+    lease_detail = LeaseSerializer(source="lease", read_only=True)
+
+    class Meta:
+        model = Document
+        fields = "__all__"
+        read_only_fields = ["uploaded_by", "file_size", "file_type"]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        file_obj = validated_data.get("file")
+        if file_obj is not None:
+            validated_data["file_size"] = getattr(file_obj, "size", None)
+            filename = getattr(file_obj, "name", "")
+            file_type = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            validated_data["file_type"] = file_type or None
+        if request and request.user and request.user.is_authenticated:
+            validated_data["uploaded_by"] = request.user
+        return super().create(validated_data)
