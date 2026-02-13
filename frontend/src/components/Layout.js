@@ -65,7 +65,7 @@ function Layout({ children }) {
     if (location.pathname.startsWith("/my-lease")) return "My Lease";
     if (location.pathname.startsWith("/maintenance")) return "Maintenance";
     if (location.pathname.startsWith("/messages")) return "Messages";
-    return "CloudProp";
+    return "Onyx";
   })();
 
   const isActive = (path) => {
@@ -96,12 +96,14 @@ function Layout({ children }) {
             <Typography
               variant="body1"
               sx={{
-                fontSize: 15,
-                fontWeight: 600,
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
                 color: "#fff",
+                lineHeight: 1.1,
               }}
             >
-              CloudProp
+              Onyx PM
             </Typography>
           </Toolbar>
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />

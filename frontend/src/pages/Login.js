@@ -52,17 +52,15 @@ function Login() {
         <Typography
           variant="body1"
           sx={{
-            mb: 0.5,
-            fontSize: 15,
-            fontWeight: 600,
+            mb: 2,
+            fontSize: 18,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
             textAlign: "center",
             color: "#fff",
           }}
         >
-          CloudProp
-        </Typography>
-        <Typography sx={{ textAlign: "center", fontSize: 12, color: "text.secondary", mb: 2 }}>
-          Sign in to continue
+          Onyx PM
         </Typography>
         {successMessage ? (
           <Alert severity="success" sx={{ mb: 2 }}>
