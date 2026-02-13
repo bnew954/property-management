@@ -1,5 +1,6 @@
-﻿from datetime import date, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
+import logging
 import random
 
 from django.contrib.auth.models import User
@@ -14,7 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .mixins import OrganizationQuerySetMixin
+from .mixins import OrganizationQuerySetMixin, resolve_request_organization
 from .models import (
     Lease,
     MaintenanceRequest,
@@ -53,6 +54,8 @@ from .serializers import (
     OrganizationInvitationSerializer,
 )
 from .signals import recalculate_lease_balances
+
+logger = logging.getLogger(__name__)
 
 
 class OrganizationDetailView(APIView):
@@ -242,12 +245,6 @@ class TenantViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsLandlord()]
 
-    def perform_create(self, serializer):
-        organization = self.request.organization
-        if not organization:
-            raise PermissionDenied("You must belong to an organization to create records.")
-        serializer.save(organization=organization)
-
 
 class LeaseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Lease.objects.all()
@@ -317,25 +314,37 @@ class MaintenanceRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
 
     def perform_create(self, serializer):
         profile = getattr(self.request.user, "profile", None)
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
-            raise PermissionDenied("You must belong to an organization to create records.")
+            if self.request.user.is_authenticated:
+                logger.warning(
+                    "Creating maintenance request without organization context. user=%s",
+                    getattr(self.request.user, "id", None),
+                )
+                organization = None
+            else:
+                raise PermissionDenied("You must belong to an organization to create records.")
         if profile and profile.role == UserProfile.ROLE_TENANT:
             if not profile.tenant_id:
                 raise ValidationError(
                     {"tenant": "Tenant users must be linked to a tenant record."}
                 )
-            serializer.save(
-                tenant_id=profile.tenant_id, organization=organization
-            )
+            serializer.save(tenant_id=profile.tenant_id, organization=organization)
             return
         serializer.save(organization=organization)
 
     def perform_update(self, serializer):
         profile = getattr(self.request.user, "profile", None)
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
-            raise PermissionDenied("You must belong to an organization to update records.")
+            if self.request.user.is_authenticated:
+                logger.warning(
+                    "Updating maintenance request without organization context. user=%s",
+                    getattr(self.request.user, "id", None),
+                )
+                organization = None
+            else:
+                raise PermissionDenied("You must belong to an organization to create records.")
         if profile and profile.role == UserProfile.ROLE_TENANT:
             if not profile.tenant_id:
                 raise ValidationError(
@@ -393,12 +402,19 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         return queryset.order_by("-created_at")
 
     def create(self, request, *args, **kwargs):
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
-            return Response(
-                {"detail": "No organization assigned to this user."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            if request.user.is_authenticated:
+                logger.warning(
+                    "Creating message without organization context. user=%s",
+                    request.user.id,
+                )
+                organization = None
+            else:
+                return Response(
+                    {"detail": "No organization assigned to this user."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         recipient_id = request.data.get("recipient")
         subject = (request.data.get("subject") or "").strip()
         body = (request.data.get("body") or "").strip()
@@ -425,18 +441,14 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        organization = self.request.organization
-        if not organization:
-            return Response(
-                {"detail": "No organization assigned to this user."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        recipient_profile = getattr(recipient, "profile", None)
-        if not recipient_profile or recipient_profile.organization_id != organization.id:
-            return Response(
-                {"recipient": "Recipient must be in your organization."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        organization = resolve_request_organization(self.request)
+        if organization:
+            recipient_profile = getattr(recipient, "profile", None)
+            if not recipient_profile or recipient_profile.organization_id != organization.id:
+                return Response(
+                    {"recipient": "Recipient must be in your organization."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         message = Message.objects.create(
             sender=request.user,
@@ -451,13 +463,13 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def sent(self, request):
         queryset = Message.objects.filter(
             sender=request.user,
-            organization=request.organization,
+            organization=resolve_request_organization(request),
         ).select_related("sender", "recipient", "parent")
         return Response(self.get_serializer(queryset, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="users")
     def users(self, request):
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
             return Response([])
         queryset = User.objects.filter(
@@ -475,12 +487,19 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="reply")
     def reply(self, request, pk=None):
         original = self.get_object()
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
-            return Response(
-                {"detail": "No organization assigned to this user."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            if request.user.is_authenticated:
+                logger.warning(
+                    "Replying message without organization context. user=%s",
+                    request.user.id,
+                )
+                organization = None
+            else:
+                return Response(
+                    {"detail": "No organization assigned to this user."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         body = (request.data.get("body") or "").strip()
         subject = (
             request.data.get("subject") or f"Re: {original.subject}"
@@ -519,12 +538,19 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
 
     def create(self, request, *args, **kwargs):
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
-            return Response(
-                {"detail": "No organization assigned to this user."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            if request.user.is_authenticated:
+                logger.warning(
+                    "Creating screening request without organization context. user=%s",
+                    request.user.id,
+                )
+                organization = None
+            else:
+                return Response(
+                    {"detail": "No organization assigned to this user."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         tenant_id = request.data.get("tenant")
         if not tenant_id:
             return Response(
@@ -534,7 +560,7 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         try:
             tenant = Tenant.objects.get(
                 id=tenant_id,
-                organization=request.organization,
+                organization=resolve_request_organization(request),
             )
         except Tenant.DoesNotExist:
             return Response(
@@ -649,7 +675,7 @@ class DocumentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 lease_ids = list(
                     Lease.objects.filter(
                         tenant_id=tenant_id,
-                        organization=self.request.organization,
+                        organization=resolve_request_organization(self.request),
                     ).values_list("id", flat=True)
                 )
             queryset = queryset.filter(
@@ -688,8 +714,15 @@ class DocumentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
+            if self.request.user.is_authenticated:
+                logger.warning(
+                    "Creating document without organization context. user=%s",
+                    self.request.user.id,
+                )
+                serializer.save()
+                return
             raise PermissionDenied("You must belong to an organization to create records.")
         serializer.save(organization=organization)
 
@@ -727,8 +760,15 @@ class ExpenseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        organization = self.request.organization
+        organization = resolve_request_organization(self.request)
         if not organization:
+            if self.request.user.is_authenticated:
+                logger.warning(
+                    "Creating expense without organization context. user=%s",
+                    self.request.user.id,
+                )
+                serializer.save(created_by=self.request.user)
+                return
             raise PermissionDenied("You must belong to an organization to create records.")
         serializer.save(created_by=self.request.user, organization=organization)
 
@@ -767,7 +807,7 @@ class GenerateChargesView(APIView):
         charges_created = 0
         late_fees_created = 0
 
-        organization = request.organization
+        organization = resolve_request_organization(request)
         for lease in (
             Lease.objects.filter(
                 is_active=True,
@@ -881,7 +921,7 @@ class AccountingReportsView(APIView):
 
         start_date = self._parse_date(date_from) or date(today.year, 1, 1)
         end_date = self._parse_date(date_to) or today
-        org = request.organization
+        org = resolve_request_organization(request)
 
         payments = Payment.objects.filter(
             organization=org,
@@ -1034,6 +1074,8 @@ class RegisterView(APIView):
         if errors:
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
+        logger.info("Register request received for username=%s role=%s", username, role)
+
         tenant = None
         if role == UserProfile.ROLE_TENANT and tenant_id:
             try:
@@ -1076,6 +1118,11 @@ class RegisterView(APIView):
                 organization = Organization.objects.filter(owner=user).first()
                 if not organization:
                     organization = Organization.objects.create(name=org_name, owner=user)
+                    logger.info(
+                        "Created organization '%s' for new landlord user id=%s",
+                        organization.name,
+                        user.id,
+                    )
                 elif organization.owner_id != user.id:
                     organization.owner = user
                     organization.save(update_fields=["owner"])
@@ -1086,7 +1133,14 @@ class RegisterView(APIView):
             profile.save(
                 update_fields=["role", "tenant", "is_org_admin", "organization", "updated_at"]
             )
+            logger.info(
+                "Registered user id=%s role=%s org=%s",
+                user.id,
+                profile.role,
+                profile.organization_id,
+            )
         except IntegrityError:
+            logger.exception("Failed to register user=%s", username)
             return Response(
                 {"detail": "Unable to create user with provided details."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1116,3 +1170,4 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+

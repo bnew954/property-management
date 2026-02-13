@@ -6,10 +6,16 @@ from django.dispatch import receiver
 
 from .models import Payment, RentLedgerEntry, UserProfile
 
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
+        logger.info("Creating default user profile for new user id=%s", instance.id)
         UserProfile.objects.create(
             user=instance, role=UserProfile.ROLE_LANDLORD
         )

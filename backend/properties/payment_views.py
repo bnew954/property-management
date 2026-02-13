@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Lease, Payment, UserProfile
+from .mixins import resolve_request_organization
 from .serializers import PaymentSerializer
 
 
@@ -39,7 +40,7 @@ class CreatePaymentIntentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        organization = getattr(request, "organization", None)
+        organization = resolve_request_organization(request)
         if not organization:
             return Response(
                 {"detail": "No organization context for this request."},
@@ -110,7 +111,7 @@ class ConfirmStripePaymentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        organization = getattr(request, "organization", None)
+        organization = resolve_request_organization(request)
         if not organization:
             return Response(
                 {"detail": "No organization context for this request."},
