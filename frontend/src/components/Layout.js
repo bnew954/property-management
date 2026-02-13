@@ -39,7 +39,7 @@ import NotificationBell from "./NotificationBell";
 const drawerWidth = 240;
 
 const navItems = [
-  { label: "Dashboard", path: "/", icon: <DashboardIcon /> },
+  { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
   { label: "Pay Rent", path: "/pay-rent", icon: <CreditCardIcon />, tenantOnly: true, accent: "green" },
   { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
@@ -72,7 +72,7 @@ function Layout({ children }) {
   const utilityNavItems = visibleNavItems.filter((item) => item.utility);
 
   const pageTitle = (() => {
-    if (location.pathname === "/") return "Dashboard";
+    if (location.pathname.startsWith("/dashboard")) return "Dashboard";
     if (location.pathname.startsWith("/properties")) return "Properties";
     if (location.pathname.startsWith("/tenants")) return "Tenants";
     if (location.pathname.startsWith("/screenings")) return "Screening";
@@ -89,8 +89,8 @@ function Layout({ children }) {
   })();
 
   const isActive = (path) => {
-    if (path === "/") {
-      return location.pathname === "/";
+    if (path === "/dashboard") {
+      return location.pathname.startsWith(path);
     }
     return location.pathname.startsWith(path);
   };

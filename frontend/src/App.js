@@ -31,6 +31,7 @@ import TenantForm from "./pages/TenantForm";
 import TenantList from "./pages/TenantList";
 import Templates from "./pages/Templates";
 import UnitForm from "./pages/UnitForm";
+import LandingPage from "./pages/LandingPage";
 import { UserProvider } from "./services/userContext";
 import { ThemeModeProvider, useThemeMode } from "./services/themeContext";
 
@@ -188,8 +189,9 @@ function AppContent() {
       <CssBaseline />
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default", color: "text.primary", transition: "background-color 0.3s ease, color 0.3s ease" }}>
         <UserProvider>
-          <BrowserRouter>
+            <BrowserRouter>
             <Routes>
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route
@@ -201,7 +203,7 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               >
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/properties" element={<PropertyList />} />
                 <Route path="/properties/new" element={<PropertyForm />} />
                 <Route path="/properties/:id" element={<PropertyDetail />} />

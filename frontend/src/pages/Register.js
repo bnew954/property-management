@@ -84,19 +84,32 @@ function Register() {
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        sx={{
-          width: "100%",
-          maxWidth: 500,
-          p: 3,
+      sx={{
+        width: "100%",
+        maxWidth: 500,
+        p: 3,
           borderRadius: 1,
           bgcolor: "background.paper",
-          boxShadow:
-            mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
-          border: mode === "dark" ? undefined : "none",
-        }}
+        boxShadow:
+          mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
+        border: mode === "dark" ? undefined : "none",
+      }}
       >
-          <Typography
-            variant="body1"
+        <Box sx={{ mb: 1.8 }}>
+          <Link
+            to="/"
+            style={{
+              color: mode === "dark" ? theme.palette.text.secondary : "#6b7280",
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            ← Back to home
+          </Link>
+        </Box>
+        <Typography
+          variant="body1"
             sx={{
               mb: 2,
               fontSize: 18,

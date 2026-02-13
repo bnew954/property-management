@@ -29,7 +29,7 @@ function Login() {
       setSubmitting(true);
       await login(values.username.trim(), values.password);
       await refreshUser();
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (requestError) {
       setError("Invalid username or password.");
     } finally {
@@ -47,7 +47,7 @@ function Login() {
         px: 2,
         bgcolor: "background.default",
       }}
-    >
+      >
       <Paper
         component="form"
         onSubmit={handleSubmit}
@@ -62,6 +62,19 @@ function Login() {
           border: mode === "dark" ? undefined : "none",
         }}
       >
+        <Box sx={{ mb: 1.8 }}>
+          <Link
+            to="/"
+            style={{
+              color: mode === "dark" ? theme.palette.text.secondary : "#6b7280",
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            ← Back to home
+          </Link>
+        </Box>
         <Typography
           variant="body1"
           sx={{
