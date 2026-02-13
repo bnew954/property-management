@@ -12,6 +12,9 @@ function ProtectedRoute({ children }) {
   const [countLoading, setCountLoading] = useState(false);
   const organizationId = user?.organization?.id;
   const isLandingOnWelcome = location.pathname === "/welcome";
+  const isOnboardingAllowedPath =
+    isLandingOnWelcome ||
+    location.pathname.startsWith("/properties");
 
   useEffect(() => {
     if (loading || !user) {
@@ -80,12 +83,12 @@ function ProtectedRoute({ children }) {
     );
   }
 
-  if (isLandlordWithNoProperties && !isLandingOnWelcome) {
-    return <Navigate to="/welcome" replace />;
-  }
-
   if (!isLandlordWithNoProperties && isLandingOnWelcome) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (isLandlordWithNoProperties && !isOnboardingAllowedPath) {
+    return <Navigate to="/welcome" replace />;
   }
 
   return children;

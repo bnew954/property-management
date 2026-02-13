@@ -6,7 +6,7 @@ const UserContext = createContext(null);
 
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(isAuthenticated()));
 
   const clearUser = useCallback(() => {
     setUser(null);
@@ -32,10 +32,16 @@ export function UserProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated() && !user) {
+    if (!isAuthenticated()) {
+      setLoading(false);
+      setUser(null);
+      return;
+    }
+
+    if (!user && !loading) {
       refreshUser().catch(() => {});
     }
-  }, [refreshUser, user]);
+  }, [loading, refreshUser, user]);
 
   const value = useMemo(
     () => ({
