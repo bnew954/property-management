@@ -1,4 +1,4 @@
-﻿import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -94,7 +94,7 @@ const featureCards = [
   },
   {
     title: "Tenant Screening",
-    body: "Background checks, credit reports, and eviction history. Pay only when you screen � no monthly fees.",
+    body: "Background checks, credit reports, and eviction history. Pay only when you screen - no monthly fees.",
     Icon: VerifiedUserIcon,
   },
   {
@@ -109,7 +109,7 @@ const featureCards = [
   },
   {
     title: "Accounting & Reports",
-    body: "Income and expense tracking, rent ledgers, P&L reports, and late fee automation � all included free.",
+    body: "Income and expense tracking, rent ledgers, P&L reports, and late fee automation - all included free.",
     Icon: AccountBalanceIcon,
   },
   {
@@ -128,7 +128,7 @@ const howItWorks = [
   {
     step: 2,
     title: "Add Your Properties",
-    body: "Import your portfolio � 1 unit or 1,000. Add tenants, leases, and documents.",
+    body: "Import your portfolio - 1 unit or 1,000. Add tenants, leases, and documents.",
   },
   {
     step: 3,
@@ -140,7 +140,7 @@ const howItWorks = [
 const faqItems = [
   {
     q: "How is Onyx PM free?",
-    a: "We make money through small transaction fees when you collect rent online (2.9% + 30¢, standard payment processing) and when you run tenant screening reports ($35 each). The platform itself � including all features, unlimited units, and unlimited users � is completely free.",
+    a: "We make money through small transaction fees when you collect rent online (2.9% + 30c, standard payment processing) and when you run tenant screening reports ($35 each). The platform itself - including all features, unlimited units, and unlimited users - is completely free.",
   },
   {
     q: "Are there any hidden fees?",
@@ -582,7 +582,7 @@ function LandingPage() {
             Everything you need. Nothing you don&apos;t.
           </Typography>
           <Typography sx={{ mt: 1, textAlign: "center", color: "#878C9E", fontSize: 16 }}>
-            A complete property management platform � without the price tag.
+            A complete property management platform - without the price tag.
           </Typography>
           <Box
             sx={{
@@ -708,7 +708,7 @@ function LandingPage() {
               <Box sx={{ mt: 1.8, borderTop: "1px solid rgba(255,255,255,0.08)", pt: 1.6 }}>
                 <Typography sx={{ fontSize: 16, color: "#fff", fontWeight: 600 }}>Pay only for what you use:</Typography>
                 <Typography sx={{ mt: 1, fontSize: 13, color: "#e5e7eb" }}>
-                  Rent collection: <Typography component="span" sx={{ color: "#fff", fontWeight: 600 }}>2.9% + 30¢</Typography> per transaction
+                  Rent collection: <Typography component="span" sx={{ color: "#fff", fontWeight: 600 }}>2.9% + 30c</Typography> per transaction
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: "#878C9E" }}>(passed through from payment processor)</Typography>
                 <Typography sx={{ mt: 1, fontSize: 13, color: "#e5e7eb" }}>
@@ -851,7 +851,7 @@ function LandingPage() {
               gap: 0.8,
             }}
           >
-            <Typography sx={{ fontSize: 12, color: "#6b7280" }}>© 2026 Onyx PM. All rights reserved.</Typography>
+            <Typography sx={{ fontSize: 12, color: "#6b7280" }}>(c) 2026 Onyx PM. All rights reserved.</Typography>
             <Stack direction="row" spacing={1.2} sx={{ color: "#6b7280", fontSize: 12 }}>
               <MuiLink href="#" color="inherit" underline="none">LinkedIn</MuiLink>
               <MuiLink href="#" color="inherit" underline="none">X</MuiLink>
