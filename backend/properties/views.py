@@ -1,10 +1,10 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 import random
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -20,8 +20,11 @@ from .models import (
     Message,
     Notification,
     Document,
+    Expense,
+    LateFeeRule,
     Payment,
     Property,
+    RentLedgerEntry,
     ScreeningRequest,
     Tenant,
     Unit,
@@ -34,8 +37,11 @@ from .serializers import (
     MessageSerializer,
     NotificationSerializer,
     DocumentSerializer,
+    ExpenseSerializer,
+    LateFeeRuleSerializer,
     PaymentSerializer,
     PropertySerializer,
+    RentLedgerEntrySerializer,
     ScreeningRequestSerializer,
     TenantSerializer,
     UserSummarySerializer,
@@ -451,6 +457,250 @@ class DocumentViewSet(viewsets.ModelViewSet):
             as_attachment=True,
             filename=document.file.name.rsplit("/", 1)[-1],
         )
+
+
+class ExpenseViewSet(viewsets.ModelViewSet):
+    queryset = Expense.objects.select_related("property", "unit", "receipt", "created_by")
+    serializer_class = ExpenseSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        queryset = Expense.objects.select_related("property", "unit", "receipt", "created_by")
+        params = self.request.query_params
+        property_id = params.get("property_id")
+        category = params.get("category")
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
+        if property_id:
+            queryset = queryset.filter(property_id=property_id)
+        if category:
+            queryset = queryset.filter(category=category)
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class RentLedgerEntryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = RentLedgerEntry.objects.select_related("lease", "payment")
+    serializer_class = RentLedgerEntrySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = RentLedgerEntry.objects.select_related("lease", "payment")
+        profile = getattr(self.request.user, "profile", None)
+        if profile and profile.role == UserProfile.ROLE_TENANT:
+            if profile.tenant_id:
+                queryset = queryset.filter(lease__tenant_id=profile.tenant_id)
+            else:
+                queryset = queryset.none()
+        lease_id = self.request.query_params.get("lease_id")
+        if lease_id:
+            queryset = queryset.filter(lease_id=lease_id)
+        return queryset
+
+
+class LateFeeRuleViewSet(viewsets.ModelViewSet):
+    queryset = LateFeeRule.objects.select_related("property")
+    serializer_class = LateFeeRuleSerializer
+    permission_classes = [IsLandlord]
+
+
+class GenerateChargesView(APIView):
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        today = timezone.now().date()
+        month_label = today.strftime("%B %Y")
+        charges_created = 0
+        late_fees_created = 0
+
+        for lease in Lease.objects.filter(is_active=True).select_related("unit", "unit__property"):
+            charge_description = f"{month_label} Rent"
+            existing_charge = RentLedgerEntry.objects.filter(
+                lease=lease,
+                entry_type=RentLedgerEntry.TYPE_CHARGE,
+                description=charge_description,
+                date__year=today.year,
+                date__month=today.month,
+            ).exists()
+            if not existing_charge:
+                RentLedgerEntry.objects.create(
+                    lease=lease,
+                    entry_type=RentLedgerEntry.TYPE_CHARGE,
+                    description=charge_description,
+                    amount=lease.monthly_rent,
+                    balance=Decimal("0.00"),
+                    date=today,
+                )
+                charges_created += 1
+
+            rule = (
+                LateFeeRule.objects.filter(
+                    property=lease.unit.property,
+                    is_active=True,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if not rule:
+                continue
+
+            due_day = min(lease.start_date.day, 28)
+            due_date = today.replace(day=due_day)
+            overdue_date = due_date + timedelta(days=rule.grace_period_days)
+            if today <= overdue_date:
+                continue
+
+            monthly_paid = (
+                Payment.objects.filter(
+                    lease=lease,
+                    status=Payment.STATUS_COMPLETED,
+                    payment_date__year=today.year,
+                    payment_date__month=today.month,
+                ).aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            if monthly_paid >= lease.monthly_rent:
+                continue
+
+            existing_late_fee = RentLedgerEntry.objects.filter(
+                lease=lease,
+                entry_type=RentLedgerEntry.TYPE_LATE_FEE,
+                date__year=today.year,
+                date__month=today.month,
+            ).exists()
+            if existing_late_fee:
+                continue
+
+            if rule.fee_type == LateFeeRule.TYPE_FLAT:
+                late_fee_amount = Decimal(rule.fee_amount)
+            else:
+                late_fee_amount = (Decimal(lease.monthly_rent) * Decimal(rule.fee_amount)) / Decimal("100")
+            if rule.max_fee is not None:
+                late_fee_amount = min(late_fee_amount, Decimal(rule.max_fee))
+
+            RentLedgerEntry.objects.create(
+                lease=lease,
+                entry_type=RentLedgerEntry.TYPE_LATE_FEE,
+                description=f"{month_label} Late Fee",
+                amount=late_fee_amount,
+                balance=Decimal("0.00"),
+                date=today,
+            )
+            late_fees_created += 1
+
+        from .signals import recalculate_lease_balances  # local import avoids circular loading
+
+        for lease_id in Lease.objects.filter(is_active=True).values_list("id", flat=True):
+            recalculate_lease_balances(lease_id)
+
+        return Response(
+            {
+                "month": month_label,
+                "charges_created": charges_created,
+                "late_fees_created": late_fees_created,
+            }
+        )
+
+
+class AccountingReportsView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        today = timezone.now().date()
+        property_id = request.query_params.get("property_id")
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+
+        start_date = self._parse_date(date_from) or date(today.year, 1, 1)
+        end_date = self._parse_date(date_to) or today
+
+        payments = Payment.objects.filter(
+            status=Payment.STATUS_COMPLETED,
+            payment_date__gte=start_date,
+            payment_date__lte=end_date,
+        ).select_related("lease__unit__property")
+        expenses = Expense.objects.filter(
+            date__gte=start_date, date__lte=end_date
+        ).select_related("property")
+        charges = RentLedgerEntry.objects.filter(
+            entry_type__in=[RentLedgerEntry.TYPE_CHARGE, RentLedgerEntry.TYPE_LATE_FEE],
+            date__gte=start_date,
+            date__lte=end_date,
+        ).select_related("lease__unit__property")
+
+        if property_id:
+            payments = payments.filter(lease__unit__property_id=property_id)
+            expenses = expenses.filter(property_id=property_id)
+            charges = charges.filter(lease__unit__property_id=property_id)
+
+        total_income = payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        total_expenses = expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        noi = total_income - total_expenses
+
+        income_by_month_map = {}
+        for payment in payments:
+            key = payment.payment_date.strftime("%Y-%m")
+            label = payment.payment_date.strftime("%b %Y")
+            if key not in income_by_month_map:
+                income_by_month_map[key] = {"month": label, "income": Decimal("0.00"), "expenses": Decimal("0.00")}
+            income_by_month_map[key]["income"] += payment.amount
+        for expense in expenses:
+            key = expense.date.strftime("%Y-%m")
+            label = expense.date.strftime("%b %Y")
+            if key not in income_by_month_map:
+                income_by_month_map[key] = {"month": label, "income": Decimal("0.00"), "expenses": Decimal("0.00")}
+            income_by_month_map[key]["expenses"] += expense.amount
+
+        income_by_month = [
+            {
+                "month": v["month"],
+                "income": float(v["income"]),
+                "expenses": float(v["expenses"]),
+            }
+            for _, v in sorted(income_by_month_map.items(), key=lambda x: x[0])
+        ]
+
+        category_totals = {}
+        for expense in expenses:
+            category_totals.setdefault(expense.category, Decimal("0.00"))
+            category_totals[expense.category] += expense.amount
+        expenses_by_category = [
+            {"category": k, "total": float(v)} for k, v in sorted(category_totals.items())
+        ]
+
+        total_charges = charges.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        rent_collection_rate = (
+            (total_income / total_charges) * Decimal("100.00")
+            if total_charges > 0
+            else Decimal("0.00")
+        )
+
+        return Response(
+            {
+                "total_income": float(total_income),
+                "total_expenses": float(total_expenses),
+                "net_operating_income": float(noi),
+                "income_by_month": income_by_month,
+                "expenses_by_category": expenses_by_category,
+                "rent_collection_rate": float(rent_collection_rate),
+                "date_from": str(start_date),
+                "date_to": str(end_date),
+            }
+        )
+
+    def _parse_date(self, value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
 
 
 class MeView(APIView):

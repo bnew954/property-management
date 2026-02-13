@@ -5,8 +5,11 @@ import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import Documents from "./pages/Documents";
+import Accounting from "./pages/Accounting";
 import MaintenanceList from "./pages/MaintenanceList";
 import MaintenanceForm from "./pages/MaintenanceForm";
+import ExpenseForm from "./pages/ExpenseForm";
+import FinancialReports from "./pages/FinancialReports";
 import LeaseForm from "./pages/LeaseForm";
 import LeaseList from "./pages/LeaseList";
 import Login from "./pages/Login";
@@ -19,6 +22,7 @@ import PropertyDetail from "./pages/PropertyDetail";
 import PropertyForm from "./pages/PropertyForm";
 import PropertyList from "./pages/PropertyList";
 import Register from "./pages/Register";
+import RentLedger from "./pages/RentLedger";
 import ScreeningDetail from "./pages/ScreeningDetail";
 import ScreeningList from "./pages/ScreeningList";
 import ScreeningRequest from "./pages/ScreeningRequest";
@@ -163,6 +167,11 @@ function App() {
               <Route path="/payments" element={<PaymentsList />} />
               <Route path="/payments/new" element={<PaymentForm />} />
               <Route path="/payments/:id/edit" element={<PaymentForm />} />
+              <Route path="/accounting" element={<Accounting />} />
+              <Route path="/accounting/ledger/:leaseId" element={<RentLedger />} />
+              <Route path="/accounting/expenses/new" element={<ExpenseForm />} />
+              <Route path="/accounting/expenses/:id/edit" element={<ExpenseForm />} />
+              <Route path="/accounting/reports" element={<FinancialReports />} />
               <Route path="/pay-rent" element={<PayRent />} />
               <Route path="/my-lease" element={<MyLease />} />
               <Route path="/messages" element={<Messages />} />

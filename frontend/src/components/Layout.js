@@ -1,4 +1,5 @@
 import ApartmentIcon from "@mui/icons-material/Apartment";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import BuildIcon from "@mui/icons-material/Build";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
@@ -40,6 +41,7 @@ const navItems = [
   { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
   { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
+  { label: "Accounting", path: "/accounting", icon: <AccountBalanceIcon />, landlordOnly: true },
   { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
   { label: "Documents", path: "/documents", icon: <FolderIcon /> },
   { label: "Messages", path: "/messages", icon: <ChatBubbleOutlineIcon />, utility: true },
@@ -55,7 +57,12 @@ function Layout({ children }) {
       ? navItems.filter((item) =>
           ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance", "/documents", "/messages"].includes(item.path)
         )
-      : navItems.filter((item) => item.path !== "/my-lease" && item.path !== "/pay-rent");
+      : navItems.filter(
+          (item) =>
+            item.path !== "/my-lease" &&
+            item.path !== "/pay-rent" &&
+            !item.tenantOnly
+        );
   const primaryNavItems = visibleNavItems.filter((item) => !item.utility);
   const utilityNavItems = visibleNavItems.filter((item) => item.utility);
 
@@ -66,6 +73,7 @@ function Layout({ children }) {
     if (location.pathname.startsWith("/screenings")) return "Screening";
     if (location.pathname.startsWith("/leases")) return "Leases";
     if (location.pathname.startsWith("/payments")) return "Payments";
+    if (location.pathname.startsWith("/accounting")) return "Accounting";
     if (location.pathname.startsWith("/pay-rent")) return "Pay Rent";
     if (location.pathname.startsWith("/my-lease")) return "My Lease";
     if (location.pathname.startsWith("/maintenance")) return "Maintenance";

@@ -407,3 +407,129 @@ class Document(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.document_type})"
+
+
+class Expense(models.Model):
+    CATEGORY_MAINTENANCE = "maintenance"
+    CATEGORY_INSURANCE = "insurance"
+    CATEGORY_TAXES = "taxes"
+    CATEGORY_UTILITIES = "utilities"
+    CATEGORY_MANAGEMENT_FEE = "management_fee"
+    CATEGORY_LEGAL = "legal"
+    CATEGORY_ADVERTISING = "advertising"
+    CATEGORY_SUPPLIES = "supplies"
+    CATEGORY_LANDSCAPING = "landscaping"
+    CATEGORY_CAPITAL_IMPROVEMENT = "capital_improvement"
+    CATEGORY_OTHER = "other"
+    CATEGORY_CHOICES = [
+        (CATEGORY_MAINTENANCE, "Maintenance"),
+        (CATEGORY_INSURANCE, "Insurance"),
+        (CATEGORY_TAXES, "Taxes"),
+        (CATEGORY_UTILITIES, "Utilities"),
+        (CATEGORY_MANAGEMENT_FEE, "Management Fee"),
+        (CATEGORY_LEGAL, "Legal"),
+        (CATEGORY_ADVERTISING, "Advertising"),
+        (CATEGORY_SUPPLIES, "Supplies"),
+        (CATEGORY_LANDSCAPING, "Landscaping"),
+        (CATEGORY_CAPITAL_IMPROVEMENT, "Capital Improvement"),
+        (CATEGORY_OTHER, "Other"),
+    ]
+
+    FREQ_MONTHLY = "monthly"
+    FREQ_QUARTERLY = "quarterly"
+    FREQ_ANNUALLY = "annually"
+    FREQ_CHOICES = [
+        (FREQ_MONTHLY, "Monthly"),
+        (FREQ_QUARTERLY, "Quarterly"),
+        (FREQ_ANNUALLY, "Annually"),
+    ]
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="expenses"
+    )
+    unit = models.ForeignKey(
+        Unit, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses"
+    )
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES)
+    vendor_name = models.CharField(max_length=255, blank=True)
+    description = models.TextField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateField()
+    is_recurring = models.BooleanField(default=False)
+    recurring_frequency = models.CharField(
+        max_length=20, choices=FREQ_CHOICES, null=True, blank=True
+    )
+    receipt = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses"
+    )
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="expenses_created"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.property.name} - {self.category} - {self.amount}"
+
+
+class RentLedgerEntry(models.Model):
+    TYPE_CHARGE = "charge"
+    TYPE_PAYMENT = "payment"
+    TYPE_LATE_FEE = "late_fee"
+    TYPE_CREDIT = "credit"
+    TYPE_ADJUSTMENT = "adjustment"
+    TYPE_CHOICES = [
+        (TYPE_CHARGE, "Charge"),
+        (TYPE_PAYMENT, "Payment"),
+        (TYPE_LATE_FEE, "Late Fee"),
+        (TYPE_CREDIT, "Credit"),
+        (TYPE_ADJUSTMENT, "Adjustment"),
+    ]
+
+    lease = models.ForeignKey(
+        Lease, on_delete=models.CASCADE, related_name="ledger_entries"
+    )
+    entry_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    balance = models.DecimalField(max_digits=10, decimal_places=2)
+    payment = models.ForeignKey(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name="ledger_entries"
+    )
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "created_at", "id"]
+
+    def __str__(self):
+        return f"Ledger {self.lease_id} {self.entry_type} {self.amount}"
+
+
+class LateFeeRule(models.Model):
+    TYPE_FLAT = "flat"
+    TYPE_PERCENTAGE = "percentage"
+    TYPE_CHOICES = [
+        (TYPE_FLAT, "Flat"),
+        (TYPE_PERCENTAGE, "Percentage"),
+    ]
+
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="late_fee_rules"
+    )
+    grace_period_days = models.IntegerField(default=5)
+    fee_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    fee_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    max_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"LateFeeRule {self.property.name} ({self.fee_type})"

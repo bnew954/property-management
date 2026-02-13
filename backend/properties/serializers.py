@@ -12,6 +12,9 @@ from .models import (
     Tenant,
     Unit,
     Document,
+    Expense,
+    RentLedgerEntry,
+    LateFeeRule,
 )
 
 
@@ -114,3 +117,32 @@ class DocumentSerializer(serializers.ModelSerializer):
         if request and request.user and request.user.is_authenticated:
             validated_data["uploaded_by"] = request.user
         return super().create(validated_data)
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    created_by_detail = UserSummarySerializer(source="created_by", read_only=True)
+    property_detail = PropertySerializer(source="property", read_only=True)
+    unit_detail = UnitSerializer(source="unit", read_only=True)
+    receipt_detail = DocumentSerializer(source="receipt", read_only=True)
+
+    class Meta:
+        model = Expense
+        fields = "__all__"
+        read_only_fields = ["created_by"]
+
+
+class RentLedgerEntrySerializer(serializers.ModelSerializer):
+    lease_detail = LeaseSerializer(source="lease", read_only=True)
+    payment_detail = PaymentSerializer(source="payment", read_only=True)
+
+    class Meta:
+        model = RentLedgerEntry
+        fields = "__all__"
+
+
+class LateFeeRuleSerializer(serializers.ModelSerializer):
+    property_detail = PropertySerializer(source="property", read_only=True)
+
+    class Meta:
+        model = LateFeeRule
+        fields = "__all__"

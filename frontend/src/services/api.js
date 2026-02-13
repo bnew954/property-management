@@ -117,6 +117,25 @@ export const deleteDocument = (id) => api.delete(`documents/${id}/`);
 export const downloadDocument = (id) =>
   api.get(`documents/${id}/download/`, { responseType: "blob" });
 
+export const getExpenses = (params = {}) => api.get("expenses/", { params });
+export const getExpense = (id) => api.get(`expenses/${id}/`);
+export const createExpense = (data) => api.post("expenses/", data);
+export const updateExpense = (id, data) => api.patch(`expenses/${id}/`, data);
+export const deleteExpense = (id) => api.delete(`expenses/${id}/`);
+
+export const getRentLedgerEntries = (params = {}) =>
+  api.get("rent-ledger/", { params });
+export const getLateFeeRules = () => api.get("late-fee-rules/");
+export const createLateFeeRule = (data) => api.post("late-fee-rules/", data);
+export const updateLateFeeRule = (id, data) =>
+  api.patch(`late-fee-rules/${id}/`, data);
+export const deleteLateFeeRule = (id) => api.delete(`late-fee-rules/${id}/`);
+
+export const generateAccountingCharges = () =>
+  api.post("accounting/generate-charges/");
+export const getAccountingReports = (params = {}) =>
+  api.get("accounting/reports/", { params });
+
 export const getPayments = () => api.get("payments/");
 export const getPayment = (id) => api.get(`payments/${id}/`);
 export const createPayment = (data) => api.post("payments/", data);
