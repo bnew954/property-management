@@ -1,4 +1,4 @@
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+﻿import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -39,7 +39,7 @@ function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       <img
-        src="/logo-icon.png"
+        src={`${process.env.PUBLIC_URL}/logo-icon.png`}
         alt="Onyx PM"
         style={{
           height: iconSize,
@@ -408,7 +408,7 @@ function LandingPage() {
             <Box sx={{ textAlign: "center", maxWidth: 980 }}>
               <Box sx={{ mb: 1.5, display: "flex", justifyContent: "center" }}>
                 <img
-                  src="/logo-icon.png"
+                  src={`${process.env.PUBLIC_URL}/logo-icon.png`}
                   alt="Onyx PM"
                   style={{
                     height: 48,
@@ -446,7 +446,7 @@ function LandingPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Get Started � It's Free
+                  Get Started {"\u2014"} It's Free
                 </Button>
                 <Button
                   size="medium"
@@ -721,7 +721,7 @@ function LandingPage() {
                 fullWidth
                 sx={{ mt: 2.4, background: "#6347f5", "&:hover": { background: "#5539d9" }, borderRadius: 2, py: 1.2, fontWeight: 600 }}
               >
-                Get Started - It\x27s Free
+                Get Started {"\u2014"} It's Free
               </Button>
               <Box sx={{ mt: 2.6, border: "1px solid rgba(124,92,252,0.3)", borderRadius: 2, p: 1.4, background: "#111111" }}>
                 <Typography sx={{ fontWeight: 600, color: "#fff" }}>How we compare</Typography>
@@ -864,6 +864,9 @@ function LandingPage() {
 }
 
 export default LandingPage;
+
+
+
 
 
 
