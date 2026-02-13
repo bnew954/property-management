@@ -1,9 +1,13 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
+  IconButton,
   Paper,
+  Snackbar,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -12,27 +16,65 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { getProperties } from "../services/api";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import { deleteProperty, getProperties } from "../services/api";
 
 function PropertyList() {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const loadProperties = async () => {
+    try {
+      const response = await getProperties();
+      setProperties(response.data || []);
+    } catch (err) {
+      setError("Unable to load properties.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadProperties = async () => {
-      try {
-        const response = await getProperties();
-        setProperties(response.data || []);
-      } catch (err) {
-        setError("Unable to load properties.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadProperties();
   }, []);
+
+  useEffect(() => {
+    if (location.state?.snackbar?.message) {
+      setSnackbar({
+        open: true,
+        message: location.state.snackbar.message,
+        severity: location.state.snackbar.severity || "success",
+      });
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state, navigate]);
+
+  const handleDelete = async (propertyId) => {
+    try {
+      await deleteProperty(propertyId);
+      setSnackbar({
+        open: true,
+        message: "Property deleted successfully.",
+        severity: "success",
+      });
+      loadProperties();
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: "Failed to delete property.",
+        severity: "error",
+      });
+    }
+  };
 
   return (
     <Box>
@@ -40,7 +82,7 @@ function PropertyList() {
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
           Properties
         </Typography>
-        <Button variant="contained" color="primary">
+        <Button component={Link} to="/properties/new" variant="contained" color="primary">
           Add Property
         </Button>
       </Box>
@@ -54,6 +96,7 @@ function PropertyList() {
               <TableCell>City</TableCell>
               <TableCell>State</TableCell>
               <TableCell>Type</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -67,16 +110,48 @@ function PropertyList() {
                 <TableCell>{property.city}</TableCell>
                 <TableCell>{property.state}</TableCell>
                 <TableCell sx={{ textTransform: "capitalize" }}>{property.property_type}</TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                    <IconButton
+                      component={Link}
+                      to={`/properties/${property.id}/edit`}
+                      color="primary"
+                      size="small"
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      size="small"
+                      onClick={() => handleDelete(property.id)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </TableCell>
               </TableRow>
             ))}
             {!loading && properties.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>No properties found.</TableCell>
+                <TableCell colSpan={5}>No properties found.</TableCell>
               </TableRow>
             ) : null}
           </TableBody>
         </Table>
       </TableContainer>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

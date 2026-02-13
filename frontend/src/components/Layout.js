@@ -1,6 +1,7 @@
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import BuildIcon from "@mui/icons-material/Build";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+import DescriptionIcon from "@mui/icons-material/Description";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
 import {
@@ -23,6 +24,7 @@ const navItems = [
   { label: "Dashboard", path: "/", icon: <DashboardIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
   { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
+  { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
   { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
   { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
 ];
