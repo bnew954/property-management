@@ -3,6 +3,7 @@ import { Avatar, Box, Card, CardActionArea, Typography } from "@mui/material";
 import AddHomeWorkIcon from "@mui/icons-material/AddHomeWork";
 import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
 import SpeedIcon from "@mui/icons-material/Speed";
+import EastIcon from "@mui/icons-material/East";
 import { useUser } from "../services/userContext";
 
 const quickActions = [
@@ -103,6 +104,24 @@ function Welcome() {
             </Card>
           ))}
         </Box>
+        <Typography
+          component={Link}
+          to="/dashboard"
+          variant="body2"
+          sx={{
+            mt: 2,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.6,
+            color: "#6b7280",
+            textDecoration: "none",
+            fontSize: 12,
+            "&:hover": { color: "#1a1a1a" },
+          }}
+        >
+          Skip to Dashboard
+          <EastIcon sx={{ fontSize: 14 }} />
+        </Typography>
       </Box>
     </Box>
   );
