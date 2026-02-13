@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "@mui/material";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import {
@@ -28,6 +29,7 @@ const formatCurrency = (value) =>
 
 function MyLease() {
   const { user } = useUser();
+  const theme = useTheme();
   const [lease, setLease] = useState(null);
   const [unit, setUnit] = useState(null);
   const [property, setProperty] = useState(null);
@@ -98,7 +100,7 @@ function MyLease() {
 
   return (
     <Box>
-      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em", mb: 0.8 }}>
+          <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em", mb: 0.8 }}>
         My Lease
       </Typography>
       <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.5 }}>
@@ -109,8 +111,8 @@ function MyLease() {
       {error ? <Alert severity="error">{error}</Alert> : null}
 
       {!loading && !error && !lease ? (
-        <Paper sx={{ p: 2.5, bgcolor: "#141414" }}>
-          <Typography sx={{ fontSize: 14, color: "#e0e0e0", mb: 0.5 }}>
+        <Paper sx={{ p: 2.5, bgcolor: "background.paper" }}>
+          <Typography sx={{ fontSize: 14, color: "text.secondary", mb: 0.5 }}>
             No active lease found.
           </Typography>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
@@ -120,11 +122,11 @@ function MyLease() {
       ) : null}
 
       {!loading && !error && lease ? (
-        <Paper sx={{ p: 2.5, bgcolor: "#141414" }}>
+        <Paper sx={{ p: 2.5, bgcolor: "background.paper" }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <HomeWorkIcon sx={{ fontSize: 18, color: "#7c5cfc" }} />
-              <Typography sx={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
+              <HomeWorkIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
+              <Typography sx={{ fontSize: 15, fontWeight: 600, color: "text.primary" }}>
                 {property?.name || "Property"}
               </Typography>
             </Box>
@@ -133,8 +135,10 @@ function MyLease() {
               icon={<AssignmentTurnedInIcon />}
               label={lease.is_active ? "Active" : "Inactive"}
               sx={{
-                bgcolor: lease.is_active ? "rgba(34,197,94,0.1)" : "rgba(107,114,128,0.15)",
-                color: lease.is_active ? "#22c55e" : "#9ca3af",
+                bgcolor: lease.is_active
+                  ? `${theme.palette.success.main}20`
+                  : `${theme.palette.text.secondary}25`,
+                color: lease.is_active ? theme.palette.success.main : theme.palette.text.secondary,
                 fontWeight: 500,
                 fontSize: 11,
                 height: 22,
@@ -203,4 +207,3 @@ function MyLease() {
 }
 
 export default MyLease;
-

@@ -91,11 +91,10 @@ function NotificationBell() {
       }
     }
     setNotifications((prev) =>
-      prev.map((item) =>
-        item.id === notification.id ? { ...item, is_read: true } : item
-      )
+      prev.map((item) => (item.id === notification.id ? { ...item, is_read: true } : item))
     );
     setUnreadCount((prev) => Math.max(prev - (notification.is_read ? 0 : 1), 0));
+
     if (notification.link) {
       navigate(notification.link);
       setAnchorEl(null);
@@ -117,10 +116,15 @@ function NotificationBell() {
       <IconButton
         onClick={(event) => setAnchorEl(event.currentTarget)}
         sx={{
-          color: "#9ca3af",
-          border: "1px solid rgba(255,255,255,0.08)",
+          color: "text.secondary",
+          border: "1px solid",
+          borderColor: "divider",
           borderRadius: 1,
-          "&:hover": { color: "#fff", backgroundColor: "rgba(255,255,255,0.03)" },
+          transition: "color 0.2s ease, background-color 0.2s ease",
+          "&:hover": {
+            color: "text.primary",
+            backgroundColor: "action.hover",
+          },
         }}
       >
         <Badge
@@ -149,13 +153,14 @@ function NotificationBell() {
             width: 360,
             mt: 1,
             borderRadius: 1,
-            backgroundColor: "#141414",
-            border: "1px solid rgba(255,255,255,0.08)",
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
           },
         }}
       >
         <Box sx={{ p: 1.2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}>
             Notifications
           </Typography>
           <Button
@@ -166,7 +171,7 @@ function NotificationBell() {
             Mark all as read
           </Button>
         </Box>
-        <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
+        <Divider sx={{ borderColor: "divider" }} />
         <Box sx={{ maxHeight: 340, overflowY: "auto" }}>
           {visibleNotifications.map((notification) => (
             <Box
@@ -176,8 +181,9 @@ function NotificationBell() {
                 px: 1.2,
                 py: 1.1,
                 cursor: "pointer",
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
-                "&:hover": { backgroundColor: "rgba(255,255,255,0.03)" },
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                "&:hover": { backgroundColor: "action.hover" },
               }}
             >
               <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.8 }}>
@@ -187,13 +193,14 @@ function NotificationBell() {
                     height: 6,
                     borderRadius: "50%",
                     mt: 0.7,
-                    bgcolor: notification.is_read ? "transparent" : "#ef4444",
-                    border: notification.is_read ? "1px solid rgba(255,255,255,0.1)" : "none",
+                    bgcolor: notification.is_read ? "transparent" : "error.main",
+                    border: notification.is_read ? "1px solid" : "none",
+                    borderColor: notification.is_read ? "divider" : "transparent",
                     flexShrink: 0,
                   }}
                 />
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 12, fontWeight: 500, color: "#e5e7eb" }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 500, color: "text.primary" }}>
                     {notification.title}
                   </Typography>
                   <Typography
@@ -207,7 +214,7 @@ function NotificationBell() {
                   >
                     {notification.message}
                   </Typography>
-                  <Typography sx={{ fontSize: 10, color: "#6b7280", mt: 0.3 }}>
+                  <Typography sx={{ fontSize: 10, color: "text.secondary", mt: 0.3 }}>
                     {toTimeAgo(notification.created_at)}
                   </Typography>
                 </Box>
@@ -222,7 +229,7 @@ function NotificationBell() {
             </Box>
           ) : null}
         </Box>
-        <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
+        <Divider sx={{ borderColor: "divider" }} />
         <Box sx={{ p: 1, textAlign: "center" }}>
           <Button
             size="small"
@@ -238,4 +245,3 @@ function NotificationBell() {
 }
 
 export default NotificationBell;
-

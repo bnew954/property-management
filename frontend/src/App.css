@@ -1,13 +1,9 @@
-* {
-  box-sizing: border-box;
-}
-
 body {
   margin: 0;
-  background: #0a0a0a;
-  color: #e0e0e0;
   font-family: "Inter", "Roboto", sans-serif;
   font-size: 13px;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 a {
@@ -15,24 +11,8 @@ a {
   text-decoration: none;
 }
 
-* {
-  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #0a0a0a;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #232323;
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #333;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }

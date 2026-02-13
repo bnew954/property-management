@@ -113,7 +113,7 @@ function ExpenseForm() {
 
   return (
     <Box>
-      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", mb: 0.6 }}>
+      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", mb: 0.6 }}>
         {isEditMode ? "Edit Expense" : "Add Expense"}
       </Typography>
       <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.4 }}>
@@ -184,4 +184,3 @@ function ExpenseForm() {
 }
 
 export default ExpenseForm;
-

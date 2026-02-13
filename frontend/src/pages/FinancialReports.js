@@ -1,4 +1,5 @@
 import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Paper, Select, TextField, Typography } from "@mui/material";
+import { useTheme } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getAccountingReports, getProperties } from "../services/api";
@@ -9,6 +10,7 @@ const formatCurrency = (value) =>
 
 function FinancialReports() {
   const { role } = useUser();
+  const theme = useTheme();
   const thisYear = new Date().getFullYear();
   const [dateFrom, setDateFrom] = useState(`${thisYear}-01-01`);
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
@@ -37,14 +39,20 @@ function FinancialReports() {
     loadReport();
   }, [loadReport]);
 
-  const expensesByCategory = useMemo(
-    () =>
-      (report?.expenses_by_category || []).map((item, idx) => ({
-        ...item,
-        color: ["#ef4444", "#f59e0b", "#a855f7", "#3b82f6", "#22c55e", "#6b7280"][idx % 6],
-      })),
-    [report?.expenses_by_category]
-  );
+  const expensesByCategory = useMemo(() => {
+    const categoryColors = [
+      theme.palette.error.main,
+      theme.palette.warning.main,
+      theme.palette.secondary.main,
+      theme.palette.info.main,
+      theme.palette.success.main,
+      theme.palette.text.secondary,
+    ];
+    return (report?.expenses_by_category || []).map((item, idx) => ({
+      ...item,
+      color: categoryColors[idx % categoryColors.length],
+    }));
+  }, [report?.expenses_by_category, theme.palette.error.main, theme.palette.warning.main, theme.palette.secondary.main, theme.palette.info.main, theme.palette.success.main, theme.palette.text.secondary]);
 
   const exportCsv = () => {
     if (!report) return;
@@ -76,7 +84,7 @@ function FinancialReports() {
   return (
     <Box>
       {role !== "landlord" ? (
-        <Paper sx={{ p: 2, bgcolor: "#141414" }}>
+        <Paper sx={{ p: 2, bgcolor: "background.paper" }}>
           <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
             Financial reports are available to landlord accounts only.
           </Typography>
@@ -84,7 +92,7 @@ function FinancialReports() {
       ) : null}
       {role !== "landlord" ? null : (
       <>
-      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", mb: 0.6 }}>
+      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", mb: 0.6 }}>
         Financial Reports
       </Typography>
       <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.2 }}>
@@ -108,37 +116,72 @@ function FinancialReports() {
 
       {report ? (
         <>
-          <Paper sx={{ p: 1.4, mb: 1.2 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 0.8 }}>P&L Summary</Typography>
+            <Paper sx={{ p: 1.4, mb: 1.2 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.8 }}>P&L Summary</Typography>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 1 }}>
-              <Typography sx={{ fontSize: 13, color: "#22c55e" }}>Income: {formatCurrency(report.total_income)}</Typography>
-              <Typography sx={{ fontSize: 13, color: "#ef4444" }}>Expenses: {formatCurrency(report.total_expenses)}</Typography>
-              <Typography sx={{ fontSize: 13, color: Number(report.net_operating_income) >= 0 ? "#22c55e" : "#ef4444" }}>NOI: {formatCurrency(report.net_operating_income)}</Typography>
+              <Typography sx={{ fontSize: 13, color: "success.main" }}>
+                Income: {formatCurrency(report.total_income)}
+              </Typography>
+              <Typography sx={{ fontSize: 13, color: "error.main" }}>
+                Expenses: {formatCurrency(report.total_expenses)}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: Number(report.net_operating_income) >= 0 ? "success.main" : "error.main",
+                }}
+              >
+                NOI: {formatCurrency(report.net_operating_income)}
+              </Typography>
             </Box>
           </Paper>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.25fr 1fr" }, gap: 1.2 }}>
             <Paper sx={{ p: 1.2 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 0.8 }}>Income by Month</Typography>
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
+                Income by Month
+              </Typography>
               <Box sx={{ width: "100%", height: 300 }}>
                 <ResponsiveContainer>
                   <BarChart data={report.income_by_month || []}>
-                    <XAxis dataKey="month" tick={{ fill: "#6b7280", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={{ background: "#141414", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }} />
-                    <Bar dataKey="income" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    <XAxis dataKey="month" tick={{ fill: "text.secondary", fontSize: 11 }} axisLine={{ stroke: theme.palette.divider }} />
+                    <YAxis
+                      tick={{ fill: "text.secondary", fontSize: 11 }}
+                      axisLine={{ stroke: theme.palette.divider }}
+                      tickFormatter={(v) => `$${Number(v).toLocaleString()}`}
+                    />
+                    <Tooltip
+                      formatter={(v) => formatCurrency(v)}
+                      contentStyle={{
+                        background: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderRadius: 8,
+                        color: theme.palette.text.primary,
+                      }}
+                    />
+                    <Bar dataKey="income" fill={theme.palette.success.main} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
             </Paper>
             <Paper sx={{ p: 1.2 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 0.8 }}>Expenses by Category</Typography>
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
+                Expenses by Category
+              </Typography>
               <Box sx={{ width: "100%", height: 300 }}>
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie data={expensesByCategory} dataKey="total" nameKey="category" innerRadius={60} outerRadius={95}>
                       {expensesByCategory.map((item) => <Cell key={item.category} fill={item.color} />)}
                     </Pie>
-                    <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={{ background: "#141414", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }} />
+                    <Tooltip
+                      formatter={(v) => formatCurrency(v)}
+                      contentStyle={{
+                        background: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderRadius: 8,
+                        color: theme.palette.text.primary,
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </Box>

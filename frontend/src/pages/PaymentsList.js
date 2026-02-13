@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  useTheme,
   IconButton,
   Paper,
   Snackbar,
@@ -23,20 +24,14 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deletePayment, getPayments, getProperties, getTenants } from "../services/api";
 import { useUser } from "../services/userContext";
 
-const statusStyles = {
-  pending: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
-  completed: { bgcolor: "rgba(34,197,94,0.1)", color: "#22c55e" },
-  failed: { bgcolor: "rgba(239,68,68,0.1)", color: "#ef4444" },
-  refunded: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
-};
-
 const toLabel = (value) => value.replaceAll("_", " ");
 const headerCellSx = {
   color: "text.secondary",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 const formatDate = (value) =>
@@ -49,6 +44,7 @@ const formatDate = (value) =>
     : "-";
 
 function PaymentsList() {
+  const theme = useTheme();
   const { role } = useUser();
   const [payments, setPayments] = useState([]);
   const [properties, setProperties] = useState([]);
@@ -62,7 +58,7 @@ function PaymentsList() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const loadPayments = async () => {
+  const loadPayments = useCallback(async () => {
     try {
       const requests =
         role === "tenant"
@@ -85,11 +81,11 @@ function PaymentsList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [role]);
 
   useEffect(() => {
     loadPayments();
-  }, [role]);
+  }, [loadPayments, role]);
 
   useEffect(() => {
     if (location.state?.snackbar?.message) {
@@ -145,7 +141,7 @@ function PaymentsList() {
   return (
     <Box>
       <Box sx={{ mb: 0.8 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
           Payments
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -160,12 +156,12 @@ function PaymentsList() {
             variant="outlined"
             size="small"
             sx={{
-              borderColor: "rgba(255,255,255,0.1)",
-              color: "#e0e0e0",
+            borderColor: "divider",
+            color: "text.secondary",
               "&:hover": {
-                borderColor: "primary.main",
+            borderColor: "primary.main",
                 color: "primary.main",
-                backgroundColor: "rgba(124,92,252,0.08)",
+                backgroundColor: "action.hover",
               },
             }}
           >
@@ -176,7 +172,7 @@ function PaymentsList() {
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "background.paper" }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -191,7 +187,7 @@ function PaymentsList() {
           </TableHead>
           <TableBody>
             {payments.map((payment) => (
-              <TableRow key={payment.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+              <TableRow key={payment.id} sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}>
                 <TableCell>{tenantName(payment)}</TableCell>
                 <TableCell>{propertyUnit(payment)}</TableCell>
                 <TableCell>
@@ -205,17 +201,29 @@ function PaymentsList() {
                   {toLabel(payment.payment_method)}
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    size="small"
-                    label={toLabel(payment.status)}
-                    sx={{
-                      ...(statusStyles[payment.status] || { bgcolor: "#e2e8f0", color: "#334155" }),
-                      fontWeight: 500,
-                      fontSize: 11,
-                      height: 22,
-                      textTransform: "capitalize",
-                    }}
-                  />
+                    <Chip
+                      size="small"
+                      label={toLabel(payment.status)}
+                      sx={{
+                        fontWeight: 500,
+                        fontSize: 11,
+                        height: 22,
+                        textTransform: "capitalize",
+                        ...(payment.status === "pending"
+                          ? {
+                              bgcolor: `${theme.palette.warning.main}22`,
+                              color: theme.palette.warning.main,
+                            }
+                          : payment.status === "completed"
+                            ? { bgcolor: `${theme.palette.success.main}22`, color: theme.palette.success.main }
+                            : payment.status === "failed"
+                              ? { bgcolor: `${theme.palette.error.main}22`, color: theme.palette.error.main }
+                              : {
+                                  bgcolor: `${theme.palette.info.main}22`,
+                                  color: theme.palette.info.main,
+                                }),
+                      }}
+                    />
                 </TableCell>
                 <TableCell align="right">
                   {role !== "tenant" ? (
@@ -224,14 +232,20 @@ function PaymentsList() {
                         component={Link}
                         to={`/payments/${payment.id}/edit`}
                         size="small"
-                        sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                        sx={{
+                          color: "text.secondary",
+                          "&:hover": { color: "primary.main", backgroundColor: "transparent" },
+                        }}
                       >
                         <EditIcon sx={{ fontSize: 16 }} />
                       </IconButton>
                       <IconButton
                         size="small"
                         onClick={() => handleDelete(payment.id)}
-                        sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                        sx={{
+                          color: "text.secondary",
+                          "&:hover": { color: "error.main", backgroundColor: "transparent" },
+                        }}
                       >
                         <DeleteIcon sx={{ fontSize: 16 }} />
                       </IconButton>
@@ -253,7 +267,8 @@ function PaymentsList() {
               mx: 1.2,
               mb: 1.2,
               mt: 0.4,
-              border: "1px dashed rgba(255,255,255,0.12)",
+              border: "1px dashed",
+              borderColor: "divider",
               borderRadius: 1,
               py: 1,
               textAlign: "center",

@@ -21,6 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -41,7 +42,8 @@ const headerCellSx = {
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 const formatCurrency = (value) =>
@@ -61,6 +63,7 @@ const formatDate = (value) =>
 
 function Accounting() {
   const { role } = useUser();
+  const theme = useTheme();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [report, setReport] = useState(null);
@@ -170,7 +173,7 @@ function Accounting() {
 
   if (role !== "landlord") {
     return (
-      <Paper sx={{ p: 2, bgcolor: "#141414" }}>
+      <Paper sx={{ p: 2, bgcolor: "background.paper" }}>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Accounting is available to landlord accounts only.
         </Typography>
@@ -182,7 +185,7 @@ function Accounting() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
         <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
+          <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}>
             Accounting
           </Typography>
           <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -199,8 +202,12 @@ function Accounting() {
         </Box>
       </Box>
       {error ? <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert> : null}
-      <Paper sx={{ mb: 1.2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <Paper sx={{ mb: 1.2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{ borderBottom: "1px solid", borderColor: "divider" }}
+          >
           <Tab label="Overview" />
           <Tab label="Expenses" />
           <Tab label="Rent Roll" />
@@ -211,24 +218,99 @@ function Accounting() {
 
       {!loading && tab === 0 && report ? (
         <Box>
-          <Box sx={{ display: "grid", gap: 1.1, gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, mb: 1.2 }}>
-            <Card><CardContent><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Income (YTD)</Typography><Typography sx={{ fontSize: 22, color: "#22c55e", fontWeight: 600 }}>{formatCurrency(report.total_income)}</Typography></CardContent></Card>
-            <Card><CardContent><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Expenses (YTD)</Typography><Typography sx={{ fontSize: 22, color: "#ef4444", fontWeight: 600 }}>{formatCurrency(report.total_expenses)}</Typography></CardContent></Card>
-            <Card><CardContent><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Net Operating Income</Typography><Typography sx={{ fontSize: 22, color: Number(report.net_operating_income) >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{formatCurrency(report.net_operating_income)}</Typography></CardContent></Card>
-            <Card><CardContent><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Rent Collection Rate</Typography><Typography sx={{ fontSize: 22, color: "#e5e7eb", fontWeight: 600 }}>{Number(report.rent_collection_rate || 0).toFixed(1)}%</Typography></CardContent></Card>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 1.1,
+              gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" },
+              mb: 1.2,
+            }}
+          >
+            <Card>
+              <CardContent>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                  Total Income (YTD)
+                </Typography>
+                <Typography sx={{ fontSize: 22, color: "success.main", fontWeight: 600 }}>
+                  {formatCurrency(report.total_income)}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                  Total Expenses (YTD)
+                </Typography>
+                <Typography sx={{ fontSize: 22, color: "error.main", fontWeight: 600 }}>
+                  {formatCurrency(report.total_expenses)}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Net Operating Income</Typography>
+                <Typography
+                  sx={{
+                    fontSize: 22,
+                    color: Number(report.net_operating_income) >= 0 ? "success.main" : "error.main",
+                    fontWeight: 600,
+                  }}
+                >
+                  {formatCurrency(report.net_operating_income)}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Rent Collection Rate</Typography>
+                <Typography sx={{ fontSize: 22, color: "text.primary", fontWeight: 600 }}>
+                  {Number(report.rent_collection_rate || 0).toFixed(1)}%
+                </Typography>
+              </CardContent>
+            </Card>
           </Box>
           <Paper sx={{ p: 1.4 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
               Income vs Expenses by Month
             </Typography>
             <Box sx={{ width: "100%", height: 280 }}>
               <ResponsiveContainer>
                 <LineChart data={report.income_by_month || []}>
-                  <XAxis dataKey="month" tick={{ fill: "#6b7280", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} />
-                  <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={{ background: "#141414", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }} />
-                  <Line type="monotone" dataKey="income" stroke="#22c55e" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} dot={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fill: "text.secondary", fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.palette.divider }}
+                  />
+                  <YAxis
+                    tick={{ fill: "text.secondary", fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: theme.palette.divider }}
+                    tickFormatter={(v) => `$${Number(v).toLocaleString()}`}
+                  />
+                  <Tooltip
+                    formatter={(v) => formatCurrency(v)}
+                    contentStyle={{
+                      background: theme.palette.background.paper,
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: 8,
+                      color: theme.palette.text.primary,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="income"
+                    stroke={theme.palette.success.main}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expenses"
+                    stroke={theme.palette.error.main}
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </Box>
@@ -300,13 +382,18 @@ function Accounting() {
               </TableHead>
               <TableBody>
                 {expenseRows.map((expense) => (
-                  <TableRow key={expense.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+                  <TableRow
+                    key={expense.id}
+                    sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}
+                  >
                     <TableCell>{formatDate(expense.date)}</TableCell>
                     <TableCell>{propertyMap[expense.property]?.name || "-"}</TableCell>
-                    <TableCell><Chip label={expense.category.replaceAll("_", " ")} size="small" sx={{ fontSize: 11, textTransform: "capitalize" }} /></TableCell>
+                    <TableCell>
+                      <Chip label={expense.category.replaceAll("_", " ")} size="small" sx={{ fontSize: 11, textTransform: "capitalize" }} />
+                    </TableCell>
                     <TableCell>{expense.vendor_name || "-"}</TableCell>
                     <TableCell>{expense.description}</TableCell>
-                    <TableCell sx={{ color: "#ef4444" }}>{formatCurrency(expense.amount)}</TableCell>
+                    <TableCell sx={{ color: "error.main" }}>{formatCurrency(expense.amount)}</TableCell>
                     <TableCell align="right">
                       <Button size="small" component={Link} to={`/accounting/expenses/${expense.id}/edit`}>Edit</Button>
                       <Button size="small" color="error" onClick={() => deleteExpense(expense.id).then(loadData)}>Delete</Button>
@@ -340,11 +427,15 @@ function Accounting() {
                 const property = unit ? propertyMap[unit.property] : null;
                 const tenant = tenantMap[row.lease.tenant];
                 const statusColor =
-                  row.status === "current" ? "#22c55e" : row.status === "overdue" ? "#ef4444" : "#f59e0b";
+                  row.status === "current"
+                    ? theme.palette.success.main
+                    : row.status === "overdue"
+                      ? theme.palette.error.main
+                      : theme.palette.warning.main;
                 return (
                   <TableRow
                     key={row.lease.id}
-                    sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 }, cursor: "pointer" }}
+                    sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 }, cursor: "pointer" }}
                     onClick={() => navigate(`/accounting/ledger/${row.lease.id}`)}
                   >
                     <TableCell>{property?.name || "-"}</TableCell>
@@ -352,10 +443,16 @@ function Accounting() {
                     <TableCell>{tenant ? `${tenant.first_name} ${tenant.last_name}` : "-"}</TableCell>
                     <TableCell>{formatCurrency(row.lease.monthly_rent)}</TableCell>
                     <TableCell>{row.lastPaymentDate ? formatDate(row.lastPaymentDate) : "-"}</TableCell>
-                    <TableCell sx={{ color: row.balance <= 0 ? "#22c55e" : "#ef4444" }}>
+                    <TableCell sx={{ color: row.balance <= 0 ? "success.main" : "error.main" }}>
                       {formatCurrency(row.balance)}
                     </TableCell>
-                    <TableCell><Chip size="small" label={row.status} sx={{ color: statusColor, bgcolor: `${statusColor}22`, textTransform: "capitalize", fontSize: 11 }} /></TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={row.status}
+                        sx={{ color: statusColor, bgcolor: `${statusColor}22`, textTransform: "capitalize", fontSize: 11 }}
+                      />
+                    </TableCell>
                   </TableRow>
                 );
               })}

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  useTheme,
   IconButton,
   Paper,
   Snackbar,
@@ -23,39 +24,45 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deleteMaintenanceRequest, getMaintenanceRequests, getTenants } from "../services/api";
 import { useUser } from "../services/userContext";
 
-const statusStyles = {
-  submitted: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
-  in_progress: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
-  completed: { bgcolor: "rgba(34,197,94,0.1)", color: "#22c55e" },
-  cancelled: { bgcolor: "rgba(239,68,68,0.1)", color: "#ef4444" },
-};
-
-const priorityStyles = {
-  low: { bgcolor: "rgba(107,114,128,0.1)", color: "#6b7280" },
-  medium: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
-  high: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
-  emergency: { bgcolor: "rgba(239,68,68,0.1)", color: "#ef4444" },
-};
-
 const toLabel = (value) => value.replaceAll("_", " ");
 
-const chipSx = (stylesMap, value) => ({
-  ...(stylesMap[value] || { bgcolor: "#e2e8f0", color: "#334155" }),
-  fontWeight: 500,
-  fontSize: 11,
-  height: 22,
-  textTransform: "capitalize",
-});
+const chipSx = (theme, type, value) => {
+  const styles =
+    type === "status"
+      ? {
+          submitted: { color: theme.palette.info.main },
+          in_progress: { color: theme.palette.warning.main },
+          completed: { color: theme.palette.success.main },
+          cancelled: { color: theme.palette.error.main },
+        }[value] || { color: theme.palette.text.secondary }
+      : {
+          low: { color: theme.palette.text.secondary },
+          medium: { color: theme.palette.info.main },
+          high: { color: theme.palette.warning.main },
+          emergency: { color: theme.palette.error.main },
+        }[value] || { color: theme.palette.text.secondary };
+
+  return {
+    bgcolor: `${styles.color}22`,
+    ...styles,
+    fontWeight: 500,
+    fontSize: 11,
+    height: 22,
+    textTransform: "capitalize",
+  };
+};
 
 const headerCellSx = {
   color: "text.secondary",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 function MaintenanceList() {
+  const theme = useTheme();
   const { role } = useUser();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +75,7 @@ function MaintenanceList() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       if (role === "tenant") {
         const [requestsRes, tenantsRes] = await Promise.all([
@@ -90,11 +97,11 @@ function MaintenanceList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [role]);
 
   useEffect(() => {
     loadRequests();
-  }, [role]);
+  }, [loadRequests, role]);
 
   useEffect(() => {
     if (location.state?.snackbar?.message) {
@@ -128,7 +135,7 @@ function MaintenanceList() {
   return (
     <Box>
       <Box sx={{ mb: 0.8 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
           Maintenance Requests
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -142,12 +149,12 @@ function MaintenanceList() {
           variant="outlined"
           size="small"
           sx={{
-            borderColor: "rgba(255,255,255,0.1)",
-            color: "#e0e0e0",
+            borderColor: "divider",
+            color: "text.secondary",
             "&:hover": {
               borderColor: "primary.main",
               color: "primary.main",
-              backgroundColor: "rgba(124,92,252,0.08)",
+              backgroundColor: "action.hover",
             },
           }}
         >
@@ -157,7 +164,7 @@ function MaintenanceList() {
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "background.paper" }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -170,14 +177,17 @@ function MaintenanceList() {
           </TableHead>
           <TableBody>
             {requests.map((request) => (
-              <TableRow key={request.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+              <TableRow
+                key={request.id}
+                sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}
+              >
                 <TableCell>{request.title}</TableCell>
                 <TableCell>{request.unit_detail?.unit_number || request.unit}</TableCell>
                 <TableCell>
-                  <Chip size="small" label={toLabel(request.priority)} sx={chipSx(priorityStyles, request.priority)} />
+                  <Chip size="small" label={toLabel(request.priority)} sx={chipSx(theme, "priority", request.priority)} />
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" label={toLabel(request.status)} sx={chipSx(statusStyles, request.status)} />
+                  <Chip size="small" label={toLabel(request.status)} sx={chipSx(theme, "status", request.status)} />
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end">
@@ -185,7 +195,7 @@ function MaintenanceList() {
                       component={Link}
                       to={`/maintenance/${request.id}/edit`}
                       size="small"
-                      sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                      sx={{ color: "text.secondary", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                     >
                       <EditIcon sx={{ fontSize: 16 }} />
                     </IconButton>
@@ -193,7 +203,7 @@ function MaintenanceList() {
                       <IconButton
                         size="small"
                         onClick={() => handleDelete(request.id)}
-                        sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                        sx={{ color: "text.secondary", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
                       >
                         <DeleteIcon sx={{ fontSize: 16 }} />
                       </IconButton>
@@ -215,7 +225,8 @@ function MaintenanceList() {
               mx: 1.2,
               mb: 1.2,
               mt: 0.4,
-              border: "1px dashed rgba(255,255,255,0.12)",
+              border: "1px dashed",
+              borderColor: "divider",
               borderRadius: 1,
               py: 1,
               textAlign: "center",

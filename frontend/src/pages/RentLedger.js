@@ -8,7 +8,8 @@ const headerCellSx = {
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 const formatCurrency = (value) =>
@@ -82,7 +83,7 @@ function RentLedger() {
 
   return (
     <Box>
-      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em", mb: 0.2 }}>
+      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em", mb: 0.2 }}>
         Rent Ledger
       </Typography>
       <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1 }}>
@@ -93,9 +94,26 @@ function RentLedger() {
       {!loading ? (
         <>
           <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, mb: 1.2 }}>
-            <Paper sx={{ p: 1.2 }}><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Charges</Typography><Typography sx={{ fontSize: 20, color: "#ef4444", fontWeight: 600 }}>{formatCurrency(totals.totalCharges)}</Typography></Paper>
-            <Paper sx={{ p: 1.2 }}><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Payments</Typography><Typography sx={{ fontSize: 20, color: "#22c55e", fontWeight: 600 }}>{formatCurrency(totals.totalPayments)}</Typography></Paper>
-            <Paper sx={{ p: 1.2 }}><Typography sx={{ fontSize: 12, color: "text.secondary" }}>Outstanding Balance</Typography><Typography sx={{ fontSize: 20, color: totals.balance > 0 ? "#ef4444" : "#22c55e", fontWeight: 600 }}>{formatCurrency(totals.balance)}</Typography></Paper>
+            <Paper sx={{ p: 1.2 }}>
+              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Charges</Typography>
+              <Typography sx={{ fontSize: 20, color: "error.main", fontWeight: 600 }}>
+                {formatCurrency(totals.totalCharges)}
+              </Typography>
+            </Paper>
+            <Paper sx={{ p: 1.2 }}>
+              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Payments</Typography>
+              <Typography sx={{ fontSize: 20, color: "success.main", fontWeight: 600 }}>
+                {formatCurrency(totals.totalPayments)}
+              </Typography>
+            </Paper>
+            <Paper sx={{ p: 1.2 }}>
+              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Outstanding Balance</Typography>
+              <Typography
+                sx={{ fontSize: 20, color: totals.balance > 0 ? "error.main" : "success.main", fontWeight: 600 }}
+              >
+                {formatCurrency(totals.balance)}
+              </Typography>
+            </Paper>
           </Box>
 
           <TableContainer component={Paper}>
@@ -111,11 +129,16 @@ function RentLedger() {
               </TableHead>
               <TableBody>
                 {entries.map((entry) => (
-                  <TableRow key={entry.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+                <TableRow
+                  key={entry.id}
+                  sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}
+                >
                     <TableCell>{formatDate(entry.date)}</TableCell>
                     <TableCell>{entry.description}</TableCell>
                     <TableCell><Chip size="small" label={entry.entry_type.replaceAll("_", " ")} sx={{ fontSize: 11, textTransform: "capitalize" }} /></TableCell>
-                    <TableCell sx={{ color: Number(entry.amount) < 0 ? "#22c55e" : "#ef4444" }}>{formatCurrency(entry.amount)}</TableCell>
+                    <TableCell sx={{ color: Number(entry.amount) < 0 ? "success.main" : "error.main" }}>
+                      {formatCurrency(entry.amount)}
+                    </TableCell>
                     <TableCell>{formatCurrency(entry.balance)}</TableCell>
                   </TableRow>
                 ))}

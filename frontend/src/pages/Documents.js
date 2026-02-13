@@ -8,6 +8,7 @@ import ImageIcon from "@mui/icons-material/Image";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SecurityIcon from "@mui/icons-material/Security";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { alpha } from "@mui/material/styles";
 import {
   Alert,
   Box,
@@ -26,6 +27,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -54,7 +56,8 @@ const headerCellSx = {
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 const formatDate = (value) =>
@@ -80,33 +83,46 @@ const formatBytes = (bytes) => {
 };
 
 const typeConfig = {
-  lease_agreement: { color: "#3b82f6", icon: <DescriptionIcon sx={{ fontSize: 14 }} /> },
-  inspection_report: { color: "#f59e0b", icon: <FactCheckIcon sx={{ fontSize: 14 }} /> },
-  insurance: { color: "#22c55e", icon: <SecurityIcon sx={{ fontSize: 14 }} /> },
-  tax_document: { color: "#a855f7", icon: <GavelIcon sx={{ fontSize: 14 }} /> },
-  notice: { color: "#ef4444", icon: <WarningAmberIcon sx={{ fontSize: 14 }} /> },
-  receipt: { color: "#9ca3af", icon: <ReceiptLongIcon sx={{ fontSize: 14 }} /> },
-  photo: { color: "#06b6d4", icon: <ImageIcon sx={{ fontSize: 14 }} /> },
-  other: { color: "#6b7280", icon: <FolderIcon sx={{ fontSize: 14 }} /> },
+  lease_agreement: DescriptionIcon,
+  inspection_report: FactCheckIcon,
+  insurance: SecurityIcon,
+  tax_document: GavelIcon,
+  notice: WarningAmberIcon,
+  receipt: ReceiptLongIcon,
+  photo: ImageIcon,
+  other: FolderIcon,
 };
 
-function typeChip(type) {
-  const config = typeConfig[type] || typeConfig.other;
+const typeChip = (type, theme) => {
+  const colors = {
+    lease_agreement: theme.palette.info.main,
+    inspection_report: theme.palette.warning.main,
+    insurance: theme.palette.success.main,
+    tax_document: theme.palette.secondary.main,
+    notice: theme.palette.error.main,
+    receipt: theme.palette.text.secondary,
+    photo: theme.palette.info.main,
+    other: theme.palette.text.secondary,
+  };
+  const IconByType = typeConfig[type] || FolderIcon;
+  const icon = <IconByType sx={{ fontSize: 14 }} />;
+  const color = colors[type] || colors.other;
+
   return (
     <Chip
-      icon={config.icon}
+      icon={icon}
       label={String(type || "other").replaceAll("_", " ")}
       size="small"
       sx={{
-        bgcolor: `${config.color}1f`,
-        color: config.color,
+        bgcolor: `${color}22`,
+        color,
         fontSize: 11,
         height: 22,
         textTransform: "capitalize",
       }}
     />
   );
-}
+};
 
 function associatedWith(document) {
   if (document.property_detail?.name) {
@@ -125,6 +141,7 @@ function associatedWith(document) {
 }
 
 function Documents({ templateOnly = false }) {
+  const theme = useTheme();
   const { role } = useUser();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -240,22 +257,22 @@ function Documents({ templateOnly = false }) {
             position: "absolute",
             inset: 0,
             zIndex: 10,
-            border: "1px dashed rgba(124,92,252,0.6)",
+            border: `1px dashed ${alpha(theme.palette.primary.main, 0.6)}`,
             borderRadius: 1,
-            bgcolor: "rgba(124,92,252,0.08)",
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             pointerEvents: "none",
           }}
         >
-          <Typography sx={{ fontSize: 14, color: "#c4b5fd" }}>
+          <Typography sx={{ fontSize: 14, color: "primary.main" }}>
             Drop file to upload
           </Typography>
         </Box>
       ) : null}
       <Box sx={{ mb: 0.8 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
           {templateOnly ? "Templates" : "Documents"}
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -275,7 +292,7 @@ function Documents({ templateOnly = false }) {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 16, color: "#6b7280" }} />
+                <SearchIcon sx={{ fontSize: 16, color: "text.secondary" }} />
               </InputAdornment>
             ),
           }}
@@ -299,7 +316,7 @@ function Documents({ templateOnly = false }) {
         ) : null}
       </Paper>
 
-      <TableContainer component={Paper} sx={{ bgcolor: "#141414" }}>
+      <TableContainer component={Paper} sx={{ bgcolor: "background.paper" }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -314,7 +331,10 @@ function Documents({ templateOnly = false }) {
           </TableHead>
           <TableBody>
             {filteredDocuments.map((doc) => (
-              <TableRow key={doc.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+              <TableRow
+                key={doc.id}
+                sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}
+              >
                 <TableCell>
                   <Button
                     variant="text"
@@ -325,7 +345,7 @@ function Documents({ templateOnly = false }) {
                     {doc.name}
                   </Button>
                 </TableCell>
-                <TableCell>{typeChip(doc.document_type)}</TableCell>
+                <TableCell>{typeChip(doc.document_type, theme)}</TableCell>
                 <TableCell>{associatedWith(doc)}</TableCell>
                 <TableCell>
                   {doc.uploaded_by_detail
@@ -340,7 +360,7 @@ function Documents({ templateOnly = false }) {
                   <IconButton
                     size="small"
                     onClick={() => handleDownload(doc)}
-                    sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                    sx={{ color: "text.secondary", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                   >
                     <CloudDownloadIcon sx={{ fontSize: 16 }} />
                   </IconButton>
@@ -348,7 +368,7 @@ function Documents({ templateOnly = false }) {
                     <IconButton
                       size="small"
                       onClick={() => handleDelete(doc.id)}
-                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                      sx={{ color: "text.secondary", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
                     >
                       <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
@@ -385,4 +405,3 @@ function Documents({ templateOnly = false }) {
 }
 
 export default Documents;
-

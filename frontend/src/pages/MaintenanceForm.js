@@ -176,7 +176,7 @@ function MaintenanceForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "background.paper", maxWidth: 600 }}
         >
           <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
             <Box>

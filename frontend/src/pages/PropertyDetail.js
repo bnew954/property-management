@@ -72,7 +72,8 @@ function PropertyDetail() {
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     fontSize: "11px",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    borderBottom: "1px solid",
+    borderColor: "divider",
   };
 
   return (
@@ -82,7 +83,7 @@ function PropertyDetail() {
       {!loading && property ? (
         <>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-            <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
               {property.name}
             </Typography>
             <Stack direction="row" spacing={1}>
@@ -91,7 +92,7 @@ function PropertyDetail() {
                 to={`/properties/${id}/edit`}
                 variant="outlined"
                 size="small"
-                sx={{ borderColor: "rgba(255,255,255,0.1)", color: "#e0e0e0" }}
+                sx={{ borderColor: "divider", color: "text.secondary", "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "action.hover" } }}
               >
                 <EditIcon sx={{ mr: 0.6, fontSize: 16 }} />
                 Edit Property
@@ -101,7 +102,7 @@ function PropertyDetail() {
                 to={`/properties/${id}/units/new`}
                 variant="outlined"
                 size="small"
-                sx={{ borderColor: "rgba(255,255,255,0.1)", color: "#e0e0e0" }}
+                sx={{ borderColor: "divider", color: "text.secondary", "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "action.hover" } }}
               >
                 <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
                 Add Unit
@@ -109,7 +110,7 @@ function PropertyDetail() {
             </Stack>
           </Box>
 
-          <Paper sx={{ p: 2, mb: 1.2, bgcolor: "#141414" }}>
+          <Paper sx={{ p: 2, mb: 1.2, bgcolor: "background.paper" }}>
             <Typography variant="body1" sx={{ mb: 1 }}>
               <strong>Address:</strong> {property.address_line1}
               {property.address_line2 ? `, ${property.address_line2}` : ""}, {property.city},{" "}
@@ -123,7 +124,7 @@ function PropertyDetail() {
             </Typography>
           </Paper>
 
-          <TableContainer component={Paper} sx={{ bgcolor: "#141414", borderRadius: 1 }}>
+          <TableContainer component={Paper} sx={{ bgcolor: "background.paper", borderRadius: 1 }}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -136,9 +137,9 @@ function PropertyDetail() {
                   <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+                <TableBody>
                 {units.map((unit) => (
-                  <TableRow key={unit.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+                  <TableRow key={unit.id} sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}>
                     <TableCell>{unit.unit_number}</TableCell>
                     <TableCell>{unit.bedrooms}</TableCell>
                     <TableCell>{unit.bathrooms}</TableCell>
@@ -151,7 +152,7 @@ function PropertyDetail() {
                         to={`/properties/${id}/units/${unit.id}/edit`}
                         variant="text"
                         size="small"
-                        sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                        sx={{ color: "text.secondary", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                       >
                         Edit
                       </Button>
@@ -167,8 +168,8 @@ function PropertyDetail() {
             </Table>
           </TableContainer>
 
-          <Paper sx={{ mt: 1.2, p: 1.2, bgcolor: "#141414" }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+          <Paper sx={{ mt: 1.2, p: 1.2, bgcolor: "background.paper" }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
               Documents
             </Typography>
             <TableContainer>
@@ -183,7 +184,7 @@ function PropertyDetail() {
                 </TableHead>
                 <TableBody>
                   {documents.map((doc) => (
-                    <TableRow key={doc.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+                    <TableRow key={doc.id} sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}>
                       <TableCell>{doc.name}</TableCell>
                       <TableCell sx={{ textTransform: "capitalize" }}>
                         {String(doc.document_type || "").replaceAll("_", " ")}
@@ -210,7 +211,7 @@ function PropertyDetail() {
                             a.remove();
                             URL.revokeObjectURL(url);
                           }}
-                          sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                          sx={{ color: "text.secondary", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                         >
                           <CloudDownloadIcon sx={{ mr: 0.4, fontSize: 15 }} />
                           Download

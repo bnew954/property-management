@@ -26,7 +26,8 @@ const headerCellSx = {
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 function TenantList() {
@@ -88,7 +89,7 @@ function TenantList() {
   return (
     <Box>
       <Box sx={{ mb: 0.8 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
           Tenants
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -102,12 +103,12 @@ function TenantList() {
           variant="outlined"
           size="small"
           sx={{
-            borderColor: "rgba(255,255,255,0.1)",
-            color: "#e0e0e0",
+            borderColor: "divider",
+            color: "text.secondary",
             "&:hover": {
               borderColor: "primary.main",
               color: "primary.main",
-              backgroundColor: "rgba(124,92,252,0.08)",
+              backgroundColor: "action.hover",
             },
           }}
         >
@@ -117,7 +118,7 @@ function TenantList() {
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "background.paper" }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -129,7 +130,7 @@ function TenantList() {
           </TableHead>
           <TableBody>
             {tenants.map((tenant) => (
-              <TableRow key={tenant.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
+              <TableRow key={tenant.id} sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}>
                 <TableCell>
                   {tenant.first_name} {tenant.last_name}
                 </TableCell>
@@ -141,14 +142,14 @@ function TenantList() {
                       component={Link}
                       to={`/tenants/${tenant.id}/edit`}
                       size="small"
-                      sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                      sx={{ color: "text.secondary", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                     >
                       <EditIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                     <IconButton
                       size="small"
                       onClick={() => handleDelete(tenant.id)}
-                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                      sx={{ color: "text.secondary", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
                     >
                       <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
@@ -169,7 +170,8 @@ function TenantList() {
               mx: 1.2,
               mb: 1.2,
               mt: 0.4,
-              border: "1px dashed rgba(255,255,255,0.12)",
+              border: "1px dashed",
+              borderColor: "divider",
               borderRadius: 1,
               py: 1,
               textAlign: "center",

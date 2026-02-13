@@ -7,12 +7,15 @@ import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
 import { Box, Card, CardContent, Paper, Typography } from "@mui/material";
+import { useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { Link } from "react-router-dom";
 import {
   Area,
   Bar,
   BarChart,
   Cell,
+  CartesianGrid,
   Line,
   LineChart,
   Pie,
@@ -34,6 +37,7 @@ import { useUser } from "../services/userContext";
 
 function Dashboard() {
   const { role, user } = useUser();
+  const theme = useTheme();
   const [counts, setCounts] = useState({
     properties: 0,
     units: 0,
@@ -46,8 +50,8 @@ function Dashboard() {
   });
   const [revenueData, setRevenueData] = useState([]);
   const [occupancyData, setOccupancyData] = useState([
-    { name: "Occupied", value: 0, color: "#7c5cfc" },
-    { name: "Vacant", value: 0, color: "#2a2a2a" },
+    { name: "Occupied", value: 0 },
+    { name: "Vacant", value: 0 },
   ]);
   const [maintenanceStatusData, setMaintenanceStatusData] = useState([]);
   const [tenantAmountDue, setTenantAmountDue] = useState(null);
@@ -123,8 +127,8 @@ function Dashboard() {
           const occupiedUnits = units.filter((item) => !item.is_available).length;
           const vacantUnits = Math.max(units.length - occupiedUnits, 0);
           setOccupancyData([
-            { name: "Occupied", value: occupiedUnits, color: "#7c5cfc" },
-            { name: "Vacant", value: vacantUnits, color: "#2a2a2a" },
+            { name: "Occupied", value: occupiedUnits },
+            { name: "Vacant", value: vacantUnits },
           ]);
 
           const statusCounts = {
@@ -139,10 +143,10 @@ function Dashboard() {
             }
           });
           setMaintenanceStatusData([
-            { status: "Submitted", count: statusCounts.submitted, color: "#3b82f6" },
-            { status: "In Progress", count: statusCounts.in_progress, color: "#f59e0b" },
-            { status: "Completed", count: statusCounts.completed, color: "#22c55e" },
-            { status: "Cancelled", count: statusCounts.cancelled, color: "#ef4444" },
+            { status: "Submitted", count: statusCounts.submitted },
+            { status: "In Progress", count: statusCounts.in_progress },
+            { status: "Completed", count: statusCounts.completed },
+            { status: "Cancelled", count: statusCounts.cancelled },
           ]);
 
           const monthBuckets = new Map();
@@ -202,6 +206,23 @@ function Dashboard() {
   const totalUnits = occupancyData.reduce((sum, item) => sum + item.value, 0);
   const occupiedUnits = occupancyData.find((item) => item.name === "Occupied")?.value || 0;
   const occupancyRate = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+  const occupancySeries = occupancyData.map((entry) => ({
+    ...entry,
+    color:
+      entry.name === "Occupied"
+        ? theme.palette.primary.main
+        : alpha(theme.palette.text.secondary, theme.palette.mode === "light" ? 0.22 : 0.2),
+  }));
+  const statusColorByLabel = {
+    Submitted: theme.palette.info.main,
+    "In Progress": theme.palette.warning.main,
+    Completed: theme.palette.success.main,
+    Cancelled: theme.palette.error.main,
+  };
+  const maintenanceSeries = maintenanceStatusData.map((entry) => ({
+    ...entry,
+    color: statusColorByLabel[entry.status] || theme.palette.text.secondary,
+  }));
 
   const cards =
     role === "tenant"
@@ -210,27 +231,53 @@ function Dashboard() {
             title: "My Payments",
             value: counts.myPayments,
             path: "/payments",
-            icon: <PaymentIcon sx={{ color: "#7c5cfc", opacity: 0.7, fontSize: 18 }} />,
+            icon: <PaymentIcon sx={{ color: theme.palette.primary.main, opacity: 0.7, fontSize: 18 }} />,
           },
           {
             title: "My Maintenance Requests",
             value: counts.myMaintenance,
             path: "/maintenance",
-            icon: <BuildIcon sx={{ color: "#f59e0b", opacity: 0.7, fontSize: 18 }} />,
+            icon: <BuildIcon sx={{ color: theme.palette.warning.main, opacity: 0.7, fontSize: 18 }} />,
           },
           {
             title: "My Lease Info",
             value: counts.myLeaseInfo,
             path: "/my-lease",
-            icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e", opacity: 0.7, fontSize: 18 }} />,
+            icon: <AssignmentTurnedInIcon sx={{ color: theme.palette.success.main, opacity: 0.7, fontSize: 18 }} />,
           },
         ]
       : [
-          { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#7c5cfc", opacity: 0.7, fontSize: 18 }} /> },
-          { title: "Total Units", value: counts.units, icon: <HomeWorkIcon sx={{ color: "#38bdf8", opacity: 0.7, fontSize: 18 }} /> },
-          { title: "Total Tenants", value: counts.tenants, icon: <PeopleIcon sx={{ color: "#a78bfa", opacity: 0.7, fontSize: 18 }} /> },
-          { title: "Active Leases", value: counts.activeLeases, icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e", opacity: 0.7, fontSize: 18 }} /> },
-          { title: "Open Requests", value: counts.openMaintenance, icon: <BuildIcon sx={{ color: "#f59e0b", opacity: 0.7, fontSize: 18 }} /> },
+          {
+            title: "Total Properties",
+            value: counts.properties,
+            icon: (
+              <ApartmentIcon
+                sx={{ color: theme.palette.primary.main, opacity: 0.7, fontSize: 18 }}
+              />
+            ),
+          },
+          {
+            title: "Total Units",
+            value: counts.units,
+            icon: (
+              <HomeWorkIcon sx={{ color: theme.palette.info.main, opacity: 0.7, fontSize: 18 }} />
+            ),
+          },
+          {
+            title: "Total Tenants",
+            value: counts.tenants,
+            icon: <PeopleIcon sx={{ color: theme.palette.primary.light, opacity: 0.7, fontSize: 18 }} />,
+          },
+          {
+            title: "Active Leases",
+            value: counts.activeLeases,
+            icon: <AssignmentTurnedInIcon sx={{ color: theme.palette.success.main, opacity: 0.7, fontSize: 18 }} />,
+          },
+          {
+            title: "Open Requests",
+            value: counts.openMaintenance,
+            icon: <BuildIcon sx={{ color: theme.palette.warning.main, opacity: 0.7, fontSize: 18 }} />,
+          },
         ];
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -249,7 +296,7 @@ function Dashboard() {
         animation: "dashboardFadeIn 0.35s ease",
       }}
     >
-      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
+      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}>
         Welcome back, {user?.first_name || user?.username || "User"}
       </Typography>
       <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
@@ -272,21 +319,28 @@ function Dashboard() {
             to="/pay-rent"
             sx={{
               gridColumn: { xs: "1 / -1", md: "1 / -1" },
-              bgcolor: "rgba(34,197,94,0.07)",
-              borderColor: "rgba(34,197,94,0.25)",
+              bgcolor: alpha(theme.palette.success.main, theme.palette.mode === "dark" ? 0.05 : 0.07),
+              borderColor: alpha(theme.palette.success.main, theme.palette.mode === "dark" ? 0.28 : 0.33),
               textDecoration: "none",
               "&:hover": {
-                borderColor: "rgba(34,197,94,0.45)",
-                backgroundColor: "rgba(34,197,94,0.1)",
+                borderColor: alpha(theme.palette.success.main, 0.55),
+                backgroundColor: alpha(theme.palette.success.main, theme.palette.mode === "dark" ? 0.1 : 0.12),
               },
             }}
           >
             <CardContent sx={{ p: 1.8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
               <Box>
-                <Typography sx={{ fontSize: 12, color: "rgba(187,247,208,0.95)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: "text.secondary",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                  }}
+                >
                   Pay Rent
                 </Typography>
-                <Typography sx={{ fontSize: 20, lineHeight: 1.2, fontWeight: 600, color: "#fff" }}>
+                <Typography sx={{ fontSize: 20, lineHeight: 1.2, fontWeight: 600, color: "text.primary" }}>
                   {tenantAmountDue !== null
                     ? Number(tenantAmountDue).toLocaleString("en-US", {
                         style: "currency",
@@ -298,7 +352,7 @@ function Dashboard() {
                   Pay securely online with card
                 </Typography>
               </Box>
-              <CreditCardIcon sx={{ color: "rgba(34,197,94,0.9)", fontSize: 22 }} />
+              <CreditCardIcon sx={{ color: theme.palette.success.main, fontSize: 22 }} />
             </CardContent>
           </Card>
         ) : null}
@@ -308,17 +362,17 @@ function Dashboard() {
             component={card.path ? Link : "div"}
             to={card.path || undefined}
             sx={{
-              bgcolor: "#141414",
+              bgcolor: "background.paper",
               textDecoration: "none",
               cursor: card.path ? "pointer" : "default",
               "&:hover": card.path
-                ? { borderColor: "rgba(124,92,252,0.45)", backgroundColor: "rgba(255,255,255,0.01)" }
+                ? { borderColor: "primary.main", backgroundColor: "action.hover" }
                 : undefined,
             }}
           >
             <CardContent sx={{ p: 1.8 }}>
               <Box sx={{ mb: 1 }}>{card.icon}</Box>
-              <Typography sx={{ fontSize: 24, lineHeight: 1.1, fontWeight: 600, color: "#fff" }}>
+              <Typography sx={{ fontSize: 24, lineHeight: 1.1, fontWeight: 600, color: "text.primary" }}>
                 {card.value}
               </Typography>
               <Typography sx={{ mt: 0.6, fontSize: 12, color: "text.secondary" }}>
@@ -330,8 +384,8 @@ function Dashboard() {
       </Box>
       {role === "landlord" ? (
         <Box sx={{ mt: 2, display: "grid", gap: 1.5 }}>
-          <Paper sx={{ p: 2, bgcolor: "#141414", borderRadius: 1 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.3 }}>
+          <Paper sx={{ p: 2, bgcolor: "background.paper", borderRadius: 1 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.3 }}>
               Revenue Overview
             </Typography>
             <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>
@@ -343,29 +397,34 @@ function Dashboard() {
                   <LineChart data={revenueData}>
                     <defs>
                       <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#7c5cfc" stopOpacity={0.28} />
-                        <stop offset="100%" stopColor="#7c5cfc" stopOpacity={0} />
+                        <stop offset="0%" stopColor={theme.palette.primary.main} stopOpacity={0.28} />
+                        <stop offset="100%" stopColor={theme.palette.primary.main} stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis
                       dataKey="month"
-                      tick={{ fill: "#6b7280", fontSize: 11 }}
-                      axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      tick={{ fill: theme.palette.text.secondary, fontSize: 11 }}
+                      axisLine={{ stroke: theme.palette.divider }}
                       tickLine={false}
                     />
+                    <CartesianGrid
+                      stroke={theme.palette.divider}
+                      strokeOpacity={theme.palette.mode === "light" ? 0.5 : 0.25}
+                      vertical={false}
+                    />
                     <YAxis
-                      tick={{ fill: "#6b7280", fontSize: 11 }}
-                      axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      tick={{ fill: theme.palette.text.secondary, fontSize: 11 }}
+                      axisLine={{ stroke: theme.palette.divider }}
                       tickLine={false}
                       width={60}
                       tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "#141414",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.divider}`,
                         borderRadius: 8,
-                        color: "#e0e0e0",
+                        color: "text.primary",
                         fontSize: 12,
                       }}
                       formatter={(value) => [
@@ -381,7 +440,7 @@ function Dashboard() {
                     <Line
                       type="monotone"
                       dataKey="total"
-                      stroke="#7c5cfc"
+                      stroke={theme.palette.primary.main}
                       strokeWidth={2}
                       dot={false}
                       activeDot={{ r: 4 }}
@@ -403,8 +462,8 @@ function Dashboard() {
               gap: 1.5,
             }}
           >
-            <Paper sx={{ p: 2, bgcolor: "#141414", borderRadius: 1 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.3 }}>
+            <Paper sx={{ p: 2, bgcolor: "background.paper", borderRadius: 1 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.3 }}>
                 Occupancy Rate
               </Typography>
               <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>
@@ -414,7 +473,7 @@ function Dashboard() {
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie
-                      data={occupancyData}
+                      data={occupancySeries}
                       dataKey="value"
                       nameKey="name"
                       innerRadius={62}
@@ -422,16 +481,16 @@ function Dashboard() {
                       stroke="none"
                       paddingAngle={2}
                     >
-                      {occupancyData.map((entry) => (
+                      {occupancySeries.map((entry) => (
                         <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        background: "#141414",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.divider}`,
                         borderRadius: 8,
-                        color: "#e0e0e0",
+                        color: "text.primary",
                         fontSize: 12,
                       }}
                       formatter={(value) => [value, "Units"]}
@@ -449,7 +508,7 @@ function Dashboard() {
                     pointerEvents: "none",
                   }}
                 >
-                  <Typography sx={{ fontSize: 24, fontWeight: 600, color: "#fff" }}>
+                  <Typography sx={{ fontSize: 24, fontWeight: 600, color: "text.primary" }}>
                     {occupancyRate}%
                   </Typography>
                   <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
@@ -459,8 +518,8 @@ function Dashboard() {
               </Box>
             </Paper>
 
-            <Paper sx={{ p: 2, bgcolor: "#141414", borderRadius: 1 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "#fff", mb: 0.3 }}>
+            <Paper sx={{ p: 2, bgcolor: "background.paper", borderRadius: 1 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.3 }}>
                 Maintenance Overview
               </Typography>
               <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>
@@ -471,31 +530,36 @@ function Dashboard() {
                   <BarChart data={maintenanceStatusData} layout="vertical">
                     <XAxis
                       type="number"
-                      tick={{ fill: "#6b7280", fontSize: 11 }}
-                      axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      tick={{ fill: theme.palette.text.secondary, fontSize: 11 }}
+                      axisLine={{ stroke: theme.palette.divider }}
                       tickLine={false}
                       allowDecimals={false}
                     />
                     <YAxis
                       type="category"
                       dataKey="status"
-                      tick={{ fill: "#6b7280", fontSize: 11 }}
+                      tick={{ fill: theme.palette.text.secondary, fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={80}
                     />
+                    <CartesianGrid
+                      stroke={theme.palette.divider}
+                      strokeOpacity={theme.palette.mode === "light" ? 0.4 : 0.25}
+                      horizontal={false}
+                    />
                     <Tooltip
                       contentStyle={{
-                        background: "#141414",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.divider}`,
                         borderRadius: 8,
-                        color: "#e0e0e0",
+                        color: "text.primary",
                         fontSize: 12,
                       }}
                       formatter={(value) => [value, "Requests"]}
                     />
                     <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                      {maintenanceStatusData.map((entry) => (
+                      {maintenanceSeries.map((entry) => (
                         <Cell key={entry.status} fill={entry.color} />
                       ))}
                     </Bar>
@@ -506,7 +570,7 @@ function Dashboard() {
           </Box>
         </Box>
       ) : null}
-      <Paper sx={{ mt: 2, p: 2, bgcolor: "#141414" }}>
+      <Paper sx={{ mt: 2, p: 2, bgcolor: "background.paper" }}>
         <Typography sx={{ fontSize: 13, fontWeight: 500, mb: 0.8 }}>
           Recent Activity
         </Typography>
@@ -519,3 +583,6 @@ function Dashboard() {
 }
 
 export default Dashboard;
+
+
+

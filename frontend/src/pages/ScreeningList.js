@@ -1,5 +1,6 @@
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { Alert, Box, Button, Chip, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+import { useTheme } from "@mui/material";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getScreenings } from "../services/api";
@@ -10,7 +11,8 @@ const headerCellSx = {
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   fontSize: "11px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: "1px solid",
+  borderColor: "divider",
 };
 
 const formatDate = (value) =>
@@ -22,54 +24,43 @@ const formatDate = (value) =>
       })
     : "-";
 
-const statusChipSx = (status) => ({
-  bgcolor:
-    status === "completed"
-      ? "rgba(34,197,94,0.1)"
-      : status === "processing"
-        ? "rgba(245,158,11,0.1)"
-        : status === "failed"
-          ? "rgba(239,68,68,0.1)"
-          : "rgba(107,114,128,0.15)",
-  color:
-    status === "completed"
-      ? "#22c55e"
-      : status === "processing"
-        ? "#f59e0b"
-        : status === "failed"
-          ? "#ef4444"
-          : "#9ca3af",
-  fontWeight: 500,
-  fontSize: 11,
-  height: 22,
-  textTransform: "capitalize",
-});
+const statusChipSx = (status, theme) => {
+  const colorMap = {
+    completed: theme.palette.success.main,
+    processing: theme.palette.warning.main,
+    failed: theme.palette.error.main,
+  };
+  const color = colorMap[status] || theme.palette.text.secondary;
+  return {
+    bgcolor: `${color}22`,
+    color,
+    fontWeight: 500,
+    fontSize: 11,
+    height: 22,
+    textTransform: "capitalize",
+  };
+};
 
-const recommendationChipSx = (value) => ({
-  bgcolor:
-    value === "approved"
-      ? "rgba(34,197,94,0.1)"
-      : value === "conditional"
-        ? "rgba(245,158,11,0.1)"
-        : value === "denied"
-          ? "rgba(239,68,68,0.1)"
-          : "rgba(107,114,128,0.15)",
-  color:
-    value === "approved"
-      ? "#22c55e"
-      : value === "conditional"
-        ? "#f59e0b"
-        : value === "denied"
-          ? "#ef4444"
-          : "#9ca3af",
-  fontWeight: 500,
-  fontSize: 11,
-  height: 22,
-  textTransform: "capitalize",
-});
+const recommendationChipSx = (value, theme) => {
+  const colorMap = {
+    approved: theme.palette.success.main,
+    conditional: theme.palette.warning.main,
+    denied: theme.palette.error.main,
+  };
+  const color = colorMap[value] || theme.palette.text.secondary;
+  return {
+    bgcolor: `${color}22`,
+    color,
+    fontWeight: 500,
+    fontSize: 11,
+    height: 22,
+    textTransform: "capitalize",
+  };
+};
 
 function ScreeningList() {
   const { role } = useUser();
+  const theme = useTheme();
   const [screenings, setScreenings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -94,7 +85,7 @@ function ScreeningList() {
 
   if (role !== "landlord") {
     return (
-      <Paper sx={{ p: 2, bgcolor: "#141414" }}>
+      <Paper sx={{ p: 2, bgcolor: "background.paper" }}>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Screening tools are available to landlord accounts only.
         </Typography>
@@ -105,7 +96,7 @@ function ScreeningList() {
   return (
     <Box>
       <Box sx={{ mb: 0.8 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
           Screening
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -119,12 +110,12 @@ function ScreeningList() {
           variant="outlined"
           size="small"
           sx={{
-            borderColor: "rgba(255,255,255,0.1)",
-            color: "#e0e0e0",
+            borderColor: "divider",
+            color: "text.secondary",
             "&:hover": {
               borderColor: "primary.main",
               color: "primary.main",
-              backgroundColor: "rgba(124,92,252,0.08)",
+              backgroundColor: "action.hover",
             },
           }}
         >
@@ -134,7 +125,7 @@ function ScreeningList() {
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
+          <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "background.paper" }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -155,8 +146,8 @@ function ScreeningList() {
                 sx={{
                   textDecoration: "none",
                   cursor: "pointer",
-                  "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13, color: "#e5e7eb" },
-                  "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" },
+                  "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13, color: "text.primary" },
+                  "&:hover": { backgroundColor: "action.hover" },
                 }}
               >
                 <TableCell>
@@ -166,7 +157,7 @@ function ScreeningList() {
                 </TableCell>
                 <TableCell>{formatDate(screening.created_at)}</TableCell>
                 <TableCell>
-                  <Chip size="small" label={screening.status} sx={statusChipSx(screening.status)} />
+                  <Chip size="small" label={screening.status} sx={statusChipSx(screening.status, theme)} />
                 </TableCell>
                 <TableCell>{screening.credit_score ?? "-"}</TableCell>
                 <TableCell sx={{ textTransform: "capitalize" }}>
@@ -176,7 +167,7 @@ function ScreeningList() {
                   <Chip
                     size="small"
                     label={screening.recommendation || "pending"}
-                    sx={recommendationChipSx(screening.recommendation)}
+                    sx={recommendationChipSx(screening.recommendation, theme)}
                   />
                 </TableCell>
               </TableRow>
@@ -194,4 +185,3 @@ function ScreeningList() {
 }
 
 export default ScreeningList;
-

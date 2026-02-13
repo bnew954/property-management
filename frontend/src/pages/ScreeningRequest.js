@@ -1,12 +1,14 @@
-import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Paper, Select, Snackbar, Typography } from "@mui/material";
+import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Paper, Select, Snackbar, Typography, useTheme } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createScreening, getTenants, runScreening } from "../services/api";
 import { useUser } from "../services/userContext";
+import { alpha } from "@mui/material/styles";
 
 function ScreeningRequest() {
   const navigate = useNavigate();
   const { role } = useUser();
+  const theme = useTheme();
   const [tenant, setTenant] = useState("");
   const [tenants, setTenants] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -67,7 +69,7 @@ function ScreeningRequest() {
 
   if (role !== "landlord") {
     return (
-      <Paper sx={{ p: 2, bgcolor: "#141414" }}>
+      <Paper sx={{ p: 2, bgcolor: "background.paper" }}>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Screening tools are available to landlord accounts only.
         </Typography>
@@ -77,7 +79,7 @@ function ScreeningRequest() {
 
   return (
     <Box>
-      <Typography sx={{ fontSize: 20, fontWeight: 600, mb: 0.8, color: "#fff", letterSpacing: "-0.01em" }}>
+      <Typography sx={{ fontSize: 20, fontWeight: 600, mb: 0.8, color: "text.primary", letterSpacing: "-0.01em" }}>
         New Screening Request
       </Typography>
       <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.5 }}>
@@ -85,13 +87,13 @@ function ScreeningRequest() {
       </Typography>
       {loading ? <Typography>Loading...</Typography> : null}
       {!loading ? (
-        <Paper component="form" onSubmit={handleSubmit} sx={{ p: 3, bgcolor: "#141414", maxWidth: 640 }}>
+        <Paper component="form" onSubmit={handleSubmit} sx={{ p: 3, bgcolor: "background.paper", maxWidth: 640 }}>
           <Alert
             severity="info"
             sx={{
               mb: 2,
-              bgcolor: "rgba(59,130,246,0.08)",
-              border: "1px solid rgba(59,130,246,0.25)",
+              bgcolor: alpha(theme.palette.info.main, 0.08),
+              border: `1px solid ${alpha(theme.palette.info.main, 0.25)}`,
             }}
           >
             This will run a background check, credit check, and eviction history
@@ -139,4 +141,3 @@ function ScreeningRequest() {
 }
 
 export default ScreeningRequest;
-

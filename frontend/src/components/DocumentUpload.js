@@ -15,6 +15,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useEffect, useMemo, useState } from "react";
 import { getLeases, getProperties, getTenants, getUnits, uploadDocument } from "../services/api";
 
@@ -166,10 +167,17 @@ function DocumentUpload({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ bgcolor: "#141414", color: "#fff", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <DialogTitle
+        sx={{
+          bgcolor: "background.paper",
+          color: "text.primary",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
         Upload Document
       </DialogTitle>
-      <DialogContent sx={{ bgcolor: "#141414", pt: 2 }}>
+      <DialogContent sx={{ bgcolor: "background.paper", pt: 2 }}>
         <Box component="form" onSubmit={handleSubmit} sx={{ display: "grid", gap: 1.2, mt: 1 }}>
           {error ? <Alert severity="error">{error}</Alert> : null}
           <Button
@@ -177,8 +185,8 @@ function DocumentUpload({
             component="label"
             sx={{
               borderStyle: "dashed",
-              borderColor: "rgba(255,255,255,0.2)",
-              color: "#e5e7eb",
+              borderColor: alpha("currentColor", 0.4),
+              color: "text.secondary",
               justifyContent: "flex-start",
             }}
           >

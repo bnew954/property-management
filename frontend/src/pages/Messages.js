@@ -13,7 +13,9 @@ import {
   Select,
   TextField,
   Typography,
+  useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getInboxMessages,
@@ -60,6 +62,7 @@ const fullDate = (value) =>
 
 function Messages() {
   const { user } = useUser();
+  const theme = useTheme();
   const [inbox, setInbox] = useState([]);
   const [sent, setSent] = useState([]);
   const [users, setUsers] = useState([]);
@@ -196,7 +199,7 @@ function Messages() {
   return (
     <Box>
       <Box sx={{ mb: 1 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}>
           Messages
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -206,15 +209,15 @@ function Messages() {
       {error ? <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert> : null}
       <Paper sx={{ p: 0, overflow: "hidden", minHeight: 520 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "320px 1fr" }, minHeight: 520 }}>
-          <Box sx={{ borderRight: { md: "1px solid rgba(255,255,255,0.06)" } }}>
-            <Box sx={{ p: 1.2, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <Box sx={{ borderRight: { md: "1px solid", borderColor: "divider" } }}>
+            <Box sx={{ p: 1.2, borderBottom: "1px solid", borderColor: "divider" }}>
               <Button
                 size="small"
                 variant="outlined"
                 onClick={() => setComposeOpen(true)}
                 sx={{
-                  borderColor: "rgba(255,255,255,0.1)",
-                  color: "#e0e0e0",
+                  borderColor: "divider",
+                  color: "text.secondary",
                   "&:hover": { borderColor: "primary.main", color: "primary.main" },
                 }}
               >
@@ -233,23 +236,24 @@ function Messages() {
                     px: 1.2,
                     py: 1,
                     cursor: "pointer",
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
                     backgroundColor:
                       selectedThreadId === thread.threadId
-                        ? "rgba(124,92,252,0.12)"
+                        ? alpha(theme.palette.primary.main, 0.12)
                         : "transparent",
-                    "&:hover": { backgroundColor: "rgba(255,255,255,0.03)" },
+                    "&:hover": { backgroundColor: "action.hover" },
                   }}
                 >
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                    <Typography sx={{ fontSize: 12, fontWeight: 500, color: "#e5e7eb" }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 500, color: "text.primary" }}>
                       {thread.otherUserName}
                     </Typography>
-                    <Typography sx={{ fontSize: 10, color: "#6b7280" }}>
+                    <Typography sx={{ fontSize: 10, color: "text.secondary" }}>
                       {toTimeAgo(thread.updatedAt)}
                     </Typography>
                   </Box>
-                  <Typography sx={{ fontSize: 11, color: "#d1d5db", mt: 0.2 }}>
+                  <Typography sx={{ fontSize: 11, color: "text.secondary", mt: 0.2 }}>
                     {thread.subject}
                   </Typography>
                   <Typography
@@ -264,7 +268,7 @@ function Messages() {
                     {thread.preview}
                   </Typography>
                   {thread.unread ? (
-                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#ef4444", mt: 0.6 }} />
+                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "error.main", mt: 0.6 }} />
                   ) : null}
                 </Box>
               ))}
@@ -273,8 +277,8 @@ function Messages() {
           <Box sx={{ display: "flex", flexDirection: "column" }}>
             {selectedThread ? (
               <>
-                <Box sx={{ p: 1.2, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>
+                <Box sx={{ p: 1.2, borderBottom: "1px solid", borderColor: "divider" }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}>
                     {selectedThread.subject}
                   </Typography>
                 </Box>
@@ -296,12 +300,15 @@ function Messages() {
                             px: 1.2,
                             py: 0.8,
                             borderRadius: 1,
-                            border: "1px solid rgba(255,255,255,0.08)",
-                            bgcolor: mine ? "rgba(124,92,252,0.12)" : "rgba(255,255,255,0.02)",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            bgcolor: mine
+                              ? alpha(theme.palette.primary.main, 0.12)
+                              : alpha(theme.palette.text.secondary, theme.palette.mode === "dark" ? 0.08 : 0.05),
                           }}
                         >
-                          <Typography sx={{ fontSize: 12, color: "#e5e7eb" }}>{message.body}</Typography>
-                          <Typography sx={{ mt: 0.4, fontSize: 10, color: "#6b7280" }}>
+                          <Typography sx={{ fontSize: 12, color: "text.primary" }}>{message.body}</Typography>
+                          <Typography sx={{ mt: 0.4, fontSize: 10, color: "text.secondary" }}>
                             {fullDate(message.created_at)}
                           </Typography>
                         </Box>
@@ -309,7 +316,7 @@ function Messages() {
                     );
                   })}
                 </Box>
-                <Box sx={{ p: 1.2, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 1 }}>
+                <Box sx={{ p: 1.2, borderTop: "1px solid", borderColor: "divider", display: "flex", gap: 1 }}>
                   <TextField
                     fullWidth
                     size="small"
@@ -334,10 +341,10 @@ function Messages() {
       </Paper>
 
       <Dialog open={composeOpen} onClose={() => setComposeOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ bgcolor: "#141414", color: "#fff", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <DialogTitle sx={{ bgcolor: "background.paper", color: "text.primary", borderBottom: "1px solid", borderColor: "divider" }}>
           New Message
         </DialogTitle>
-        <DialogContent sx={{ bgcolor: "#141414", pt: 2 }}>
+        <DialogContent sx={{ bgcolor: "background.paper", pt: 2 }}>
           <Box sx={{ display: "grid", gap: 1.2, mt: 1 }}>
             <FormControl fullWidth>
               <InputLabel>Recipient</InputLabel>
@@ -392,4 +399,3 @@ function Messages() {
 }
 
 export default Messages;
-

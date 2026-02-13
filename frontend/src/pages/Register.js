@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useThemeMode } from "../services/themeContext";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -9,11 +10,15 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Typography,
+  useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { register } from "../services/auth";
 
 function Register() {
   const navigate = useNavigate();
+  const { mode } = useThemeMode();
+  const theme = useTheme();
   const [values, setValues] = useState({
     username: "",
     email: "",
@@ -73,25 +78,34 @@ function Register() {
         alignItems: "center",
         justifyContent: "center",
         px: 2,
-        background: "#0a0a0a",
+        bgcolor: "background.default",
       }}
     >
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        sx={{ width: "100%", maxWidth: 500, p: 3, borderRadius: 1, bgcolor: "#141414" }}
+        sx={{
+          width: "100%",
+          maxWidth: 500,
+          p: 3,
+          borderRadius: 1,
+          bgcolor: "background.paper",
+          boxShadow:
+            mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
+          border: mode === "dark" ? undefined : "none",
+        }}
       >
-        <Typography
-          variant="body1"
-          sx={{
-            mb: 2,
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            textAlign: "center",
-            color: "#fff",
-          }}
-        >
+          <Typography
+            variant="body1"
+            sx={{
+              mb: 2,
+              fontSize: 18,
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              textAlign: "center",
+              color: "text.primary",
+            }}
+          >
           Onyx PM
         </Typography>
         {error ? (
@@ -115,13 +129,13 @@ function Register() {
             size="small"
             sx={{
               "& .MuiToggleButton-root": {
-                borderColor: "rgba(255,255,255,0.12)",
-                color: "#9ca3af",
+                borderColor: "divider",
+                color: "text.secondary",
                 px: 1.4,
               },
               "& .Mui-selected": {
-                color: "#fff",
-                bgcolor: "rgba(124,92,252,0.18)",
+                color: "primary.main",
+                bgcolor: "action.selected",
               },
             }}
           >
@@ -200,7 +214,7 @@ function Register() {
         </Button>
         <Typography sx={{ textAlign: "center", mt: 1.5, fontSize: 12, color: "text.secondary" }}>
           Already have an account?{" "}
-          <Link to="/login" style={{ color: "#7c5cfc", fontWeight: 500 }}>
+          <Link to="/login" style={{ color: theme.palette.primary.main, fontWeight: 500 }}>
             Sign In
           </Link>
         </Typography>

@@ -11,11 +11,13 @@ import {
   Chip,
   Paper,
   Typography,
+  useTheme,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getLeases, getScreening } from "../services/api";
 import { useUser } from "../services/userContext";
+import { alpha } from "@mui/material/styles";
 
 const formatDate = (value) =>
   value
@@ -32,27 +34,29 @@ const formatCurrency = (value) =>
     currency: "USD",
   });
 
-const recommendationSx = (recommendation) => ({
+const recommendationSx = (recommendation, theme) => ({
   fontSize: 14,
   fontWeight: 600,
   px: 1.2,
   height: 30,
-  bgcolor:
+  bgcolor: alpha(
     recommendation === "approved"
-      ? "rgba(34,197,94,0.14)"
+      ? theme.palette.success.main
       : recommendation === "conditional"
-        ? "rgba(245,158,11,0.14)"
+        ? theme.palette.warning.main
         : recommendation === "denied"
-          ? "rgba(239,68,68,0.14)"
-          : "rgba(107,114,128,0.16)",
+          ? theme.palette.error.main
+          : theme.palette.text.secondary,
+    0.14,
+  ),
   color:
     recommendation === "approved"
-      ? "#22c55e"
+      ? theme.palette.success.main
       : recommendation === "conditional"
-        ? "#f59e0b"
+        ? theme.palette.warning.main
         : recommendation === "denied"
-          ? "#ef4444"
-          : "#9ca3af",
+          ? theme.palette.error.main
+          : theme.palette.text.secondary,
   textTransform: "capitalize",
 });
 
@@ -63,6 +67,7 @@ function ScreeningDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeLease, setActiveLease] = useState(null);
+  const theme = useTheme();
 
   useEffect(() => {
     const load = async () => {
@@ -104,7 +109,7 @@ function ScreeningDetail() {
 
   if (role !== "landlord") {
     return (
-      <Paper sx={{ p: 2, bgcolor: "#141414" }}>
+      <Paper sx={{ p: 2, bgcolor: "background.paper" }}>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Screening reports are available to landlord accounts only.
         </Typography>
@@ -128,7 +133,7 @@ function ScreeningDetail() {
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
         <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
+          <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}>
             Screening Report
           </Typography>
           <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -138,32 +143,32 @@ function ScreeningDetail() {
             · Requested {formatDate(screening.created_at)}
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() => window.print()}
-          sx={{
-            borderColor: "rgba(255,255,255,0.12)",
-            color: "#e0e0e0",
-            "&:hover": { borderColor: "primary.main", color: "primary.main" },
-          }}
-        >
-          <PrintOutlinedIcon sx={{ mr: 0.6, fontSize: 16 }} />
-          Print Report
-        </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => window.print()}
+            sx={{
+              borderColor: "divider",
+              color: "text.secondary",
+              "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "action.hover" },
+            }}
+          >
+            <PrintOutlinedIcon sx={{ mr: 0.6, fontSize: 16 }} />
+            Print Report
+          </Button>
       </Box>
 
-      <Paper sx={{ p: 1.8, mb: 1.4 }}>
-        <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.6 }}>Overall Recommendation</Typography>
-        <Chip label={screening.recommendation || "pending"} sx={recommendationSx(screening.recommendation)} />
+        <Paper sx={{ p: 1.8, mb: 1.4 }}>
+          <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.6 }}>Overall Recommendation</Typography>
+        <Chip label={screening.recommendation || "pending"} sx={recommendationSx(screening.recommendation, theme)} />
       </Paper>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 1.2, mb: 1.2 }}>
-        <Paper sx={{ p: 1.6 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+        <Paper sx={{ p: 1.6, bgcolor: "background.paper" }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
             Credit Report
           </Typography>
-          <Typography sx={{ fontSize: 34, lineHeight: 1, fontWeight: 700, color: "#fff" }}>
+          <Typography sx={{ fontSize: 34, lineHeight: 1, fontWeight: 700, color: "text.primary" }}>
             {screening.credit_score ?? "-"}
           </Typography>
           <Typography sx={{ mt: 0.6, fontSize: 12, color: "text.secondary", textTransform: "capitalize" }}>
@@ -171,17 +176,17 @@ function ScreeningDetail() {
           </Typography>
         </Paper>
 
-        <Paper sx={{ p: 1.6 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+        <Paper sx={{ p: 1.6, bgcolor: "background.paper" }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
             Background Check
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.7 }}>
             {screening.background_check === "clear" ? (
-              <CheckCircleOutlineIcon sx={{ color: "#22c55e", fontSize: 18 }} />
+              <CheckCircleOutlineIcon sx={{ color: theme.palette.success.main, fontSize: 18 }} />
             ) : screening.background_check === "review_needed" ? (
-              <WarningAmberOutlinedIcon sx={{ color: "#f59e0b", fontSize: 18 }} />
+              <WarningAmberOutlinedIcon sx={{ color: theme.palette.warning.main, fontSize: 18 }} />
             ) : (
-              <ErrorOutlineIcon sx={{ color: "#ef4444", fontSize: 18 }} />
+              <ErrorOutlineIcon sx={{ color: theme.palette.error.main, fontSize: 18 }} />
             )}
             <Typography sx={{ fontSize: 13, textTransform: "capitalize" }}>
               {screening.background_check ? screening.background_check.replaceAll("_", " ") : "-"}
@@ -189,15 +194,15 @@ function ScreeningDetail() {
           </Box>
         </Paper>
 
-        <Paper sx={{ p: 1.6 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+        <Paper sx={{ p: 1.6, bgcolor: "background.paper" }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
             Eviction History
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.7 }}>
             <GavelIcon
               sx={{
                 color:
-                  screening.eviction_history === "none_found" ? "#22c55e" : "#ef4444",
+                  screening.eviction_history === "none_found" ? theme.palette.success.main : theme.palette.error.main,
                 fontSize: 18,
               }}
             />
@@ -210,26 +215,26 @@ function ScreeningDetail() {
         </Paper>
       </Box>
 
-      <Paper sx={{ p: 1.6, mb: 1.2 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+      <Paper sx={{ p: 1.6, mb: 1.2, bgcolor: "background.paper" }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
           Income Verification
         </Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 1 }}>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
             Monthly Income:{" "}
-            <Typography component="span" sx={{ color: "#e5e7eb", fontSize: 13 }}>
+            <Typography component="span" sx={{ color: "text.primary", fontSize: 13 }}>
               {screening.monthly_income ? formatCurrency(screening.monthly_income) : "-"}
             </Typography>
           </Typography>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
             Income Verified:{" "}
-            <Typography component="span" sx={{ color: "#e5e7eb", fontSize: 13 }}>
+            <Typography component="span" sx={{ color: "text.primary", fontSize: 13 }}>
               {screening.income_verified === null ? "-" : screening.income_verified ? "Yes" : "No"}
             </Typography>
           </Typography>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
             3x Rent Threshold:{" "}
-            <Typography component="span" sx={{ color: "#e5e7eb", fontSize: 13 }}>
+            <Typography component="span" sx={{ color: "text.primary", fontSize: 13 }}>
               {incomeThreshold ? formatCurrency(incomeThreshold) : "No active lease found"}
             </Typography>
           </Typography>
@@ -237,9 +242,17 @@ function ScreeningDetail() {
         {meetsIncomeThreshold !== null ? (
           <Box sx={{ mt: 0.8, display: "flex", alignItems: "center", gap: 0.6 }}>
             <PolicyOutlinedIcon
-              sx={{ color: meetsIncomeThreshold ? "#22c55e" : "#f59e0b", fontSize: 17 }}
+              sx={{
+                color: meetsIncomeThreshold ? theme.palette.success.main : theme.palette.warning.main,
+                fontSize: 17,
+              }}
             />
-            <Typography sx={{ fontSize: 12, color: meetsIncomeThreshold ? "#22c55e" : "#f59e0b" }}>
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: meetsIncomeThreshold ? theme.palette.success.main : theme.palette.warning.main,
+              }}
+            >
               {meetsIncomeThreshold
                 ? "Income meets the typical 3x rent threshold."
                 : "Income is below the typical 3x rent threshold."}
@@ -248,8 +261,8 @@ function ScreeningDetail() {
         ) : null}
       </Paper>
 
-      <Paper sx={{ p: 1.6 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff", mb: 0.8 }}>
+      <Paper sx={{ p: 1.6, bgcolor: "background.paper" }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
           Notes
         </Typography>
         <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
@@ -261,4 +274,3 @@ function ScreeningDetail() {
 }
 
 export default ScreeningDetail;
-

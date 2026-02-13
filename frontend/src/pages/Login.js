@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
+import { useThemeMode } from "../services/themeContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Alert, Box, Button, Paper, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Paper, TextField, Typography, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { login } from "../services/auth";
 import { useUser } from "../services/userContext";
 
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { mode } = useThemeMode();
+  const theme = useTheme();
   const { refreshUser } = useUser();
   const [values, setValues] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
@@ -41,13 +45,22 @@ function Login() {
         alignItems: "center",
         justifyContent: "center",
         px: 2,
-        background: "#0a0a0a",
+        bgcolor: "background.default",
       }}
     >
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        sx={{ width: "100%", maxWidth: 420, p: 3, borderRadius: 1, bgcolor: "#141414" }}
+        sx={{
+          width: "100%",
+          maxWidth: 420,
+          p: 3,
+          borderRadius: 1,
+          bgcolor: "background.paper",
+          boxShadow:
+            mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
+          border: mode === "dark" ? undefined : "none",
+        }}
       >
         <Typography
           variant="body1"
@@ -57,7 +70,7 @@ function Login() {
             fontWeight: 700,
             letterSpacing: "-0.02em",
             textAlign: "center",
-            color: "#fff",
+            color: "text.primary",
           }}
         >
           Onyx PM
@@ -94,7 +107,7 @@ function Login() {
         </Button>
         <Typography sx={{ textAlign: "center", mt: 1.5, fontSize: 12, color: "text.secondary" }}>
           Don&apos;t have an account?{" "}
-          <Link to="/register" style={{ color: "#7c5cfc", fontWeight: 500 }}>
+          <Link to="/register" style={{ color: theme.palette.primary.main, fontWeight: 500 }}>
             Register
           </Link>
         </Typography>
