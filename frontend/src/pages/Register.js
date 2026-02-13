@@ -23,7 +23,14 @@ function BrandLogo({ textColor }) {
       <img
         src="/logo-icon.png"
         alt="Onyx PM"
-        style={{ height: 40, width: "auto", display: "block" }}
+        style={{
+          height: 40,
+          width: "auto",
+          display: "block",
+          background: "transparent",
+          filter: "brightness(1.1)",
+          mixBlendMode: "screen",
+        }}
       />
       <Typography
         sx={{

@@ -1,4 +1,3 @@
-import AddIcon from "@mui/icons-material/Add";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
@@ -6,8 +5,9 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
 import PeopleIcon from "@mui/icons-material/People";
-import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
-import ViewCarouselIcon from "@mui/icons-material/ViewCarousel";
+import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import { useMemo, useRef, useState, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Accordion,
   AccordionDetails,
@@ -27,14 +27,12 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { useTheme as useMuiTheme } from "@mui/material/styles";
-import { alpha } from "@mui/material/styles";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import BuildIcon from "@mui/icons-material/Build";
 import DescriptionIcon from "@mui/icons-material/Description";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 
 function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
   const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
@@ -43,7 +41,14 @@ function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
       <img
         src="/logo-icon.png"
         alt="Onyx PM"
-        style={{ height: iconSize, width: "auto", display: "block" }}
+        style={{
+          height: iconSize,
+          width: "auto",
+          display: "block",
+          background: "transparent",
+          filter: "brightness(1.1)",
+          mixBlendMode: "screen",
+        }}
       />
       <Typography
         sx={{
@@ -82,107 +87,79 @@ function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
 
 const featureCards = [
   {
-    title: "Property & Unit Management",
-    body: "Organize your entire portfolio. Track units, vacancies, and property details in one place.",
+    title: "Portfolio Management",
+    body: "Manage unlimited properties and units. Track vacancies, tenant details, and lease terms from a single dashboard.",
     Icon: ApartmentIcon,
   },
   {
     title: "Tenant Screening",
-    body: "Background checks, credit reports, and eviction history. Make informed leasing decisions.",
+    body: "Background checks, credit reports, and eviction history. Pay only when you screen � no monthly fees.",
     Icon: VerifiedUserIcon,
   },
   {
     title: "Online Rent Collection",
-    body: "Accept payments via credit card and ACH. Automated reminders for overdue rent.",
+    body: "Tenants pay by credit card or bank transfer. Automatic tracking and reminders. Small processing fee per transaction.",
     Icon: CreditCardIcon,
   },
   {
     title: "Maintenance Tracking",
-    body: "Tenants submit requests, you track progress. AI-powered triage coming soon.",
+    body: "Tenants submit requests online. Track priority, status, and resolution. AI-powered triage coming soon.",
     Icon: BuildIcon,
   },
   {
     title: "Accounting & Reports",
-    body: "Income tracking, expense management, P&L reports, and rent ledgers.",
+    body: "Income and expense tracking, rent ledgers, P&L reports, and late fee automation � all included free.",
     Icon: AccountBalanceIcon,
   },
   {
-    title: "Documents & E-Signatures",
-    body: "Store leases, inspections, and templates. Everything organized and searchable.",
+    title: "Documents & Storage",
+    body: "Store leases, inspections, and templates. Upload, organize, and access your documents from anywhere.",
     Icon: DescriptionIcon,
   },
 ];
 
 const howItWorks = [
-  { step: 1, title: "Sign Up", body: "Create your free account in 30 seconds." },
-  { step: 2, title: "Add Properties", body: "Import your portfolio and invite tenants." },
-  { step: 3, title: "Manage Everything", body: "Collect rent, handle maintenance, run reports." },
-];
-
-const pricingCards = [
   {
-    title: "Free Plan",
-    price: "$0",
-    cadence: "/month",
-    badge: "",
-    cta: "Get Started Free",
-    buttonVariant: "outlined",
-    note: "",
-    features: [
-      "Up to 5 units",
-      "Tenant management",
-      "Online rent collection",
-      "Maintenance tracking",
-      "Basic reports",
-      "Document storage",
-    ],
-    emphasized: false,
+    step: 1,
+    title: "Sign Up in Seconds",
+    body: "Create your free account. No credit card. No trial period. Just start.",
   },
   {
-    title: "Pro Plan",
-    price: "$12",
-    cadence: "/unit/month",
-    badge: "Most Popular",
-    cta: "Start Free Trial",
-    buttonVariant: "contained",
-    note: "14-day free trial. No credit card required.",
-    features: [
-      "Everything in Free",
-      "Unlimited units",
-      "Tenant screening",
-      "Advanced accounting & P&L",
-      "Late fee automation",
-      "AI-powered features",
-      "Priority support",
-    ],
-    emphasized: true,
+    step: 2,
+    title: "Add Your Properties",
+    body: "Import your portfolio � 1 unit or 1,000. Add tenants, leases, and documents.",
+  },
+  {
+    step: 3,
+    title: "Manage & Grow",
+    body: "Collect rent, handle maintenance, run reports. Only pay for payment processing and screenings.",
   },
 ];
 
 const faqItems = [
   {
-    q: "What is Onyx PM?",
-    a: "Onyx PM is a modern property management platform built for landlords and property managers. Manage properties, tenants, payments, maintenance, and more from one dashboard.",
+    q: "How is Onyx PM free?",
+    a: "We make money through small transaction fees when you collect rent online (2.9% + 30¢, standard payment processing) and when you run tenant screening reports ($35 each). The platform itself � including all features, unlimited units, and unlimited users � is completely free.",
   },
   {
-    q: "Is there really a free plan?",
-    a: "Yes. Our free plan supports up to 5 units with core features. No credit card required, no time limit.",
+    q: "Are there any hidden fees?",
+    a: "None. No setup fees, no monthly fees, no per-unit charges, no contracts. You can use Onyx PM forever without paying a dime if you collect rent offline and don't use screening.",
   },
   {
-    q: "How does online rent collection work?",
-    a: "Tenants can pay rent directly through their portal using credit card or bank transfer. You get automatic payment tracking and reminders.",
+    q: "What's the catch?",
+    a: "There isn't one. We built Onyx PM because we believe property management software is overpriced. By keeping the platform free and monetizing through transactions, we can grow alongside our customers.",
   },
   {
-    q: "Can tenants submit maintenance requests?",
-    a: "Yes. Tenants have their own portal where they can submit and track maintenance requests. You manage everything from your dashboard.",
+    q: "How does rent collection work?",
+    a: "Tenants can pay rent through their portal using credit card or bank transfer. Payments are processed securely through Stripe. Funds are deposited directly to your bank account.",
+  },
+  {
+    q: "Is there a limit on properties or units?",
+    a: "No. Whether you manage 1 unit or 1,000, Onyx PM is free with no feature restrictions.",
   },
   {
     q: "Is my data secure?",
-    a: "Absolutely. We use industry-standard encryption, secure authentication, and your data is hosted on enterprise-grade infrastructure.",
-  },
-  {
-    q: "Can I upgrade or downgrade anytime?",
-    a: "Yes, you can switch between plans at any time. No long-term contracts.",
+    a: "Yes. We use bank-level encryption, secure authentication, and your data is hosted on enterprise-grade cloud infrastructure.",
   },
 ];
 
@@ -207,21 +184,81 @@ function SectionFadeIn({ id, visibleSections, children, sx = {}, ref }) {
   );
 }
 
+function RevenueSvg() {
+  return (
+    <Box sx={{ pt: 1, width: "100%", height: 120 }}>
+      <svg viewBox="0 0 500 130" width="100%" height="100%" role="img" aria-label="Revenue chart">
+        <defs>
+          <linearGradient id="rev-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(124,92,252,0.45)" />
+            <stop offset="100%" stopColor="rgba(124,92,252,0)" />
+          </linearGradient>
+        </defs>
+        <path d="M16 98 L74 86 L132 74 L190 62 L248 50 L306 42 L364 44 L422 36 L480 44" fill="none" stroke="#7c5cfc" strokeWidth="2.5" />
+        <path d="M16 98 L74 86 L132 74 L190 62 L248 50 L306 42 L364 44 L422 36 L480 44 L480 118 L16 118 Z" fill="url(#rev-fill)" />
+        <line x1="16" y1="118" x2="480" y2="118" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+        <line x1="16" y1="16" x2="16" y2="118" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+        {["Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan"].map((label, index) => (
+          <text
+            key={label}
+            x={16 + index * (464 / 6)}
+            y={128}
+            fill="#6b7280"
+            fontSize="9"
+            textAnchor="middle"
+            fontFamily="Inter, sans-serif"
+          >
+            {label}
+          </text>
+        ))}
+        {["$0", "$10K", "$20K", "$25K"].map((value, index) => (
+          <text key={value} x={8} y={118 - index * 34} fill="#6b7280" fontSize="9" textAnchor="end" fontFamily="Inter, sans-serif">
+            {value}
+          </text>
+        ))}
+      </svg>
+    </Box>
+  );
+}
+
+function OccupancyDonut({ occupied = 88, total = 100 }) {
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (occupied / total) * circumference;
+  return (
+    <Box sx={{ width: "100%", height: 120 }}>
+      <svg viewBox="0 0 120 120" width="100%" height="100%" role="img" aria-label="Occupancy donut">
+        <circle cx="60" cy="60" r={radius} stroke="rgba(255,255,255,0.2)" strokeWidth="10" fill="none" />
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
+          stroke="#7c5cfc"
+          strokeWidth="10"
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${circumference - dash}`}
+          transform="rotate(-90 60 60)"
+          pathLength={circumference}
+        />
+        <circle cx="60" cy="60" r="24" fill="#0a0a0a" />
+        <text x="60" y="57" textAnchor="middle" fontSize="14" fill="#fff" fontWeight={700} fontFamily="Inter, sans-serif">
+          {`${occupied}%`}
+        </text>
+        <text x="60" y="72" textAnchor="middle" fontSize="8" fill="#6b7280" fontFamily="Inter, sans-serif">
+          Occupancy
+        </text>
+      </svg>
+    </Box>
+  );
+}
+
 function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [visibleSections, setVisibleSections] = useState({});
   const sectionRefs = useRef({});
   const materialTheme = useMuiTheme();
   const isMobile = useMediaQuery(materialTheme.breakpoints.down("md"));
-
-  useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -239,14 +276,9 @@ function LandingPage() {
       { root: null, threshold: 0.18 },
     );
 
-    const nodes = sectionSeed
-      .map((id) => sectionRefs.current[id])
-      .filter(Boolean);
+    const nodes = sectionSeed.map((id) => sectionRefs.current[id]).filter(Boolean);
     nodes.forEach((node) => observer.observe(node));
-
-    return () => {
-      nodes.forEach((node) => observer.unobserve(node));
-    };
+    return () => nodes.forEach((node) => observer.unobserve(node));
   }, []);
 
   const registerSection = useCallback((id) => (node) => {
@@ -255,46 +287,59 @@ function LandingPage() {
     }
   }, []);
 
-  const navLinks = useMemo(() => [
-    { label: "Features", href: "#features" },
-    { label: "Pricing", href: "#pricing" },
-    { label: "FAQ", href: "#faq" },
-  ], []);
+  const navLinks = useMemo(
+    () => [
+      { label: "Features", href: "#features" },
+      { label: "Pricing", href: "#pricing" },
+      { label: "FAQ", href: "#faq" },
+    ],
+    [],
+  );
 
   return (
-    <Box sx={{ bgcolor: "#ffffff", color: "#111827", fontFamily: "Inter, Roboto, sans-serif" }}>
+    <Box
+      sx={{
+        bgcolor: "#0a0a0a",
+        color: "#e5e7eb",
+        fontFamily: "Inter, Roboto, sans-serif",
+        backgroundImage: "radial-gradient(ellipse at 50% 0%, rgba(124,92,252,0.08) 0%, transparent 70%)",
+        "@keyframes onyxFloat": {
+          "0%,100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+      }}
+    >
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
-          backgroundColor: isScrolled ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.92)",
-          backdropFilter: isScrolled ? "blur(14px)" : "blur(8px)",
-          borderBottom: "1px solid rgba(0,0,0,0.08)",
-          color: "#111827",
+          backgroundColor: "rgba(10,10,10,0.8)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          color: "#fff",
           zIndex: 1300,
-          transition: "background-color 0.3s ease, border-color 0.3s ease",
         }}
       >
-          <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
           <Box sx={{ minHeight: 68, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
-            <BrandLogo textColor="#1a1a1a" onyxSize={18} iconSize={26} />
+            <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
             {isMobile ? (
-              <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "#111827" }} aria-label="Open menu">
+              <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "#fff" }} aria-label="Open menu">
                 <MenuIcon />
               </IconButton>
             ) : (
-              <Stack direction="row" spacing={1.8} alignItems="center">
+              <Stack direction="row" spacing={1.6} alignItems="center">
                 {navLinks.map((link) => (
                   <MuiLink
                     key={link.label}
                     href={link.href}
                     underline="none"
-                    sx={{ fontSize: 13, color: "#4b5563", "&:hover": { color: "#111827" } }}
+                    sx={{ fontSize: 13, color: "#878C9E", "&:hover": { color: "#fff" } }}
                   >
                     {link.label}
                   </MuiLink>
                 ))}
-                <Button component={Link} to="/login" size="small" sx={{ color: "#111827", fontWeight: 500 }}>
+                <Button component={Link} to="/login" size="small" sx={{ color: "#fff", fontWeight: 500 }}>
                   Log In
                 </Button>
                 <Button
@@ -316,10 +361,10 @@ function LandingPage() {
         anchor="right"
         open={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
-        PaperProps={{ sx: { width: 250, background: "#fff", p: 1.2 } }}
+        PaperProps={{ sx: { width: 250, background: "#0a0a0a", p: 1.2, color: "#fff" } }}
       >
         <Box sx={{ display: "flex", justifyContent: "flex-end", px: 0.6, mb: 1 }}>
-          <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "#111827" }}>
+          <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "#fff" }}>
             <CloseIcon />
           </IconButton>
         </Box>
@@ -330,16 +375,16 @@ function LandingPage() {
               component="a"
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
-              sx={{ borderRadius: 1, color: "#111827" }}
+              sx={{ borderRadius: 1, color: "#878C9E", "&:hover": { color: "#fff" } }}
             >
               <ListItemText primary={link.label} />
             </ListItemButton>
           ))}
           <Divider sx={{ my: 1 }} />
-          <ListItemButton component={Link} to="/login" onClick={() => setMobileMenuOpen(false)} sx={{ borderRadius: 1 }}>
+          <ListItemButton component={Link} to="/login" onClick={() => setMobileMenuOpen(false)} sx={{ borderRadius: 1, color: "#fff" }}>
             <ListItemText primary="Log In" />
           </ListItemButton>
-          <ListItemButton component={Link} to="/register" onClick={() => setMobileMenuOpen(false)} sx={{ borderRadius: 1 }}>
+          <ListItemButton component={Link} to="/register" onClick={() => setMobileMenuOpen(false)} sx={{ borderRadius: 1, color: "#fff" }}>
             <ListItemText primary="Get Started Free" />
           </ListItemButton>
         </List>
@@ -362,7 +407,16 @@ function LandingPage() {
           >
             <Box sx={{ textAlign: "center", maxWidth: 980 }}>
               <Box sx={{ mb: 1.5, display: "flex", justifyContent: "center" }}>
-                <img src="/logo-icon.png" alt="Onyx PM" style={{ height: 48 }} />
+                <img
+                  src="/logo-icon.png"
+                  alt="Onyx PM"
+                  style={{
+                    height: 48,
+                    background: "transparent",
+                    filter: "brightness(1.1)",
+                    mixBlendMode: "screen",
+                  }}
+                />
               </Box>
               <Typography
                 sx={{
@@ -370,17 +424,14 @@ function LandingPage() {
                   lineHeight: 1.05,
                   fontWeight: 700,
                   letterSpacing: "-0.03em",
-                  color: "#111827",
+                  color: "#fff",
                   whiteSpace: "pre-line",
                 }}
               >
-                Property Management,{"\n"}Simplified.
+                Stop Paying for Property Management Software.
               </Typography>
-              <Typography
-                sx={{ mt: 2, maxWidth: 640, mx: "auto", color: "#6b7280", fontSize: 18, lineHeight: 1.45 }}
-              >
-                The modern platform for landlords and property managers. Manage properties, tenants, payments,
-                and maintenance — all in one place.
+              <Typography sx={{ mt: 2, maxWidth: 640, mx: "auto", color: "#878C9E", fontSize: 18, lineHeight: 1.45 }}>
+                Onyx PM is 100% free. No subscriptions. No per-unit fees. No limits. We only make money when you collect rent or screen tenants.
               </Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} justifyContent="center" sx={{ mt: 3 }}>
                 <Button
@@ -395,7 +446,7 @@ function LandingPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Get Started Free
+                  Get Started � It's Free
                 </Button>
                 <Button
                   size="medium"
@@ -403,102 +454,113 @@ function LandingPage() {
                   href="#how-it-works"
                   sx={{
                     px: 2.2,
-                    borderColor: alpha("#111827", 0.2),
-                    color: "#111827",
-                    "&:hover": { borderColor: "#111827" },
+                    borderColor: "rgba(255,255,255,0.1)",
+                    color: "#fff",
+                    "&:hover": { borderColor: "#fff" },
                   }}
-                  component={MuiLink}
                 >
                   See How It Works
                 </Button>
               </Stack>
               <Typography sx={{ mt: 1.2, fontSize: 12, color: "#6b7280" }}>
-                Free forever for up to 5 units. No credit card required.
+                No credit card required. Unlimited units. Free forever.
               </Typography>
             </Box>
+
             <Box
               sx={{
                 width: "100%",
-                maxWidth: 1020,
+                maxWidth: 1080,
                 borderRadius: 3,
-                border: "1px solid rgba(0,0,0,0.08)",
+                border: "1px solid rgba(255,255,255,0.06)",
                 overflow: "hidden",
-                background: "linear-gradient(160deg, #ffffff 0%, #f4f6ff 45%, #ffffff 100%)",
-                p: { xs: 2, md: 3 },
-                boxShadow: "0 28px 70px rgba(17,24,39,0.15)",
-                transform: "perspective(1200px) rotateX(6deg) rotateY(-2deg)",
+                background: "#141414",
+                p: { xs: 1.5, md: 2.4 },
+                boxShadow: "0 0 120px rgba(124,92,252,0.12)",
+                transform: "perspective(2000px) rotateX(2deg)",
+                animation: "onyxFloat 7s ease-in-out infinite",
               }}
             >
-              <Box
-                sx={{
-                  height: { xs: 360, md: 420 },
-                  borderRadius: 2,
-                  border: "1px solid rgba(0,0,0,0.08)",
-                  backgroundColor: "#0f172a",
-                  p: 1.8,
-                  color: "#e5e7eb",
-                  display: "grid",
-                  gap: 1.3,
-                  gridTemplateColumns: "200px 1fr",
-                }}
-              >
-                <Box
-                  sx={{
-                    borderRadius: 1.5,
-                    background: "rgba(255,255,255,0.05)",
-                    p: 1.2,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <Typography sx={{ fontSize: 11, color: alpha("#ffffff", 0.74) }}>Dashboard</Typography>
-                  <Box sx={{ mt: 1.2, display: "grid", gap: 0.8 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <DashboardIcon sx={{ fontSize: 16, color: "#94a3b8" }} />
-                      <Typography sx={{ fontSize: 12 }}>Overview</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <PeopleIcon sx={{ fontSize: 16, color: "#94a3b8" }} />
-                      <Typography sx={{ fontSize: 12 }}>Tenants</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <ViewCarouselIcon sx={{ fontSize: 16, color: "#94a3b8" }} />
-                      <Typography sx={{ fontSize: 12 }}>Maintenance</Typography>
-                    </Stack>
-                  </Box>
+              <Box sx={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#0a0a0a", p: 1.2, color: "#e5e7eb" }}>
+                <Box sx={{ px: 0.8, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.08)", pb: 0.9 }}>
+                  <Typography sx={{ fontSize: 11, color: "#fff", fontWeight: 600 }}>Dashboard</Typography>
+                  <Typography sx={{ fontSize: 10, color: "#9ca3af", letterSpacing: "0.03em" }}>/dashboard/overview</Typography>
                 </Box>
-                <Box sx={{ display: "grid", gap: 1 }}>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
-                    {[
-                      { label: "Revenue", value: "$24,300" },
-                      { label: "Units", value: "38" },
-                      { label: "Open Requests", value: "9" },
-                    ].map((item) => (
+                <Box sx={{ mt: 1.1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Box>
+                    <Typography sx={{ fontSize: 11, color: "#fff" }}>Welcome back, Sarah</Typography>
+                    <Typography sx={{ mt: 0.3, fontSize: 10, color: "#6b7280" }}>February 13, 2026</Typography>
+                  </Box>
+                  <Stack direction="row" spacing={0.8} alignItems="center">
+                    <Typography sx={{ width: 26, height: 26, borderRadius: "50%", bgcolor: "#0f172a", border: "1px solid rgba(255,255,255,0.12)", fontSize: 11, display: "grid", placeItems: "center" }}>SN</Typography>
+                    <Box sx={{ width: 20, height: 20, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "grid", placeItems: "center" }}>
+                      <NotificationsNoneIcon sx={{ fontSize: 12, color: "#9ca3af" }} />
+                    </Box>
+                  </Stack>
+                </Box>
+                <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.8 }}>
+                  {[
+                    { label: "Properties", value: "4", icon: ApartmentIcon, color: "#7c5cfc" },
+                    { label: "Units", value: "17", icon: PeopleIcon, color: "#06b6d4" },
+                    { label: "Active Leases", value: "12", icon: DashboardIcon, color: "#22c55e" },
+                    { label: "Open Requests", value: "3", icon: BuildIcon, color: "#f59e0b" },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
                       <Box
                         key={item.label}
                         sx={{
                           borderRadius: 1.2,
-                          p: 1.2,
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          px: 0.9,
+                          py: 0.7,
+                          background: "rgba(255,255,255,0.03)",
                         }}
                       >
-                        <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>{item.label}</Typography>
-                        <Typography sx={{ fontSize: 19, fontWeight: 700, mt: 0.8, color: "#fff" }}>{item.value}</Typography>
+                        <Icon sx={{ fontSize: 12, color: item.color, opacity: 0.85 }} />
+                        <Typography sx={{ mt: 0.4, fontSize: 9, color: "#9ca3af", letterSpacing: "0.01em" }}>{item.label}</Typography>
+                        <Typography sx={{ fontSize: 17, lineHeight: 1.1, fontWeight: 700, color: "#fff" }}>{item.value}</Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+                <Box sx={{ mt: 1.1, display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 0.8 }}>
+                  <Box sx={{ borderRadius: 1.2, border: "1px solid rgba(255,255,255,0.1)", p: 0.9, background: "rgba(255,255,255,0.02)" }}>
+                    <Typography sx={{ fontSize: 10, color: "#9ca3af", letterSpacing: "0.03em" }}>Revenue Overview</Typography>
+                    <Typography sx={{ fontSize: 14, color: "#fff", fontWeight: 600 }}>Monthly Rent</Typography>
+                    <RevenueSvg />
+                  </Box>
+                  <Box sx={{ borderRadius: 1.2, border: "1px solid rgba(255,255,255,0.1)", p: 0.9, background: "rgba(255,255,255,0.02)" }}>
+                    <Typography sx={{ fontSize: 10, color: "#9ca3af", letterSpacing: "0.03em" }}>Occupancy Rate</Typography>
+                    <Typography sx={{ fontSize: 14, color: "#fff", fontWeight: 600 }}>Current</Typography>
+                    <OccupancyDonut />
+                  </Box>
+                </Box>
+                <Box sx={{ mt: 1.1, borderRadius: 1.2, border: "1px solid rgba(255,255,255,0.1)", p: 0.9, background: "rgba(255,255,255,0.02)" }}>
+                  <Typography sx={{ fontSize: 10, color: "#9ca3af", letterSpacing: "0.03em" }}>Recent Activity</Typography>
+                  <Box sx={{ mt: 0.6, display: "grid", gap: 0.45 }}>
+                    {[
+                      { subject: "Sarah Chen", action: "Rent payment received", value: "$1,400", age: "2 hours ago" },
+                      { subject: "AC repair", action: "In Progress", value: "Oak Park Unit B", age: "5 hours ago" },
+                      { subject: "New lease signed", action: "Downtown Loft 2A", value: "", age: "Yesterday" },
+                    ].map((row) => (
+                      <Box
+                        key={`${row.subject}-${row.age}`}
+                        sx={{
+                          borderBottom: "1px dashed rgba(255,255,255,0.12)",
+                          pb: 0.45,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 1,
+                        }}
+                      >
+                        <Typography sx={{ fontSize: 10.5, color: "#d1d5db", width: "42%" }}>{row.subject}</Typography>
+                        <Typography sx={{ fontSize: 10.5, color: "#9ca3af", width: "35%" }}>{row.action}</Typography>
+                        <Typography sx={{ fontSize: 10.5, color: "#fff", fontWeight: 600, width: "13%", textAlign: "right" }}>{row.value}</Typography>
+                        <Typography sx={{ fontSize: 10, color: "#6b7280", width: "10%", textAlign: "right" }}>{row.age}</Typography>
                       </Box>
                     ))}
-                  </Box>
-                  <Box sx={{ borderRadius: 1.2, border: "1px solid rgba(255,255,255,0.08)", p: 1.1, background: "rgba(255,255,255,0.04)", minHeight: 188 }}>
-                    <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>Net Rent Collected</Typography>
-                    <Box sx={{ mt: 1.2, height: 82, borderRadius: 1, background: "linear-gradient(90deg, rgba(99,71,245,0.32), rgba(99,71,245,0.08))", position: "relative", overflow: "hidden" }}>
-                      <Box
-                        sx={{
-                          position: "absolute",
-                          inset: 0,
-                          background: "linear-gradient(90deg, rgba(255,255,255,0.16) 25%, rgba(255,255,255,0) 25%)",
-                          opacity: 0.25,
-                        }}
-                      />
-                    </Box>
                   </Box>
                 </Box>
               </Box>
@@ -507,34 +569,19 @@ function LandingPage() {
 
           <Box sx={{ mt: 4, mb: 8 }}>
             <Typography sx={{ textAlign: "center", color: "#6b7280", fontSize: 14 }}>
-              Trusted by property managers across the US
+              Built for landlords with 1 unit or 1,000
             </Typography>
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={3}
-              justifyContent="center"
-              alignItems="center"
-              sx={{ mt: 1.8, color: "#9ca3af", fontSize: 13 }}
-            >
-              <Typography>Northlake Property Group</Typography>
-              <Typography>UrbanNest Management</Typography>
-              <Typography>Maple Street Partners</Typography>
-              <Typography>Harborline Holdings</Typography>
-            </Stack>
           </Box>
         </Container>
       </Box>
 
-      <Container
-        maxWidth="lg"
-        sx={{ px: { xs: 2, md: 3 }, py: { xs: 8, md: 10 }, maxWidth: "1200px !important" }}
-      >
+      <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, py: { xs: 8, md: 10 }, maxWidth: "1200px !important" }}>
         <SectionFadeIn id="features" visibleSections={visibleSections} ref={registerSection("features")} sx={{ mb: { xs: 8, md: 10 } }}>
-          <Typography sx={{ fontSize: { xs: 30, md: 36 }, fontWeight: 700, letterSpacing: "-0.01em", textAlign: "center", color: "#111827" }}>
-            Everything you need to manage your properties
+          <Typography sx={{ fontSize: { xs: 30, md: 36 }, fontWeight: 700, letterSpacing: "-0.01em", textAlign: "center", color: "#fff" }}>
+            Everything you need. Nothing you don&apos;t.
           </Typography>
-          <Typography sx={{ mt: 1, textAlign: "center", color: "#6b7280", fontSize: 16 }}>
-            From leasing to accounting, Onyx PM handles it all.
+          <Typography sx={{ mt: 1, textAlign: "center", color: "#878C9E", fontSize: 16 }}>
+            A complete property management platform � without the price tag.
           </Typography>
           <Box
             sx={{
@@ -551,16 +598,19 @@ function LandingPage() {
                   key={item.title}
                   sx={{
                     borderRadius: 3,
-                    border: "1px solid rgba(0,0,0,0.08)",
+                    border: "1px solid rgba(255,255,255,0.06)",
                     p: 2.2,
-                    background: "#fff",
-                    transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-                    "&:hover": { transform: "translateY(-2px)", boxShadow: "0 14px 35px rgba(15,23,42,0.08)" },
+                    background: "#141414",
+                    transition: "transform 0.2s ease, border-color 0.2s ease",
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      borderColor: "rgba(124,92,252,0.2)",
+                    },
                   }}
                 >
-                  <Icon sx={{ color: "#6347f5", mb: 1.2 }} />
-                  <Typography sx={{ fontWeight: 600, color: "#111827", fontSize: 16 }}>{item.title}</Typography>
-                  <Typography sx={{ mt: 0.8, color: "#6b7280", fontSize: 13, lineHeight: 1.5 }}>{item.body}</Typography>
+                  <Icon sx={{ color: "#7c5cfc", mb: 1.2 }} />
+                  <Typography sx={{ fontWeight: 600, color: "#fff", fontSize: 16 }}>{item.title}</Typography>
+                  <Typography sx={{ mt: 0.8, color: "#878C9E", fontSize: 13, lineHeight: 1.5 }}>{item.body}</Typography>
                 </Box>
               );
             })}
@@ -568,7 +618,7 @@ function LandingPage() {
         </SectionFadeIn>
 
         <SectionFadeIn id="how-it-works" visibleSections={visibleSections} ref={registerSection("how-it-works")} sx={{ mb: { xs: 8, md: 10 } }}>
-          <Typography sx={{ fontSize: 24, fontWeight: 700, textAlign: "center", color: "#111827" }}>
+          <Typography sx={{ fontSize: 36, fontWeight: 700, textAlign: "center", color: "#fff" }}>
             How it works
           </Typography>
           <Box
@@ -577,31 +627,33 @@ function LandingPage() {
               display: "grid",
               gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
               gap: 1.5,
+              position: "relative",
             }}
           >
             {howItWorks.map((item, index) => (
-              <Box key={item.step} sx={{ display: "flex", alignItems: "stretch", position: "relative", gap: 1.2 }}>
-                <Box
-                  sx={{
-                    mt: 0.1,
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    border: "1px solid rgba(99,71,245,0.3)",
-                    color: "#6347f5",
-                    background: "rgba(99,71,245,0.08)",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    flex: "none",
-                  }}
-                >
-                  {item.step}
+              <Box key={item.step} sx={{ position: "relative", gap: 1.2, display: "grid" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Box
+                    sx={{
+                      mt: 0.1,
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      border: "1px solid rgba(124,92,252,0.35)",
+                      color: "#7c5cfc",
+                      background: "rgba(124,92,252,0.12)",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: 14,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {item.step}
+                  </Box>
+                  <Typography sx={{ fontSize: 16, fontWeight: 600, color: "#fff" }}>{item.title}</Typography>
                 </Box>
-                <Box sx={{ flex: 1, border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2, p: 2, background: "#fff" }}>
-                  <Typography sx={{ fontSize: 16, fontWeight: 600, color: "#111827" }}>{item.title}</Typography>
-                  <Typography sx={{ mt: 0.8, color: "#6b7280", fontSize: 13 }}>{item.body}</Typography>
+                <Box sx={{ border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, p: 2, background: "#141414" }}>
+                  <Typography sx={{ color: "#878C9E", fontSize: 13, lineHeight: 1.5 }}>{item.body}</Typography>
                 </Box>
                 {index !== howItWorks.length - 1 ? (
                   <Box
@@ -609,13 +661,11 @@ function LandingPage() {
                       position: "absolute",
                       top: 18,
                       left: 18,
-                      right: -24,
-                      borderTop: "1px dashed rgba(0,0,0,0.14)",
+                      right: { xs: -9999, md: -24 },
+                      borderTop: "1px dashed rgba(255,255,255,0.06)",
                       display: { xs: "none", md: "block" },
                     }}
-                  >
-                    <AddIcon sx={{ position: "absolute", right: -7, top: -10, color: "#cbd5e1", fontSize: 18 }} />
-                  </Box>
+                  />
                 ) : null}
               </Box>
             ))}
@@ -623,140 +673,142 @@ function LandingPage() {
         </SectionFadeIn>
 
         <SectionFadeIn id="pricing" visibleSections={visibleSections} ref={registerSection("pricing")} sx={{ mb: { xs: 8, md: 10 } }}>
-          <Typography sx={{ fontSize: 32, fontWeight: 700, textAlign: "center", color: "#111827" }}>
-            Simple, transparent pricing
+          <Typography sx={{ fontSize: 32, fontWeight: 700, textAlign: "center", color: "#fff" }}>
+            Free. Really.
           </Typography>
-          <Typography sx={{ mt: 1, textAlign: "center", color: "#6b7280", fontSize: 16 }}>
-            Start free, upgrade when you&apos;re ready.
+          <Typography sx={{ mt: 1, textAlign: "center", color: "#878C9E", fontSize: 16 }}>
+            No subscriptions. No per-unit fees. No catches.
           </Typography>
-          <Box
-            sx={{
-              mt: 3.6,
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-              gap: 2,
-            }}
-          >
-            {pricingCards.map((plan) => (
-              <Box
-                key={plan.title}
-                sx={{
-                  borderRadius: 3,
-                  border: plan.emphasized ? "1px solid #6347f5" : "1px solid rgba(0,0,0,0.08)",
-                  background: "#fff",
-                  p: 2.6,
-                  position: "relative",
-                  boxShadow: plan.emphasized ? "0 14px 30px rgba(99,71,245,0.12)" : "none",
-                }}
+          <Box sx={{ mt: 3.6, display: "flex", justifyContent: "center" }}>
+            <Box sx={{ width: { xs: "100%", md: 760 }, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, background: "#141414", p: { xs: 2.2, md: 3 } }}>
+              <Typography sx={{ fontSize: 14, color: "#878C9E" }}>Core plan</Typography>
+              <Typography sx={{ mt: 1, fontSize: 34, fontWeight: 700, color: "#fff" }}>
+                Onyx PM is free for every landlord
+              </Typography>
+              <Typography sx={{ mt: 1, fontSize: 46, fontWeight: 700, color: "#fff" }}>
+                $0 <Typography component="span" sx={{ fontSize: 16, fontWeight: 500, color: "#6b7280" }}>/ month</Typography>
+              </Typography>
+              <Box sx={{ mt: 2, display: "grid", gap: 0.8 }}>
+                {[
+                  "Unlimited properties & units",
+                  "Unlimited tenants & leases",
+                  "Maintenance management",
+                  "Accounting & financial reports",
+                  "Document storage",
+                  "In-app messaging",
+                  "Dark & light mode",
+                ].map((item) => (
+                  <Stack key={item} direction="row" spacing={1} alignItems="center">
+                    <CheckCircleOutlineIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                    <Typography sx={{ color: "#878C9E", fontSize: 13 }}>{item}</Typography>
+                  </Stack>
+                ))}
+              </Box>
+              <Box sx={{ mt: 1.8, borderTop: "1px solid rgba(255,255,255,0.08)", pt: 1.6 }}>
+                <Typography sx={{ fontSize: 16, color: "#fff", fontWeight: 600 }}>Pay only for what you use:</Typography>
+                <Typography sx={{ mt: 1, fontSize: 13, color: "#e5e7eb" }}>
+                  Rent collection: <Typography component="span" sx={{ color: "#fff", fontWeight: 600 }}>2.9% + 30¢</Typography> per transaction
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: "#878C9E" }}>(passed through from payment processor)</Typography>
+                <Typography sx={{ mt: 1, fontSize: 13, color: "#e5e7eb" }}>
+                  Tenant screening: <Typography component="span" sx={{ color: "#fff", fontWeight: 600 }}>$35</Typography> per report
+                </Typography>
+              </Box>
+              <Button
+                component={Link}
+                to="/register"
+                variant="contained"
+                fullWidth
+                sx={{ mt: 2.4, background: "#6347f5", "&:hover": { background: "#5539d9" }, borderRadius: 2, py: 1.2, fontWeight: 600 }}
               >
-                {plan.badge ? (
+                Get Started - It\x27s Free
+              </Button>
+              <Box sx={{ mt: 2.6, border: "1px solid rgba(124,92,252,0.3)", borderRadius: 2, p: 1.4, background: "#111111" }}>
+                <Typography sx={{ fontWeight: 600, color: "#fff" }}>How we compare</Typography>
+                {[
+                  { name: "AppFolio", value: "AppFolio: $1.40/unit/month + setup fees", active: false },
+                  { name: "Buildium", value: "Buildium: $58/month for 20 units", active: false },
+                  { name: "Onyx PM", value: "Onyx PM: $0/month for unlimited units", active: true },
+                ].map((item) => (
                   <Box
+                    key={item.name}
                     sx={{
-                      position: "absolute",
-                      top: 14,
-                      right: 14,
-                      fontSize: 11,
-                      color: "#fff",
-                      px: 1.1,
-                      py: 0.35,
-                      borderRadius: 12,
-                      background: "#6347f5",
-                      lineHeight: 1.2,
+                      mt: 0.8,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      borderLeft: item.active ? "3px solid #7c5cfc" : "none",
+                      pl: item.active ? 1 : 0,
+                      color: item.active ? "#7c5cfc" : "#6b7280",
                     }}
                   >
-                    {plan.badge}
+                    <Typography sx={{ fontSize: 12, fontWeight: item.active ? 600 : 400, color: item.active ? "#7c5cfc" : "#6b7280" }}>
+                      {item.name}
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, fontWeight: item.active ? 600 : 400, color: item.active ? "#fff" : "#6b7280" }}>
+                      {item.value}
+                    </Typography>
                   </Box>
-                ) : null}
-                <Typography sx={{ fontSize: 14, color: "#6b7280" }}>{plan.title}</Typography>
-                <Typography sx={{ mt: 1, fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em" }}>
-                  {plan.price}
-                  <Typography component="span" sx={{ fontSize: 15, color: "#6b7280", fontWeight: 500 }}>
-                    {plan.cadence}
-                  </Typography>
-                </Typography>
-                <Box sx={{ mt: 2, display: "grid", gap: 0.8 }}>
-                  {plan.features.map((feature) => (
-                    <Stack key={feature} direction="row" spacing={1} alignItems="center">
-                      <CheckCircleOutlineIcon sx={{ color: "#22c55e", fontSize: 16 }} />
-                      <Typography sx={{ fontSize: 13, color: "#374151" }}>{feature}</Typography>
-                    </Stack>
-                  ))}
-                </Box>
-                <Button
-                  variant={plan.buttonVariant}
-                  color={plan.buttonVariant === "contained" ? "primary" : "inherit"}
-                  component={Link}
-                  to="/register"
-                  fullWidth
-                  sx={{
-                    mt: 2.4,
-                    borderRadius: 2,
-                    ...(plan.buttonVariant === "contained"
-                      ? {
-                          backgroundColor: "#6347f5",
-                          "&:hover": { backgroundColor: "#5539d9" },
-                        }
-                      : {
-                          borderColor: "rgba(17,24,39,0.22)",
-                          color: "#111827",
-                          "&:hover": { borderColor: "#111827" },
-                        }),
-                  }}
-                >
-                  {plan.cta}
-                </Button>
-                {plan.note ? <Typography sx={{ mt: 1.1, fontSize: 11, color: "#6b7280" }}>{plan.note}</Typography> : null}
+                ))}
               </Box>
-            ))}
+            </Box>
           </Box>
         </SectionFadeIn>
 
-            <SectionFadeIn id="faq" visibleSections={visibleSections} ref={registerSection("faq")}>
-          <Typography sx={{ fontSize: 32, fontWeight: 700, textAlign: "center", color: "#111827" }}>
+        <SectionFadeIn id="faq" visibleSections={visibleSections} ref={registerSection("faq")}>
+          <Typography sx={{ fontSize: 36, fontWeight: 700, textAlign: "center", color: "#fff" }}>
             Frequently asked questions
-          </Typography>
-          <Typography sx={{ mt: 1, textAlign: "center", color: "#6b7280", fontSize: 16 }}>
-            Common questions about onboarding and using Onyx PM.
           </Typography>
           <Box sx={{ mt: 3.4, maxWidth: 900, mx: "auto" }}>
             {faqItems.map((faq) => (
               <Accordion
                 key={faq.q}
                 elevation={0}
-                sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2, mb: 1.2, "&:before": { display: "none" }, background: "#fff" }}
+                sx={{
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 2,
+                  mb: 1.2,
+                  "&:before": { display: "none" },
+                  background: "#141414",
+                }}
               >
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ "& .MuiAccordionSummary-content": { fontWeight: 600 } }}>
-                  <Typography sx={{ color: "#111827", fontWeight: 600 }}>{faq.q}</Typography>
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon sx={{ color: "#878C9E" }} />}
+                  sx={{ "& .MuiAccordionSummary-content": { fontWeight: 600 } }}
+                >
+                  <Typography sx={{ color: "#fff", fontWeight: 600 }}>{faq.q}</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography sx={{ color: "#4b5563", fontSize: 13, lineHeight: 1.6 }}>{faq.a}</Typography>
+                  <Typography sx={{ color: "#878C9E", fontSize: 13, lineHeight: 1.6 }}>{faq.a}</Typography>
                 </AccordionDetails>
               </Accordion>
             ))}
           </Box>
         </SectionFadeIn>
       </Container>
-          <Box sx={{ mt: 8, bgcolor: "#1a1a1a", color: "#fff", pt: 6, pb: 4 }}>
-      <Container
-        maxWidth="lg"
-        sx={{ px: { xs: 2, md: 3 }, py: { xs: 8, md: 10 }, maxWidth: "1200px !important" }}
-      >
+
+      <Box sx={{ mt: 8, bgcolor: "#111111", color: "#fff", pt: 6, pb: 4 }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
           <Box
-            sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 2.5 }}
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
+              gap: 2.5,
+            }}
           >
             <Box>
               <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
               <Stack spacing={1}>
-                <MuiLink href="#features" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#features" underline="none" color="#fff" sx={{ fontSize: 13 }}>
                   Features
                 </MuiLink>
-                <MuiLink href="#pricing" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#pricing" underline="none" color="#fff" sx={{ fontSize: 13 }}>
                   Pricing
                 </MuiLink>
-                <MuiLink href="#faq" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#faq" underline="none" color="#fff" sx={{ fontSize: 13 }}>
                   FAQ
                 </MuiLink>
-                <MuiLink component={Link} to="/login" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink component={Link} to="/login" underline="none" color="#fff" sx={{ fontSize: 13 }}>
                   Login
                 </MuiLink>
               </Stack>
@@ -764,13 +816,13 @@ function LandingPage() {
             <Box>
               <Typography sx={{ fontWeight: 700, mb: 1.4 }}>Company</Typography>
               <Stack spacing={1}>
-                <MuiLink href="#" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
                   About
                 </MuiLink>
-                <MuiLink href="#" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
                   Blog
                 </MuiLink>
-                <MuiLink href="#" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
                   Careers
                 </MuiLink>
               </Stack>
@@ -778,16 +830,16 @@ function LandingPage() {
             <Box>
               <Typography sx={{ fontWeight: 700, mb: 1.4 }}>Legal</Typography>
               <Stack spacing={1}>
-                <MuiLink href="#" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
                   Privacy Policy
                 </MuiLink>
-                <MuiLink href="#" underline="none" color="inherit" sx={{ fontSize: 13 }}>
+                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
                   Terms of Service
                 </MuiLink>
               </Stack>
             </Box>
           </Box>
-          <Divider sx={{ mt: 2.8, borderColor: "rgba(255,255,255,0.12)" }} />
+          <Divider sx={{ mt: 2.8, borderColor: "rgba(255,255,255,0.06)" }} />
           <Box
             sx={{
               mt: 1.4,
@@ -798,8 +850,8 @@ function LandingPage() {
               gap: 0.8,
             }}
           >
-            <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>© 2026 Onyx PM. All rights reserved.</Typography>
-            <Stack direction="row" spacing={1.2} sx={{ color: "#9ca3af", fontSize: 12 }}>
+            <Typography sx={{ fontSize: 12, color: "#6b7280" }}>© 2026 Onyx PM. All rights reserved.</Typography>
+            <Stack direction="row" spacing={1.2} sx={{ color: "#6b7280", fontSize: 12 }}>
               <MuiLink href="#" color="inherit" underline="none">LinkedIn</MuiLink>
               <MuiLink href="#" color="inherit" underline="none">X</MuiLink>
               <MuiLink href="#" color="inherit" underline="none">YouTube</MuiLink>
@@ -812,4 +864,6 @@ function LandingPage() {
 }
 
 export default LandingPage;
+
+
 

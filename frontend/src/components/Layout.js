@@ -42,11 +42,29 @@ const drawerWidth = 240;
 function BrandLogo({ isDark }) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-      <img
-        src="/logo-icon.png"
-        alt="Onyx PM"
-        style={{ height: 22, width: "auto", display: "block" }}
-      />
+      <Box
+        sx={{
+          width: 32,
+          height: 32,
+          borderRadius: "50%",
+          overflow: "hidden",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <img
+          src="/logo-icon.png"
+          alt="Onyx PM"
+          style={{
+            width: 32,
+            height: 32,
+            display: "block",
+            background: "transparent",
+            filter: "brightness(1.1)",
+            mixBlendMode: "screen",
+          }}
+        />
+      </Box>
       <Typography
         variant="body1"
         sx={{
