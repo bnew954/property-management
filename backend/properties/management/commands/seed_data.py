@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -30,12 +30,22 @@ from properties.signals import recalculate_lease_balances
 class Command(BaseCommand):
     help = "Populate Onyx PM with realistic demo data."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--username",
+            type=str,
+            help="Seed data into the organization owned/used by this user.",
+            default=None,
+        )
+
     def handle(self, *args, **options):
+        target_username = options.get("username")
+
         random.seed(42)
         today = timezone.now().date()
 
         with transaction.atomic():
-            actor, organization = self._ensure_seed_admin_and_org()
+            actor, organization = self._resolve_seed_target(target_username)
             self.stdout.write(
                 f"Using seed actor: {actor.username} ({actor.email})"
             )
@@ -151,6 +161,25 @@ class Command(BaseCommand):
             profile__organization=organization,
             is_superuser=False,
         ).delete()
+
+    def _resolve_seed_target(self, username):
+        if not username:
+            return self._ensure_seed_admin_and_org()
+
+        user = User.objects.filter(username=username).first()
+        if not user:
+            raise CommandError(f"User '{username}' not found.")
+
+        profile = getattr(user, "profile", None)
+        if not profile or not profile.organization:
+            raise CommandError(
+                f"User '{username}' does not belong to an organization."
+            )
+
+        self.stdout.write(
+            f"Resolved seed target from --username: {user.username}"
+        )
+        return user, profile.organization
 
     def _ensure_seed_admin_and_org(self):
         admin = User.objects.filter(is_superuser=True).order_by("id").first()
