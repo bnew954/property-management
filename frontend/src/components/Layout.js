@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../services/auth";
+import { useUser } from "../services/userContext";
 
 const drawerWidth = 240;
 
@@ -36,6 +37,12 @@ const navItems = [
 function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { role, user, clearUser } = useUser();
+
+  const visibleNavItems =
+    role === "tenant"
+      ? navItems.filter((item) => ["/", "/payments", "/maintenance"].includes(item.path))
+      : navItems;
 
   const isActive = (path) => {
     if (path === "/") {
@@ -75,7 +82,7 @@ function Layout({ children }) {
           </Toolbar>
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
           <List sx={{ py: 1.3, flexGrow: 1, minHeight: 0 }}>
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = isActive(item.path);
               return (
                 <ListItem key={item.path} disablePadding sx={{ px: 0.6, py: 0.1 }}>
@@ -116,13 +123,17 @@ function Layout({ children }) {
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
           <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
-              <Avatar sx={{ width: 26, height: 26, bgcolor: "#2a2a2a", fontSize: "0.75rem", color: "#a1a1aa" }}>A</Avatar>
+              <Avatar sx={{ width: 26, height: 26, bgcolor: "#2a2a2a", fontSize: "0.75rem", color: "#a1a1aa" }}>
+                {(user?.first_name || user?.username || "U").slice(0, 1).toUpperCase()}
+              </Avatar>
               <Box>
                 <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 500, color: "#a1a1aa", lineHeight: 1.1 }}>
-                  Admin
+                  {user?.first_name
+                    ? `${user.first_name} ${user?.last_name || ""}`.trim()
+                    : user?.username || "User"}
                 </Typography>
                 <Typography variant="caption" sx={{ fontSize: 11, color: "#666" }}>
-                  Superuser
+                  {role === "tenant" ? "Tenant" : "Landlord"}
                 </Typography>
               </Box>
             </Box>
@@ -131,6 +142,7 @@ function Layout({ children }) {
               variant="text"
               onClick={() => {
                 logout();
+                clearUser();
                 navigate("/login", { replace: true });
               }}
               sx={{

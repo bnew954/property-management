@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Box, Button, Paper, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Paper,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 import { register } from "../services/auth";
 
 function Register() {
@@ -12,6 +21,7 @@ function Register() {
     last_name: "",
     password: "",
     confirm_password: "",
+    role: "landlord",
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +51,7 @@ function Register() {
         first_name: values.first_name.trim(),
         last_name: values.last_name.trim(),
         password: values.password,
+        role: values.role,
       });
       navigate("/login", {
         replace: true,
@@ -90,6 +101,41 @@ function Register() {
             {error}
           </Alert>
         ) : null}
+        <Box sx={{ mb: 2 }}>
+          <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.8 }}>
+            Account Type
+          </Typography>
+          <ToggleButtonGroup
+            color="primary"
+            value={values.role}
+            exclusive
+            onChange={(_, nextRole) => {
+              if (nextRole) {
+                setValues((prev) => ({ ...prev, role: nextRole }));
+              }
+            }}
+            size="small"
+            sx={{
+              "& .MuiToggleButton-root": {
+                borderColor: "rgba(255,255,255,0.12)",
+                color: "#9ca3af",
+                px: 1.4,
+              },
+              "& .Mui-selected": {
+                color: "#fff",
+                bgcolor: "rgba(124,92,252,0.18)",
+              },
+            }}
+          >
+            <ToggleButton value="landlord">Landlord</ToggleButton>
+            <ToggleButton value="tenant">Tenant</ToggleButton>
+          </ToggleButtonGroup>
+          {values.role === "tenant" ? (
+            <Typography sx={{ mt: 0.8, fontSize: 12, color: "text.secondary" }}>
+              Your account will be linked to your tenant record by your property manager.
+            </Typography>
+          ) : null}
+        </Box>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.4 }}>
           <Box>
             <TextField

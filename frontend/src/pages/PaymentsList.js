@@ -20,7 +20,8 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { deletePayment, getPayments, getProperties } from "../services/api";
+import { deletePayment, getPayments, getProperties, getTenants } from "../services/api";
+import { useUser } from "../services/userContext";
 
 const statusStyles = {
   pending: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
@@ -48,6 +49,7 @@ const formatDate = (value) =>
     : "-";
 
 function PaymentsList() {
+  const { role } = useUser();
   const [payments, setPayments] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +64,21 @@ function PaymentsList() {
 
   const loadPayments = async () => {
     try {
-      const [paymentsRes, propertiesRes] = await Promise.all([getPayments(), getProperties()]);
-      setPayments(paymentsRes.data || []);
+      const requests =
+        role === "tenant"
+          ? [getPayments(), getProperties(), getTenants()]
+          : [getPayments(), getProperties()];
+      const [paymentsRes, propertiesRes, tenantsRes] = await Promise.all(requests);
+      const nextTenantId = role === "tenant" ? (tenantsRes?.data || [])[0]?.id || null : null;
+      const allPayments = paymentsRes.data || [];
+      const filteredPayments =
+        role === "tenant"
+          ? allPayments.filter((item) => {
+              const nestedId = item.lease_detail?.tenant_detail?.id ?? item.lease_detail?.tenant;
+              return !nextTenantId || nestedId === nextTenantId;
+            })
+          : allPayments;
+      setPayments(filteredPayments);
       setProperties(propertiesRes.data || []);
     } catch (err) {
       setError("Unable to load payments.");
@@ -74,7 +89,7 @@ function PaymentsList() {
 
   useEffect(() => {
     loadPayments();
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     if (location.state?.snackbar?.message) {
@@ -138,24 +153,26 @@ function PaymentsList() {
         </Typography>
       </Box>
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.2 }}>
-        <Button
-          component={Link}
-          to="/payments/new"
-          variant="outlined"
-          size="small"
-          sx={{
-            borderColor: "rgba(255,255,255,0.1)",
-            color: "#e0e0e0",
-            "&:hover": {
-              borderColor: "primary.main",
-              color: "primary.main",
-              backgroundColor: "rgba(124,92,252,0.08)",
-            },
-          }}
-        >
-          <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
-          Add Payment
-        </Button>
+        {role !== "tenant" ? (
+          <Button
+            component={Link}
+            to="/payments/new"
+            variant="outlined"
+            size="small"
+            sx={{
+              borderColor: "rgba(255,255,255,0.1)",
+              color: "#e0e0e0",
+              "&:hover": {
+                borderColor: "primary.main",
+                color: "primary.main",
+                backgroundColor: "rgba(124,92,252,0.08)",
+              },
+            }}
+          >
+            <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
+            Add Payment
+          </Button>
+        ) : null}
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
@@ -201,23 +218,25 @@ function PaymentsList() {
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                    <IconButton
-                      component={Link}
-                      to={`/payments/${payment.id}/edit`}
-                      size="small"
-                      sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
-                    >
-                      <EditIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(payment.id)}
-                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
-                    >
-                      <DeleteIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Stack>
+                  {role !== "tenant" ? (
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <IconButton
+                        component={Link}
+                        to={`/payments/${payment.id}/edit`}
+                        size="small"
+                        sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                      >
+                        <EditIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(payment.id)}
+                        sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Stack>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}

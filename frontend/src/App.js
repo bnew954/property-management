@@ -18,6 +18,7 @@ import Register from "./pages/Register";
 import TenantForm from "./pages/TenantForm";
 import TenantList from "./pages/TenantList";
 import UnitForm from "./pages/UnitForm";
+import { UserProvider } from "./services/userContext";
 
 const theme = createTheme({
   palette: {
@@ -121,7 +122,8 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
+      <UserProvider>
+        <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -134,28 +136,29 @@ function App() {
                 </ProtectedRoute>
               }
             >
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/properties" element={<PropertyList />} />
-            <Route path="/properties/new" element={<PropertyForm />} />
-            <Route path="/properties/:id" element={<PropertyDetail />} />
-            <Route path="/properties/:id/edit" element={<PropertyForm />} />
-            <Route path="/properties/:id/units/new" element={<UnitForm />} />
-            <Route path="/properties/:id/units/:unitId/edit" element={<UnitForm />} />
-            <Route path="/tenants" element={<TenantList />} />
-            <Route path="/tenants/new" element={<TenantForm />} />
-            <Route path="/tenants/:id/edit" element={<TenantForm />} />
-            <Route path="/leases" element={<LeaseList />} />
-            <Route path="/leases/new" element={<LeaseForm />} />
-            <Route path="/leases/:id/edit" element={<LeaseForm />} />
-            <Route path="/payments" element={<PaymentsList />} />
-            <Route path="/payments/new" element={<PaymentForm />} />
-            <Route path="/payments/:id/edit" element={<PaymentForm />} />
-            <Route path="/maintenance" element={<MaintenanceList />} />
-            <Route path="/maintenance/new" element={<MaintenanceForm />} />
-            <Route path="/maintenance/:id/edit" element={<MaintenanceForm />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/properties" element={<PropertyList />} />
+              <Route path="/properties/new" element={<PropertyForm />} />
+              <Route path="/properties/:id" element={<PropertyDetail />} />
+              <Route path="/properties/:id/edit" element={<PropertyForm />} />
+              <Route path="/properties/:id/units/new" element={<UnitForm />} />
+              <Route path="/properties/:id/units/:unitId/edit" element={<UnitForm />} />
+              <Route path="/tenants" element={<TenantList />} />
+              <Route path="/tenants/new" element={<TenantForm />} />
+              <Route path="/tenants/:id/edit" element={<TenantForm />} />
+              <Route path="/leases" element={<LeaseList />} />
+              <Route path="/leases/new" element={<LeaseForm />} />
+              <Route path="/leases/:id/edit" element={<LeaseForm />} />
+              <Route path="/payments" element={<PaymentsList />} />
+              <Route path="/payments/new" element={<PaymentForm />} />
+              <Route path="/payments/:id/edit" element={<PaymentForm />} />
+              <Route path="/maintenance" element={<MaintenanceList />} />
+              <Route path="/maintenance/new" element={<MaintenanceForm />} />
+              <Route path="/maintenance/:id/edit" element={<MaintenanceForm />} />
             </Route>
           </Routes>
-      </BrowserRouter>
+        </BrowserRouter>
+      </UserProvider>
     </ThemeProvider>
   );
 }

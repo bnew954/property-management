@@ -117,4 +117,6 @@ export const updateMaintenanceRequest = (id, data) =>
 export const deleteMaintenanceRequest = (id) =>
   api.delete(`maintenance-requests/${id}/`);
 
+export const getMe = () => api.get("me/");
+
 export default api;

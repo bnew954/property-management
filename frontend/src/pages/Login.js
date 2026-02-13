@@ -2,10 +2,12 @@ import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Alert, Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { login } from "../services/auth";
+import { useUser } from "../services/userContext";
 
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { refreshUser } = useUser();
   const [values, setValues] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -22,6 +24,7 @@ function Login() {
     try {
       setSubmitting(true);
       await login(values.username.trim(), values.password);
+      await refreshUser();
       navigate("/", { replace: true });
     } catch (requestError) {
       setError("Invalid username or password.");

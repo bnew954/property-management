@@ -1,10 +1,13 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
     LeaseViewSet,
     MaintenanceRequestViewSet,
+    MeView,
     PaymentViewSet,
     PropertyViewSet,
+    RegisterView,
     TenantViewSet,
     UnitViewSet,
 )
@@ -22,3 +25,7 @@ router.register(
 )
 
 urlpatterns = router.urls
+urlpatterns += [
+    path("register/", RegisterView.as_view(), name="register"),
+    path("me/", MeView.as_view(), name="me"),
+]

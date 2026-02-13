@@ -20,7 +20,8 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { deleteMaintenanceRequest, getMaintenanceRequests } from "../services/api";
+import { deleteMaintenanceRequest, getMaintenanceRequests, getTenants } from "../services/api";
+import { useUser } from "../services/userContext";
 
 const statusStyles = {
   submitted: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
@@ -55,6 +56,7 @@ const headerCellSx = {
 };
 
 function MaintenanceList() {
+  const { role } = useUser();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,8 +70,21 @@ function MaintenanceList() {
 
   const loadRequests = async () => {
     try {
-      const response = await getMaintenanceRequests();
-      setRequests(response.data || []);
+      if (role === "tenant") {
+        const [requestsRes, tenantsRes] = await Promise.all([
+          getMaintenanceRequests(),
+          getTenants(),
+        ]);
+        const tenantId = (tenantsRes.data || [])[0]?.id;
+        const filtered = (requestsRes.data || []).filter((item) => {
+          const nestedId = item.tenant_detail?.id ?? item.tenant;
+          return !tenantId || nestedId === tenantId;
+        });
+        setRequests(filtered);
+      } else {
+        const response = await getMaintenanceRequests();
+        setRequests(response.data || []);
+      }
     } catch (err) {
       setError("Unable to load maintenance requests.");
     } finally {
@@ -79,7 +94,7 @@ function MaintenanceList() {
 
   useEffect(() => {
     loadRequests();
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     if (location.state?.snackbar?.message) {
@@ -174,13 +189,15 @@ function MaintenanceList() {
                     >
                       <EditIcon sx={{ fontSize: 16 }} />
                     </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(request.id)}
-                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
-                    >
-                      <DeleteIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
+                    {role !== "tenant" ? (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(request.id)}
+                        sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    ) : null}
                   </Stack>
                 </TableCell>
               </TableRow>
