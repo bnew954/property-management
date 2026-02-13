@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Box, Button, Grid, Paper, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { register } from "../services/auth";
 
 function Register() {
@@ -62,28 +62,27 @@ function Register() {
         alignItems: "center",
         justifyContent: "center",
         px: 2,
-        background: "radial-gradient(circle at top, #1f2a44 0%, #0a0e1a 60%)",
+        background: "#0a0a0a",
       }}
     >
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        sx={{ width: "100%", maxWidth: 500, p: 4, borderRadius: 3, bgcolor: "#111827" }}
+        sx={{ width: "100%", maxWidth: 500, p: 3, borderRadius: 1, bgcolor: "#141414" }}
       >
         <Typography
-          variant="h4"
+          variant="body1"
           sx={{
-            mb: 0.7,
-            fontWeight: 800,
+            mb: 0.5,
+            fontSize: 15,
+            fontWeight: 600,
             textAlign: "center",
-            background: "linear-gradient(90deg, #38bdf8 0%, #6366f1 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
+            color: "#fff",
           }}
         >
           CloudProp
         </Typography>
-        <Typography variant="body2" sx={{ textAlign: "center", color: "text.secondary", mb: 3 }}>
+        <Typography sx={{ textAlign: "center", fontSize: 12, color: "text.secondary", mb: 2 }}>
           Create your account
         </Typography>
         {error ? (
@@ -91,8 +90,8 @@ function Register() {
             {error}
           </Alert>
         ) : null}
-        <Grid container spacing={1.8}>
-          <Grid item xs={12} md={6}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.4 }}>
+          <Box>
             <TextField
               label="First Name"
               value={values.first_name}
@@ -100,8 +99,8 @@ function Register() {
               fullWidth
               required
             />
-          </Grid>
-          <Grid item xs={12} md={6}>
+          </Box>
+          <Box>
             <TextField
               label="Last Name"
               value={values.last_name}
@@ -109,8 +108,8 @@ function Register() {
               fullWidth
               required
             />
-          </Grid>
-          <Grid item xs={12}>
+          </Box>
+          <Box sx={{ gridColumn: "1 / -1" }}>
             <TextField
               label="Username"
               value={values.username}
@@ -118,8 +117,8 @@ function Register() {
               fullWidth
               required
             />
-          </Grid>
-          <Grid item xs={12}>
+          </Box>
+          <Box sx={{ gridColumn: "1 / -1" }}>
             <TextField
               label="Email"
               type="email"
@@ -128,8 +127,8 @@ function Register() {
               fullWidth
               required
             />
-          </Grid>
-          <Grid item xs={12}>
+          </Box>
+          <Box sx={{ gridColumn: "1 / -1" }}>
             <TextField
               label="Password"
               type="password"
@@ -138,8 +137,8 @@ function Register() {
               fullWidth
               required
             />
-          </Grid>
-          <Grid item xs={12}>
+          </Box>
+          <Box sx={{ gridColumn: "1 / -1" }}>
             <TextField
               label="Confirm Password"
               type="password"
@@ -150,14 +149,14 @@ function Register() {
               fullWidth
               required
             />
-          </Grid>
-        </Grid>
-        <Button type="submit" variant="contained" fullWidth disabled={submitting} sx={{ mt: 2.5 }}>
+          </Box>
+        </Box>
+        <Button type="submit" variant="contained" fullWidth disabled={submitting} size="small" sx={{ mt: 2 }}>
           Register
         </Button>
-        <Typography variant="body2" sx={{ textAlign: "center", mt: 2, color: "text.secondary" }}>
+        <Typography sx={{ textAlign: "center", mt: 1.5, fontSize: 12, color: "text.secondary" }}>
           Already have an account?{" "}
-          <Link to="/login" style={{ color: "#38bdf8", fontWeight: 600 }}>
+          <Link to="/login" style={{ color: "#7c5cfc", fontWeight: 500 }}>
             Sign In
           </Link>
         </Typography>

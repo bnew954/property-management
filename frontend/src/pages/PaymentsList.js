@@ -23,13 +23,29 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deletePayment, getPayments, getProperties } from "../services/api";
 
 const statusStyles = {
-  pending: { bgcolor: "#f59e0b", color: "#111827" },
-  completed: { bgcolor: "#22c55e", color: "#052e16" },
-  failed: { bgcolor: "#ef4444", color: "#fef2f2" },
-  refunded: { bgcolor: "#3b82f6", color: "#dbeafe" },
+  pending: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
+  completed: { bgcolor: "rgba(34,197,94,0.1)", color: "#22c55e" },
+  failed: { bgcolor: "rgba(239,68,68,0.1)", color: "#ef4444" },
+  refunded: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
 };
 
 const toLabel = (value) => value.replaceAll("_", " ");
+const headerCellSx = {
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  fontSize: "11px",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+};
+
+const formatDate = (value) =>
+  value
+    ? new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "-";
 
 function PaymentsList() {
   const [payments, setPayments] = useState([]);
@@ -113,38 +129,48 @@ function PaymentsList() {
 
   return (
     <Box>
-      <Box sx={{ mb: 1.5 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+      <Box sx={{ mb: 0.8 }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
           Payments
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Track payment activity and statuses
         </Typography>
       </Box>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button component={Link} to="/payments/new" variant="contained">
-          <AddRoundedIcon sx={{ mr: 0.8 }} fontSize="small" />
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.2 }}>
+        <Button
+          component={Link}
+          to="/payments/new"
+          variant="outlined"
+          size="small"
+          sx={{
+            borderColor: "rgba(255,255,255,0.1)",
+            color: "#e0e0e0",
+            "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "transparent" },
+          }}
+        >
+          <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
           Add Payment
         </Button>
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 2.5, bgcolor: "#111827" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
         <Table>
-          <TableHead sx={{ bgcolor: "#1e2538" }}>
+          <TableHead>
             <TableRow>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Tenant</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Property/Unit</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Amount</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Date</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Method</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Status</TableCell>
-              <TableCell align="right" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Actions</TableCell>
+              <TableCell sx={headerCellSx}>Tenant</TableCell>
+              <TableCell sx={headerCellSx}>Property/Unit</TableCell>
+              <TableCell sx={headerCellSx}>Amount</TableCell>
+              <TableCell sx={headerCellSx}>Date</TableCell>
+              <TableCell sx={headerCellSx}>Method</TableCell>
+              <TableCell sx={headerCellSx}>Status</TableCell>
+              <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {payments.map((payment) => (
-              <TableRow key={payment.id} hover sx={{ "&:hover": { bgcolor: "#1a1f35" } }}>
+              <TableRow key={payment.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
                 <TableCell>{tenantName(payment)}</TableCell>
                 <TableCell>{propertyUnit(payment)}</TableCell>
                 <TableCell>
@@ -153,7 +179,7 @@ function PaymentsList() {
                     currency: "USD",
                   })}
                 </TableCell>
-                <TableCell>{payment.payment_date}</TableCell>
+                <TableCell>{formatDate(payment.payment_date)}</TableCell>
                 <TableCell sx={{ textTransform: "capitalize" }}>
                   {toLabel(payment.payment_method)}
                 </TableCell>
@@ -163,18 +189,29 @@ function PaymentsList() {
                     label={toLabel(payment.status)}
                     sx={{
                       ...(statusStyles[payment.status] || { bgcolor: "#e2e8f0", color: "#334155" }),
-                      fontWeight: 600,
+                      fontWeight: 500,
+                      fontSize: 11,
+                      height: 22,
                       textTransform: "capitalize",
                     }}
                   />
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                    <IconButton component={Link} to={`/payments/${payment.id}/edit`} color="primary" size="small">
-                      <EditIcon fontSize="small" />
+                    <IconButton
+                      component={Link}
+                      to={`/payments/${payment.id}/edit`}
+                      size="small"
+                      sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                    >
+                      <EditIcon sx={{ fontSize: 16 }} />
                     </IconButton>
-                    <IconButton color="error" size="small" onClick={() => handleDelete(payment.id)}>
-                      <DeleteIcon fontSize="small" />
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(payment.id)}
+                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                   </Stack>
                 </TableCell>

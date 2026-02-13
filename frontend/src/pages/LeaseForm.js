@@ -7,7 +7,6 @@ import {
   Checkbox,
   FormControl,
   FormControlLabel,
-  Grid,
   InputLabel,
   MenuItem,
   Paper,
@@ -175,11 +174,11 @@ function LeaseForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
         >
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
-              <FormControl fullWidth error={Boolean(errors.unit)} required sx={{ minWidth: 200 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
+            <Box>
+              <FormControl fullWidth error={Boolean(errors.unit)} required>
                 <InputLabel>Unit</InputLabel>
                 <Select label="Unit" value={values.unit} onChange={handleChange("unit")}>
                   {units.map((unit) => (
@@ -189,9 +188,9 @@ function LeaseForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
-              <FormControl fullWidth error={Boolean(errors.tenant)} required sx={{ minWidth: 220 }}>
+            </Box>
+            <Box>
+              <FormControl fullWidth error={Boolean(errors.tenant)} required>
                 <InputLabel>Tenant</InputLabel>
                 <Select label="Tenant" value={values.tenant} onChange={handleChange("tenant")}>
                   {tenants.map((tenant) => (
@@ -201,8 +200,8 @@ function LeaseForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="date"
@@ -214,10 +213,9 @@ function LeaseForm() {
                 helperText={errors.start_date}
                 InputLabelProps={{ shrink: true }}
                 required
-                sx={{ minWidth: 220 }}
               />
-            </Grid>
-            <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="date"
@@ -229,10 +227,9 @@ function LeaseForm() {
                 helperText={errors.end_date}
                 InputLabelProps={{ shrink: true }}
                 required
-                sx={{ minWidth: 220 }}
               />
-            </Grid>
-            <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="number"
@@ -244,10 +241,9 @@ function LeaseForm() {
                 error={Boolean(errors.monthly_rent)}
                 helperText={errors.monthly_rent}
                 required
-                sx={{ minWidth: 220 }}
               />
-            </Grid>
-            <Grid item xs={12} md={6} sx={{ minWidth: 220 }}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="number"
@@ -259,10 +255,9 @@ function LeaseForm() {
                 error={Boolean(errors.security_deposit)}
                 helperText={errors.security_deposit}
                 required
-                sx={{ minWidth: 220 }}
               />
-            </Grid>
-            <Grid item xs={12}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1" }}>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -274,14 +269,14 @@ function LeaseForm() {
                 }
                 label="Lease is active"
               />
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
-              {isEditMode ? "Update Lease" : "Create Lease"}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate("/leases")} sx={{ flex: 1 }}>
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2, display: "flex", gap: 1.2, justifyContent: "flex-end" }}>
+            <Button variant="text" onClick={() => navigate("/leases")} sx={{ color: "text.secondary" }}>
               Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={submitting}>
+              {isEditMode ? "Update Lease" : "Create Lease"}
             </Button>
           </Box>
         </Paper>

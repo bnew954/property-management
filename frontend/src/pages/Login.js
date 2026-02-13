@@ -38,28 +38,27 @@ function Login() {
         alignItems: "center",
         justifyContent: "center",
         px: 2,
-        background: "radial-gradient(circle at top, #1f2a44 0%, #0a0e1a 60%)",
+        background: "#0a0a0a",
       }}
     >
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        sx={{ width: "100%", maxWidth: 420, p: 4, borderRadius: 3, bgcolor: "#111827" }}
+        sx={{ width: "100%", maxWidth: 420, p: 3, borderRadius: 1, bgcolor: "#141414" }}
       >
         <Typography
-          variant="h4"
+          variant="body1"
           sx={{
-            mb: 0.7,
-            fontWeight: 800,
+            mb: 0.5,
+            fontSize: 15,
+            fontWeight: 600,
             textAlign: "center",
-            background: "linear-gradient(90deg, #38bdf8 0%, #6366f1 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
+            color: "#fff",
           }}
         >
           CloudProp
         </Typography>
-        <Typography variant="body2" sx={{ textAlign: "center", color: "text.secondary", mb: 3 }}>
+        <Typography sx={{ textAlign: "center", fontSize: 12, color: "text.secondary", mb: 2 }}>
           Sign in to continue
         </Typography>
         {successMessage ? (
@@ -78,7 +77,7 @@ function Login() {
           onChange={(event) => setValues((prev) => ({ ...prev, username: event.target.value }))}
           fullWidth
           required
-          sx={{ mb: 2 }}
+          sx={{ mb: 1.6 }}
         />
         <TextField
           label="Password"
@@ -87,14 +86,14 @@ function Login() {
           onChange={(event) => setValues((prev) => ({ ...prev, password: event.target.value }))}
           fullWidth
           required
-          sx={{ mb: 2.5 }}
+          sx={{ mb: 1.8 }}
         />
-        <Button type="submit" variant="contained" fullWidth disabled={submitting}>
+        <Button type="submit" variant="contained" fullWidth disabled={submitting} size="small">
           Sign In
         </Button>
-        <Typography variant="body2" sx={{ textAlign: "center", mt: 2, color: "text.secondary" }}>
+        <Typography sx={{ textAlign: "center", mt: 1.5, fontSize: 12, color: "text.secondary" }}>
           Don&apos;t have an account?{" "}
-          <Link to="/register" style={{ color: "#38bdf8", fontWeight: 600 }}>
+          <Link to="/register" style={{ color: "#7c5cfc", fontWeight: 500 }}>
             Register
           </Link>
         </Typography>

@@ -21,6 +21,14 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deleteProperty, getProperties } from "../services/api";
 
+const headerCellSx = {
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  fontSize: "11px",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+};
+
 function PropertyList() {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -79,38 +87,48 @@ function PropertyList() {
 
   return (
     <Box>
-      <Box sx={{ mb: 1.5 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+      <Box sx={{ mb: 0.8 }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
           Properties
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Manage your property portfolio
         </Typography>
       </Box>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button component={Link} to="/properties/new" variant="contained" color="primary">
-          <AddRoundedIcon sx={{ mr: 0.8 }} fontSize="small" />
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.2 }}>
+        <Button
+          component={Link}
+          to="/properties/new"
+          variant="outlined"
+          size="small"
+          sx={{
+            borderColor: "rgba(255,255,255,0.1)",
+            color: "#e0e0e0",
+            "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "transparent" },
+          }}
+        >
+          <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
           Add Property
         </Button>
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 2.5, bgcolor: "#111827" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
         <Table>
-          <TableHead sx={{ bgcolor: "#1e2538" }}>
+          <TableHead>
             <TableRow>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Name</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>City</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>State</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Type</TableCell>
-              <TableCell align="right" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Actions</TableCell>
+              <TableCell sx={headerCellSx}>Name</TableCell>
+              <TableCell sx={headerCellSx}>City</TableCell>
+              <TableCell sx={headerCellSx}>State</TableCell>
+              <TableCell sx={headerCellSx}>Type</TableCell>
+              <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {properties.map((property) => (
-              <TableRow key={property.id} hover sx={{ "&:hover": { bgcolor: "#1a1f35" } }}>
+              <TableRow key={property.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
                 <TableCell>
-                  <Link to={`/properties/${property.id}`} style={{ color: "#2563eb", fontWeight: 600 }}>
+                  <Link to={`/properties/${property.id}`} style={{ color: "#7c5cfc", fontWeight: 500 }}>
                     {property.name}
                   </Link>
                 </TableCell>
@@ -122,17 +140,17 @@ function PropertyList() {
                     <IconButton
                       component={Link}
                       to={`/properties/${property.id}/edit`}
-                      color="primary"
                       size="small"
+                      sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                     >
-                      <EditIcon fontSize="small" />
+                      <EditIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                     <IconButton
-                      color="error"
                       size="small"
                       onClick={() => handleDelete(property.id)}
+                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
                     >
-                      <DeleteIcon fontSize="small" />
+                      <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                   </Stack>
                 </TableCell>

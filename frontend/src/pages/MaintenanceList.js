@@ -23,26 +23,36 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deleteMaintenanceRequest, getMaintenanceRequests } from "../services/api";
 
 const statusStyles = {
-  submitted: { bgcolor: "#3b82f6", color: "#dbeafe" },
-  in_progress: { bgcolor: "#f59e0b", color: "#1f2937" },
-  completed: { bgcolor: "#22c55e", color: "#052e16" },
-  cancelled: { bgcolor: "#ef4444", color: "#fef2f2" },
+  submitted: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
+  in_progress: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
+  completed: { bgcolor: "rgba(34,197,94,0.1)", color: "#22c55e" },
+  cancelled: { bgcolor: "rgba(239,68,68,0.1)", color: "#ef4444" },
 };
 
 const priorityStyles = {
-  low: { bgcolor: "#6b7280", color: "#f3f4f6" },
-  medium: { bgcolor: "#3b82f6", color: "#dbeafe" },
-  high: { bgcolor: "#f59e0b", color: "#1f2937" },
-  emergency: { bgcolor: "#ef4444", color: "#fef2f2" },
+  low: { bgcolor: "rgba(107,114,128,0.1)", color: "#6b7280" },
+  medium: { bgcolor: "rgba(59,130,246,0.1)", color: "#3b82f6" },
+  high: { bgcolor: "rgba(245,158,11,0.1)", color: "#f59e0b" },
+  emergency: { bgcolor: "rgba(239,68,68,0.1)", color: "#ef4444" },
 };
 
 const toLabel = (value) => value.replaceAll("_", " ");
 
 const chipSx = (stylesMap, value) => ({
   ...(stylesMap[value] || { bgcolor: "#e2e8f0", color: "#334155" }),
-  fontWeight: 600,
+  fontWeight: 500,
+  fontSize: 11,
+  height: 22,
   textTransform: "capitalize",
 });
+
+const headerCellSx = {
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  fontSize: "11px",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+};
 
 function MaintenanceList() {
   const [requests, setRequests] = useState([]);
@@ -102,51 +112,70 @@ function MaintenanceList() {
 
   return (
     <Box>
-      <Box sx={{ mb: 1.5 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+      <Box sx={{ mb: 0.8 }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
           Maintenance Requests
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Track issues, priorities, and completion status
         </Typography>
       </Box>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button component={Link} to="/maintenance/new" variant="contained">
-          <AddRoundedIcon sx={{ mr: 0.8 }} fontSize="small" />
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.2 }}>
+        <Button
+          component={Link}
+          to="/maintenance/new"
+          variant="outlined"
+          size="small"
+          sx={{
+            borderColor: "rgba(255,255,255,0.1)",
+            color: "#e0e0e0",
+            "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "transparent" },
+          }}
+        >
+          <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
           Add Request
         </Button>
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 2.5, bgcolor: "#111827" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
         <Table>
-          <TableHead sx={{ bgcolor: "#1e2538" }}>
+          <TableHead>
             <TableRow>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Title</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Unit</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Priority</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Status</TableCell>
-              <TableCell align="right" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Actions</TableCell>
+              <TableCell sx={headerCellSx}>Title</TableCell>
+              <TableCell sx={headerCellSx}>Unit</TableCell>
+              <TableCell sx={headerCellSx}>Priority</TableCell>
+              <TableCell sx={headerCellSx}>Status</TableCell>
+              <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {requests.map((request) => (
-              <TableRow key={request.id} hover sx={{ "&:hover": { bgcolor: "#1a1f35" } }}>
+              <TableRow key={request.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
                 <TableCell>{request.title}</TableCell>
                 <TableCell>{request.unit_detail?.unit_number || request.unit}</TableCell>
                 <TableCell>
-                  <Chip size="small" variant="filled" label={toLabel(request.priority)} sx={chipSx(priorityStyles, request.priority)} />
+                  <Chip size="small" label={toLabel(request.priority)} sx={chipSx(priorityStyles, request.priority)} />
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" variant="filled" label={toLabel(request.status)} sx={chipSx(statusStyles, request.status)} />
+                  <Chip size="small" label={toLabel(request.status)} sx={chipSx(statusStyles, request.status)} />
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                    <IconButton component={Link} to={`/maintenance/${request.id}/edit`} color="primary" size="small">
-                      <EditIcon fontSize="small" />
+                    <IconButton
+                      component={Link}
+                      to={`/maintenance/${request.id}/edit`}
+                      size="small"
+                      sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                    >
+                      <EditIcon sx={{ fontSize: 16 }} />
                     </IconButton>
-                    <IconButton color="error" size="small" onClick={() => handleDelete(request.id)}>
-                      <DeleteIcon fontSize="small" />
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(request.id)}
+                      sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                   </Stack>
                 </TableCell>

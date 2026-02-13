@@ -45,7 +45,7 @@ function Layout({ children }) {
   };
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", backgroundColor: "#0a0e1a" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", backgroundColor: "#0a0a0a" }}>
       <Drawer
         variant="permanent"
         sx={{
@@ -54,53 +54,56 @@ function Layout({ children }) {
           "& .MuiDrawer-paper": {
             width: drawerWidth,
             boxSizing: "border-box",
-            borderRight: "1px solid rgba(99, 102, 241, 0.18)",
-            backgroundColor: "#070b14",
-            color: "#e2e8f0",
+            borderRight: "1px solid rgba(255,255,255,0.06)",
+            backgroundColor: "#0a0a0a",
+            color: "#e0e0e0",
           },
         }}
       >
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <Toolbar sx={{ minHeight: 72, alignItems: "center", px: 3 }}>
+          <Toolbar sx={{ minHeight: 60, alignItems: "center", px: 2.2 }}>
             <Typography
-              variant="h5"
+              variant="body1"
               sx={{
-                fontWeight: 800,
-                letterSpacing: 0.3,
-                background: "linear-gradient(90deg, #38bdf8 0%, #6366f1 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#fff",
               }}
             >
               CloudProp
             </Typography>
           </Toolbar>
-          <Divider sx={{ borderColor: "rgba(148, 163, 184, 0.18)" }} />
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
           <List sx={{ py: 1.3, flexGrow: 1 }}>
             {navItems.map((item) => {
               const active = isActive(item.path);
               return (
-                <ListItem key={item.path} disablePadding sx={{ px: 1.2, py: 0.2 }}>
+                <ListItem key={item.path} disablePadding sx={{ px: 0.6, py: 0.1 }}>
                   <ListItemButton
                     component={Link}
                     to={item.path}
                     sx={{
-                      borderRadius: 2,
-                      borderLeft: active ? "3px solid #6366f1" : "3px solid transparent",
-                      backgroundColor: active ? "rgba(99, 102, 241, 0.14)" : "transparent",
+                      borderRadius: 1,
+                      px: 2,
+                      py: 0.75,
+                      borderLeft: active ? "2px solid #7c5cfc" : "2px solid transparent",
+                      backgroundColor: active ? "rgba(124,92,252,0.1)" : "transparent",
                       "&:hover": {
-                        backgroundColor: "rgba(99, 102, 241, 0.1)",
+                        backgroundColor: "rgba(255,255,255,0.04)",
+                        "& .MuiListItemIcon-root": { color: "#fff" },
+                        "& .MuiTypography-root": { color: "#fff" },
                       },
                     }}
                   >
-                    <ListItemIcon sx={{ color: active ? "#38bdf8" : "#6b7280", minWidth: 38 }}>
+                    <ListItemIcon sx={{ color: active ? "#ffffff" : "#878C9E", minWidth: 32, "& svg": { fontSize: 18 } }}>
                       {item.icon}
                     </ListItemIcon>
                     <ListItemText
                       primary={item.label}
                       primaryTypographyProps={{
-                        fontWeight: active ? 700 : 500,
-                        color: active ? "#eef2ff" : "#cbd5e1",
+                        fontSize: 13,
+                        fontWeight: 400,
+                        color: active ? "#ffffff" : "#878C9E",
                       }}
                     />
                   </ListItemButton>
@@ -108,39 +111,42 @@ function Layout({ children }) {
               );
             })}
           </List>
-          <Divider sx={{ borderColor: "rgba(148, 163, 184, 0.18)" }} />
-          <Box sx={{ px: 2.3, py: 1.4 }}>
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
+          <Box sx={{ px: 1.8, py: 1.2 }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
-              <Avatar sx={{ width: 32, height: 32, bgcolor: "#6366f1", fontSize: "0.9rem" }}>A</Avatar>
+              <Avatar sx={{ width: 26, height: 26, bgcolor: "#2a2a2a", fontSize: "0.75rem", color: "#a1a1aa" }}>A</Avatar>
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: "#e5e7eb", lineHeight: 1.15 }}>
+                <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 500, color: "#a1a1aa", lineHeight: 1.1 }}>
                   Admin
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                <Typography variant="caption" sx={{ fontSize: 11, color: "#666" }}>
                   Superuser
                 </Typography>
               </Box>
             </Box>
             <Button
               fullWidth
-              variant="outlined"
-              startIcon={<LogoutIcon />}
+              variant="text"
               onClick={() => {
                 logout();
                 navigate("/login", { replace: true });
               }}
               sx={{
-                borderColor: "rgba(148,163,184,0.35)",
-                color: "#cbd5e1",
-                "&:hover": { borderColor: "#6366f1", bgcolor: "rgba(99,102,241,0.12)" },
+                justifyContent: "flex-start",
+                color: "#878C9E",
+                fontSize: 12,
+                px: 0.5,
+                minHeight: 28,
+                "&:hover": { color: "#fff", backgroundColor: "transparent" },
               }}
             >
+              <LogoutIcon sx={{ fontSize: 16, mr: 0.8 }} />
               Logout
             </Button>
           </Box>
         </Box>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: { xs: 2.5, md: 4 } }}>
+      <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 2.5 } }}>
         {children}
       </Box>
     </Box>

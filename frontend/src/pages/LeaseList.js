@@ -22,6 +22,23 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { deleteLease, getLeases, getProperties, getTenants, getUnits } from "../services/api";
 
+const headerCellSx = {
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  fontSize: "11px",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+};
+
+const formatDate = (value) =>
+  value
+    ? new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "-";
+
 function LeaseList() {
   const [leases, setLeases] = useState([]);
   const [units, setUnits] = useState([]);
@@ -115,34 +132,44 @@ function LeaseList() {
 
   return (
     <Box>
-      <Box sx={{ mb: 1.5 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+      <Box sx={{ mb: 0.8 }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
           Leases
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           Monitor active and inactive agreements
         </Typography>
       </Box>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button component={Link} to="/leases/new" variant="contained">
-          <AddRoundedIcon sx={{ mr: 0.8 }} fontSize="small" />
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.2 }}>
+        <Button
+          component={Link}
+          to="/leases/new"
+          variant="outlined"
+          size="small"
+          sx={{
+            borderColor: "rgba(255,255,255,0.1)",
+            color: "#e0e0e0",
+            "&:hover": { borderColor: "primary.main", color: "primary.main", backgroundColor: "transparent" },
+          }}
+        >
+          <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
           Add Lease
         </Button>
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
-      <TableContainer component={Paper} sx={{ borderRadius: 2.5, bgcolor: "#111827" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "#141414" }}>
         <Table>
-          <TableHead sx={{ bgcolor: "#1e2538" }}>
+          <TableHead>
             <TableRow>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Property</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Unit</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Tenant Name</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Start Date</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>End Date</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Monthly Rent</TableCell>
-              <TableCell sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Status</TableCell>
-              <TableCell align="right" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.74rem" }}>Actions</TableCell>
+              <TableCell sx={headerCellSx}>Property</TableCell>
+              <TableCell sx={headerCellSx}>Unit</TableCell>
+              <TableCell sx={headerCellSx}>Tenant Name</TableCell>
+              <TableCell sx={headerCellSx}>Start Date</TableCell>
+              <TableCell sx={headerCellSx}>End Date</TableCell>
+              <TableCell sx={headerCellSx}>Monthly Rent</TableCell>
+              <TableCell sx={headerCellSx}>Status</TableCell>
+              <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -151,33 +178,44 @@ function LeaseList() {
               const property = unit ? propertyMap[unit.property] : null;
               const tenant = tenantMap[lease.tenant];
               return (
-                <TableRow key={lease.id} hover sx={{ "&:hover": { bgcolor: "#1a1f35" } }}>
+                <TableRow key={lease.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
                   <TableCell>{property?.name || "N/A"}</TableCell>
                   <TableCell>{unit?.unit_number || lease.unit}</TableCell>
                   <TableCell>
                     {tenant ? `${tenant.first_name} ${tenant.last_name}` : `Tenant #${lease.tenant}`}
                   </TableCell>
-                  <TableCell>{lease.start_date}</TableCell>
-                  <TableCell>{lease.end_date}</TableCell>
+                  <TableCell>{formatDate(lease.start_date)}</TableCell>
+                  <TableCell>{formatDate(lease.end_date)}</TableCell>
                   <TableCell>${Number(lease.monthly_rent || 0).toLocaleString()}</TableCell>
                   <TableCell>
                     <Chip
                       size="small"
                       label={lease.is_active ? "Active" : "Inactive"}
                       sx={{
-                        bgcolor: lease.is_active ? "#dcfce7" : "#e5e7eb",
-                        color: lease.is_active ? "#15803d" : "#475569",
-                        fontWeight: 600,
+                        bgcolor: lease.is_active ? "rgba(34,197,94,0.1)" : "rgba(107,114,128,0.15)",
+                        color: lease.is_active ? "#22c55e" : "#6b7280",
+                        fontWeight: 500,
+                        fontSize: 11,
+                        height: 22,
                       }}
                     />
                   </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <IconButton component={Link} to={`/leases/${lease.id}/edit`} color="primary" size="small">
-                        <EditIcon fontSize="small" />
+                      <IconButton
+                        component={Link}
+                        to={`/leases/${lease.id}/edit`}
+                        size="small"
+                        sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
+                      >
+                        <EditIcon sx={{ fontSize: 16 }} />
                       </IconButton>
-                      <IconButton color="error" size="small" onClick={() => handleDelete(lease.id)}>
-                        <DeleteIcon fontSize="small" />
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(lease.id)}
+                        sx={{ color: "#6b7280", "&:hover": { color: "error.main", backgroundColor: "transparent" } }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 16 }} />
                       </IconButton>
                     </Stack>
                   </TableCell>

@@ -4,7 +4,7 @@ import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import BuildIcon from "@mui/icons-material/Build";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import PeopleIcon from "@mui/icons-material/People";
-import { Box, Card, CardContent, Grid, Paper, Typography } from "@mui/material";
+import { Box, Card, CardContent, Paper, Typography } from "@mui/material";
 import {
   getLeases,
   getMaintenanceRequests,
@@ -60,11 +60,11 @@ function Dashboard() {
   }, []);
 
   const cards = [
-    { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#38bdf8" }} /> },
-    { title: "Total Units", value: counts.units, icon: <HomeWorkIcon sx={{ color: "#60a5fa" }} /> },
-    { title: "Total Tenants", value: counts.tenants, icon: <PeopleIcon sx={{ color: "#a78bfa" }} /> },
-    { title: "Active Leases", value: counts.activeLeases, icon: <AssignmentTurnedInIcon sx={{ color: "#22c55e" }} /> },
-    { title: "Open Maintenance Requests", value: counts.openMaintenance, icon: <BuildIcon sx={{ color: "#f59e0b" }} /> },
+    { title: "Total Properties", value: counts.properties, icon: <ApartmentIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
+    { title: "Total Units", value: counts.units, icon: <HomeWorkIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
+    { title: "Total Tenants", value: counts.tenants, icon: <PeopleIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
+    { title: "Active Leases", value: counts.activeLeases, icon: <AssignmentTurnedInIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
+    { title: "Open Maintenance Requests", value: counts.openMaintenance, icon: <BuildIcon sx={{ color: "#6b7280", fontSize: 18 }} /> },
   ];
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -75,59 +75,42 @@ function Dashboard() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 800 }}>
+      <Typography sx={{ fontSize: 20, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
         Welcome back, Admin
       </Typography>
-      <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
+      <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
         {today}
       </Typography>
       {loading ? <Typography sx={{ mb: 2 }}>Loading...</Typography> : null}
       {error ? (
         <Typography sx={{ mb: 2, color: "error.main" }}>{error}</Typography>
       ) : null}
-      <Grid container spacing={2.5}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 1.5,
+        }}
+      >
         {cards.map((card) => (
-          <Grid item xs={12} sm={6} md={4} key={card.title}>
-            <Card
-              sx={{
-                bgcolor: "#111827",
-                position: "relative",
-                overflow: "hidden",
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 5,
-                  background: "linear-gradient(180deg, #38bdf8 0%, #6366f1 100%)",
-                },
-                "&:hover": {
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-                },
-              }}
-            >
-              <CardContent sx={{ pl: 2.3 }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                  {card.icon}
-                </Box>
-                <Typography variant="h3" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                  {card.value}
-                </Typography>
-                <Typography color="text.secondary" variant="body2" sx={{ mt: 0.8 }}>
-                  {card.title}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+          <Card key={card.title} sx={{ bgcolor: "#141414" }}>
+            <CardContent sx={{ p: 1.8 }}>
+              <Box sx={{ mb: 1 }}>{card.icon}</Box>
+              <Typography sx={{ fontSize: 24, lineHeight: 1.1, fontWeight: 600, color: "#fff" }}>
+                {card.value}
+              </Typography>
+              <Typography sx={{ mt: 0.6, fontSize: 12, color: "text.secondary" }}>
+                {card.title}
+              </Typography>
+            </CardContent>
+          </Card>
         ))}
-      </Grid>
-      <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#111827" }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+      </Box>
+      <Paper sx={{ mt: 2, p: 2, bgcolor: "#141414" }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 500, mb: 0.8 }}>
           Recent Activity
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
           No recent activity
         </Typography>
       </Paper>

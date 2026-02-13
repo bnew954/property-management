@@ -15,6 +15,8 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { getProperty, getUnits } from "../services/api";
 
 function PropertyDetail() {
@@ -61,6 +63,14 @@ function PropertyDetail() {
     }
   }, [location.pathname, location.state, navigate]);
 
+  const headerCellSx = {
+    color: "text.secondary",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    fontSize: "11px",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  };
+
   return (
     <Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
@@ -68,20 +78,34 @@ function PropertyDetail() {
       {!loading && property ? (
         <>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "#fff" }}>
               {property.name}
             </Typography>
             <Stack direction="row" spacing={1}>
-              <Button component={Link} to={`/properties/${id}/edit`} variant="outlined">
+              <Button
+                component={Link}
+                to={`/properties/${id}/edit`}
+                variant="outlined"
+                size="small"
+                sx={{ borderColor: "rgba(255,255,255,0.1)", color: "#e0e0e0" }}
+              >
+                <EditIcon sx={{ mr: 0.6, fontSize: 16 }} />
                 Edit Property
               </Button>
-              <Button component={Link} to={`/properties/${id}/units/new`} variant="contained">
+              <Button
+                component={Link}
+                to={`/properties/${id}/units/new`}
+                variant="outlined"
+                size="small"
+                sx={{ borderColor: "rgba(255,255,255,0.1)", color: "#e0e0e0" }}
+              >
+                <AddRoundedIcon sx={{ mr: 0.6, fontSize: 16 }} />
                 Add Unit
               </Button>
             </Stack>
           </Box>
 
-          <Paper sx={{ p: 3, mb: 2, boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+          <Paper sx={{ p: 2, mb: 1.2, bgcolor: "#141414" }}>
             <Typography variant="body1" sx={{ mb: 1 }}>
               <strong>Address:</strong> {property.address_line1}
               {property.address_line2 ? `, ${property.address_line2}` : ""}, {property.city},{" "}
@@ -95,22 +119,22 @@ function PropertyDetail() {
             </Typography>
           </Paper>
 
-          <TableContainer component={Paper} sx={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+          <TableContainer component={Paper} sx={{ bgcolor: "#141414", borderRadius: 1 }}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Unit #</TableCell>
-                  <TableCell>Bedrooms</TableCell>
-                  <TableCell>Bathrooms</TableCell>
-                  <TableCell>Sq Ft</TableCell>
-                  <TableCell>Rent</TableCell>
-                  <TableCell>Available</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell sx={headerCellSx}>Unit #</TableCell>
+                  <TableCell sx={headerCellSx}>Bedrooms</TableCell>
+                  <TableCell sx={headerCellSx}>Bathrooms</TableCell>
+                  <TableCell sx={headerCellSx}>Sq Ft</TableCell>
+                  <TableCell sx={headerCellSx}>Rent</TableCell>
+                  <TableCell sx={headerCellSx}>Available</TableCell>
+                  <TableCell align="right" sx={headerCellSx}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {units.map((unit) => (
-                  <TableRow key={unit.id} hover>
+                  <TableRow key={unit.id} sx={{ "& td": { borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 13 } }}>
                     <TableCell>{unit.unit_number}</TableCell>
                     <TableCell>{unit.bedrooms}</TableCell>
                     <TableCell>{unit.bathrooms}</TableCell>
@@ -123,6 +147,7 @@ function PropertyDetail() {
                         to={`/properties/${id}/units/${unit.id}/edit`}
                         variant="text"
                         size="small"
+                        sx={{ color: "#6b7280", "&:hover": { color: "primary.main", backgroundColor: "transparent" } }}
                       >
                         Edit
                       </Button>

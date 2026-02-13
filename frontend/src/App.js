@@ -22,28 +22,57 @@ import UnitForm from "./pages/UnitForm";
 const theme = createTheme({
   palette: {
     mode: "dark",
-    primary: { main: "#6366f1" },
-    secondary: { main: "#38bdf8" },
+    primary: { main: "#7c5cfc" },
+    secondary: { main: "#878C9E" },
     success: { main: "#22c55e" },
     warning: { main: "#f59e0b" },
     error: { main: "#ef4444" },
-    background: { default: "#0a0e1a", paper: "#111827" },
-    text: { primary: "#e5e7eb", secondary: "#9ca3af" },
+    background: { default: "#0a0a0a", paper: "#141414" },
+    text: { primary: "#e0e0e0", secondary: "#6b7280" },
   },
   typography: {
     fontFamily: "Inter, Roboto, sans-serif",
+    fontSize: 13,
+    fontWeightRegular: 400,
+    fontWeightMedium: 500,
+    fontWeightBold: 600,
+    h4: {
+      fontSize: 20,
+      fontWeight: 600,
+      letterSpacing: "-0.01em",
+    },
+    h5: {
+      fontSize: 15,
+      fontWeight: 600,
+      letterSpacing: "-0.01em",
+    },
+    body1: {
+      fontSize: 13,
+    },
+    body2: {
+      fontSize: 12,
+    },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 8,
   },
   components: {
     MuiPaper: {
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-          border: "1px solid rgba(99,102,241,0.14)",
-          transition: "all 0.2s ease",
+          boxShadow: "none",
+          border: "1px solid rgba(255,255,255,0.06)",
+          transition: "color 0.15s ease, background 0.15s ease, border-color 0.15s ease",
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          boxShadow: "none",
+          border: "1px solid rgba(255,255,255,0.06)",
+          transition: "color 0.15s ease, background 0.15s ease, border-color 0.15s ease",
         },
       },
     },
@@ -51,20 +80,37 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderColor: "rgba(148,163,184,0.12)",
+          fontSize: 12,
+          paddingTop: 10,
+          paddingBottom: 10,
+        },
+      },
+    },
+    MuiFormLabel: {
+      styleOverrides: {
+        root: {
+          fontSize: 12,
+          color: "#6b7280",
         },
       },
     },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          transition: "all 0.2s ease",
+          fontSize: 13,
+          transition: "color 0.15s ease, background 0.15s ease, border-color 0.15s ease",
+          "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: "rgba(255,255,255,0.1)",
+          },
         },
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          transition: "all 0.2s ease",
+          fontSize: 12,
+          textTransform: "none",
+          transition: "color 0.15s ease, background 0.15s ease, border-color 0.15s ease",
         },
       },
     },

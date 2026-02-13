@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   FormControl,
-  Grid,
   InputLabel,
   MenuItem,
   Paper,
@@ -177,10 +176,10 @@ function MaintenanceForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
         >
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.unit)} required>
                 <InputLabel>Unit</InputLabel>
                 <Select label="Unit" value={values.unit} onChange={handleChange("unit")}>
@@ -191,8 +190,8 @@ function MaintenanceForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.tenant)} required>
                 <InputLabel>Tenant</InputLabel>
                 <Select label="Tenant" value={values.tenant} onChange={handleChange("tenant")}>
@@ -203,8 +202,8 @@ function MaintenanceForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1" }}>
               <TextField
                 fullWidth
                 label="Title"
@@ -215,8 +214,8 @@ function MaintenanceForm() {
                 helperText={errors.title}
                 required
               />
-            </Grid>
-            <Grid item xs={12}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1" }}>
               <TextField
                 fullWidth
                 multiline
@@ -229,8 +228,8 @@ function MaintenanceForm() {
                 helperText={errors.description}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.priority)} required>
                 <InputLabel>Priority</InputLabel>
                 <Select label="Priority" value={values.priority} onChange={handleChange("priority")}>
@@ -241,8 +240,8 @@ function MaintenanceForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.status)} required>
                 <InputLabel>Status</InputLabel>
                 <Select label="Status" value={values.status} onChange={handleChange("status")}>
@@ -253,14 +252,14 @@ function MaintenanceForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
-              {isEditMode ? "Update Request" : "Create Request"}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate("/maintenance")} sx={{ flex: 1 }}>
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2, display: "flex", gap: 1.2, justifyContent: "flex-end" }}>
+            <Button variant="text" onClick={() => navigate("/maintenance")} sx={{ color: "text.secondary" }}>
               Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={submitting}>
+              {isEditMode ? "Update Request" : "Create Request"}
             </Button>
           </Box>
         </Paper>

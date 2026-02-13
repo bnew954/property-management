@@ -4,7 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Grid,
   Paper,
   Snackbar,
   TextField,
@@ -131,10 +130,10 @@ function TenantForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
         >
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
+            <Box>
               <TextField
                 fullWidth
                 label="First Name"
@@ -145,8 +144,8 @@ function TenantForm() {
                 helperText={errors.first_name}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 label="Last Name"
@@ -157,8 +156,8 @@ function TenantForm() {
                 helperText={errors.last_name}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 label="Email"
@@ -170,8 +169,8 @@ function TenantForm() {
                 helperText={errors.email}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 label="Phone"
@@ -182,8 +181,8 @@ function TenantForm() {
                 helperText={errors.phone}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1", maxWidth: 280 }}>
               <TextField
                 fullWidth
                 type="date"
@@ -193,14 +192,14 @@ function TenantForm() {
                 onChange={handleChange("date_of_birth")}
                 InputLabelProps={{ shrink: true }}
               />
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
-              {isEditMode ? "Update Tenant" : "Create Tenant"}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate("/tenants")} sx={{ flex: 1 }}>
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2, display: "flex", gap: 1.2, justifyContent: "flex-end" }}>
+            <Button variant="text" onClick={() => navigate("/tenants")} sx={{ color: "text.secondary" }}>
               Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={submitting}>
+              {isEditMode ? "Update Tenant" : "Create Tenant"}
             </Button>
           </Box>
         </Paper>

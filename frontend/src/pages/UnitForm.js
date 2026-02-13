@@ -6,7 +6,6 @@ import {
   Button,
   Checkbox,
   FormControlLabel,
-  Grid,
   Paper,
   Snackbar,
   TextField,
@@ -142,10 +141,10 @@ function UnitForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
         >
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
+            <Box>
               <TextField
                 fullWidth
                 label="Unit Number"
@@ -156,8 +155,8 @@ function UnitForm() {
                 helperText={errors.unit_number}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="number"
@@ -169,8 +168,8 @@ function UnitForm() {
                 helperText={errors.bedrooms}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={4}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 2 }}>
               <TextField
                 fullWidth
                 type="number"
@@ -183,8 +182,6 @@ function UnitForm() {
                 helperText={errors.bathrooms}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 type="number"
@@ -196,8 +193,6 @@ function UnitForm() {
                 helperText={errors.square_feet}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 type="number"
@@ -210,8 +205,8 @@ function UnitForm() {
                 helperText={errors.rent_amount}
                 required
               />
-            </Grid>
-            <Grid item xs={12}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1" }}>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -223,14 +218,14 @@ function UnitForm() {
                 }
                 label="Available for lease"
               />
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
-              {isEditMode ? "Update Unit" : "Create Unit"}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate(`/properties/${id}`)} sx={{ flex: 1 }}>
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2, display: "flex", gap: 1.2, justifyContent: "flex-end" }}>
+            <Button variant="text" onClick={() => navigate(`/properties/${id}`)} sx={{ color: "text.secondary" }}>
               Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={submitting}>
+              {isEditMode ? "Update Unit" : "Create Unit"}
             </Button>
           </Box>
         </Paper>

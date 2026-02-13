@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   FormControl,
-  Grid,
   InputLabel,
   MenuItem,
   Paper,
@@ -149,10 +148,10 @@ function PropertyForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
         >
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
+            <Box sx={{ gridColumn: { xs: "1 / -1", md: "auto" } }}>
               <TextField
                 fullWidth
                 label="Name"
@@ -163,8 +162,8 @@ function PropertyForm() {
                 helperText={errors.name}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box sx={{ gridColumn: { xs: "1 / -1", md: "auto" } }}>
               <FormControl fullWidth error={Boolean(errors.property_type)} required>
                 <InputLabel>Property Type</InputLabel>
                 <Select
@@ -176,8 +175,8 @@ function PropertyForm() {
                   <MenuItem value="commercial">Commercial</MenuItem>
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box sx={{ gridColumn: { xs: "1 / -1", md: "auto" } }}>
               <TextField
                 fullWidth
                 label="Address Line 1"
@@ -188,8 +187,8 @@ function PropertyForm() {
                 helperText={errors.address_line1}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box sx={{ gridColumn: { xs: "1 / -1", md: "auto" } }}>
               <TextField
                 fullWidth
                 label="Address Line 2"
@@ -197,8 +196,8 @@ function PropertyForm() {
                 value={values.address_line2}
                 onChange={handleChange("address_line2")}
               />
-            </Grid>
-            <Grid item xs={12} md={4}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 2 }}>
               <TextField
                 fullWidth
                 label="City"
@@ -209,8 +208,6 @@ function PropertyForm() {
                 helperText={errors.city}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="State"
@@ -221,8 +218,6 @@ function PropertyForm() {
                 helperText={errors.state}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Zip Code"
@@ -233,8 +228,8 @@ function PropertyForm() {
                 helperText={errors.zip_code}
                 required
               />
-            </Grid>
-            <Grid item xs={12}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1" }}>
               <TextField
                 fullWidth
                 label="Description"
@@ -244,14 +239,14 @@ function PropertyForm() {
                 multiline
                 minRows={4}
               />
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
-              {isEditMode ? "Update Property" : "Create Property"}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate("/properties")} sx={{ flex: 1 }}>
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2, display: "flex", gap: 1.2, justifyContent: "flex-end" }}>
+            <Button variant="text" onClick={() => navigate("/properties")} sx={{ color: "text.secondary" }}>
               Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={submitting}>
+              {isEditMode ? "Update Property" : "Create Property"}
             </Button>
           </Box>
         </Paper>

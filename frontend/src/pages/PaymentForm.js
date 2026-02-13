@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   FormControl,
-  Grid,
   InputLabel,
   MenuItem,
   Paper,
@@ -181,10 +180,10 @@ function PaymentForm() {
         <Paper
           component="form"
           onSubmit={handleSubmit}
-          sx={{ p: 3, borderRadius: 3, bgcolor: "#111827" }}
+          sx={{ p: 3, borderRadius: 1, bgcolor: "#141414", maxWidth: 600 }}
         >
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.lease)} required>
                 <InputLabel>Lease</InputLabel>
                 <Select label="Lease" value={values.lease} onChange={handleChange("lease")}>
@@ -195,8 +194,8 @@ function PaymentForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="number"
@@ -209,8 +208,8 @@ function PaymentForm() {
                 helperText={errors.amount}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <TextField
                 fullWidth
                 type="date"
@@ -223,8 +222,8 @@ function PaymentForm() {
                 InputLabelProps={{ shrink: true }}
                 required
               />
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.payment_method)} required>
                 <InputLabel>Payment Method</InputLabel>
                 <Select
@@ -239,8 +238,8 @@ function PaymentForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <FormControl fullWidth error={Boolean(errors.status)} required>
                 <InputLabel>Status</InputLabel>
                 <Select label="Status" value={values.status} onChange={handleChange("status")}>
@@ -251,8 +250,8 @@ function PaymentForm() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12}>
+            </Box>
+            <Box sx={{ gridColumn: "1 / -1" }}>
               <TextField
                 fullWidth
                 multiline
@@ -262,14 +261,14 @@ function PaymentForm() {
                 value={values.notes}
                 onChange={handleChange("notes")}
               />
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3, display: "flex", gap: 1.5 }}>
-            <Button type="submit" variant="contained" disabled={submitting} sx={{ flex: 1 }}>
-              {isEditMode ? "Update Payment" : "Create Payment"}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate("/payments")} sx={{ flex: 1 }}>
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2, display: "flex", gap: 1.2, justifyContent: "flex-end" }}>
+            <Button variant="text" onClick={() => navigate("/payments")} sx={{ color: "text.secondary" }}>
               Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={submitting}>
+              {isEditMode ? "Update Payment" : "Create Payment"}
             </Button>
           </Box>
         </Paper>
