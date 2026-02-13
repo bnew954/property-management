@@ -1,5 +1,17 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
+import {
+  Box,
+  Button,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { getProperties } from "../services/api";
 
 function PropertyList() {
@@ -23,47 +35,49 @@ function PropertyList() {
   }, []);
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1>Properties</h1>
-        <button type="button" className="button-primary">
+    <Box>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          Properties
+        </Typography>
+        <Button variant="contained" color="primary">
           Add Property
-        </button>
-      </div>
-      {loading ? <p>Loading...</p> : null}
-      {error ? <p className="error-text">{error}</p> : null}
-      <div className="card table-card">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>City</th>
-              <th>State</th>
-              <th>Type</th>
-            </tr>
-          </thead>
-          <tbody>
+        </Button>
+      </Box>
+      {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
+      {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
+      <TableContainer component={Paper} sx={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>City</TableCell>
+              <TableCell>State</TableCell>
+              <TableCell>Type</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {properties.map((property) => (
-              <tr key={property.id}>
-                <td>
-                  <Link to={`/properties/${property.id}`} className="text-link">
+              <TableRow key={property.id} hover>
+                <TableCell>
+                  <Link to={`/properties/${property.id}`} style={{ color: "#2563eb", fontWeight: 600 }}>
                     {property.name}
                   </Link>
-                </td>
-                <td>{property.city}</td>
-                <td>{property.state}</td>
-                <td>{property.property_type}</td>
-              </tr>
+                </TableCell>
+                <TableCell>{property.city}</TableCell>
+                <TableCell>{property.state}</TableCell>
+                <TableCell sx={{ textTransform: "capitalize" }}>{property.property_type}</TableCell>
+              </TableRow>
             ))}
             {!loading && properties.length === 0 ? (
-              <tr>
-                <td colSpan="4">No properties found.</td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={4}>No properties found.</TableCell>
+              </TableRow>
             ) : null}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 }
 

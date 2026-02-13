@@ -1,19 +1,39 @@
 import { useEffect, useState } from "react";
+import {
+  Box,
+  Chip,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { getMaintenanceRequests } from "../services/api";
 
-const badgeClassForPriority = (priority) => {
-  if (priority === "emergency") return "badge badge-red";
-  if (priority === "high") return "badge badge-orange";
-  if (priority === "medium") return "badge badge-blue";
-  return "badge badge-gray";
+const statusStyles = {
+  submitted: { bgcolor: "#dbeafe", color: "#1d4ed8" },
+  in_progress: { bgcolor: "#ffedd5", color: "#c2410c" },
+  completed: { bgcolor: "#dcfce7", color: "#15803d" },
+  cancelled: { bgcolor: "#fee2e2", color: "#b91c1c" },
 };
 
-const badgeClassForStatus = (status) => {
-  if (status === "completed") return "badge badge-green";
-  if (status === "in_progress") return "badge badge-blue";
-  if (status === "cancelled") return "badge badge-gray";
-  return "badge badge-orange";
+const priorityStyles = {
+  low: { bgcolor: "#f1f5f9", color: "#334155" },
+  medium: { bgcolor: "#dbeafe", color: "#1d4ed8" },
+  high: { bgcolor: "#ffedd5", color: "#c2410c" },
+  emergency: { bgcolor: "#fee2e2", color: "#b91c1c" },
 };
+
+const toLabel = (value) => value.replaceAll("_", " ");
+
+const chipSx = (stylesMap, value) => ({
+  ...(stylesMap[value] || { bgcolor: "#e2e8f0", color: "#334155" }),
+  fontWeight: 600,
+  textTransform: "capitalize",
+});
 
 function MaintenanceList() {
   const [requests, setRequests] = useState([]);
@@ -36,48 +56,44 @@ function MaintenanceList() {
   }, []);
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1>Maintenance Requests</h1>
-      </div>
-      {loading ? <p>Loading...</p> : null}
-      {error ? <p className="error-text">{error}</p> : null}
-      <div className="card table-card">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Unit</th>
-              <th>Priority</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
+    <Box>
+      <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
+        Maintenance Requests
+      </Typography>
+      {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
+      {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
+      <TableContainer component={Paper} sx={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Title</TableCell>
+              <TableCell>Unit</TableCell>
+              <TableCell>Priority</TableCell>
+              <TableCell>Status</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {requests.map((request) => (
-              <tr key={request.id}>
-                <td>{request.title}</td>
-                <td>{request.unit_detail?.unit_number || request.unit}</td>
-                <td>
-                  <span className={badgeClassForPriority(request.priority)}>
-                    {request.priority}
-                  </span>
-                </td>
-                <td>
-                  <span className={badgeClassForStatus(request.status)}>
-                    {request.status}
-                  </span>
-                </td>
-              </tr>
+              <TableRow key={request.id} hover>
+                <TableCell>{request.title}</TableCell>
+                <TableCell>{request.unit_detail?.unit_number || request.unit}</TableCell>
+                <TableCell>
+                  <Chip size="small" label={toLabel(request.priority)} sx={chipSx(priorityStyles, request.priority)} />
+                </TableCell>
+                <TableCell>
+                  <Chip size="small" label={toLabel(request.status)} sx={chipSx(statusStyles, request.status)} />
+                </TableCell>
+              </TableRow>
             ))}
             {!loading && requests.length === 0 ? (
-              <tr>
-                <td colSpan="4">No maintenance requests found.</td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={4}>No maintenance requests found.</TableCell>
+              </TableRow>
             ) : null}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 }
 

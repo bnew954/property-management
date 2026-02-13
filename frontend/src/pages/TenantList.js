@@ -1,4 +1,15 @@
 import { useEffect, useState } from "react";
+import {
+  Box,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { getTenants } from "../services/api";
 
 function TenantList() {
@@ -22,40 +33,40 @@ function TenantList() {
   }, []);
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1>Tenants</h1>
-      </div>
-      {loading ? <p>Loading...</p> : null}
-      {error ? <p className="error-text">{error}</p> : null}
-      <div className="card table-card">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-            </tr>
-          </thead>
-          <tbody>
+    <Box>
+      <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
+        Tenants
+      </Typography>
+      {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
+      {error ? <Typography sx={{ mb: 1.5, color: "error.main" }}>{error}</Typography> : null}
+      <TableContainer component={Paper} sx={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Email</TableCell>
+              <TableCell>Phone</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {tenants.map((tenant) => (
-              <tr key={tenant.id}>
-                <td>
+              <TableRow key={tenant.id} hover>
+                <TableCell>
                   {tenant.first_name} {tenant.last_name}
-                </td>
-                <td>{tenant.email}</td>
-                <td>{tenant.phone}</td>
-              </tr>
+                </TableCell>
+                <TableCell>{tenant.email}</TableCell>
+                <TableCell>{tenant.phone}</TableCell>
+              </TableRow>
             ))}
             {!loading && tenants.length === 0 ? (
-              <tr>
-                <td colSpan="3">No tenants found.</td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={3}>No tenants found.</TableCell>
+              </TableRow>
             ) : null}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 }
 
