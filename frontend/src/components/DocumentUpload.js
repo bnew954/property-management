@@ -15,7 +15,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 import { useEffect, useMemo, useState } from "react";
 import { getLeases, getProperties, getTenants, getUnits, uploadDocument } from "../services/api";
 
@@ -37,6 +37,7 @@ function DocumentUpload({
   defaultIsTemplate = false,
   initialFile = null,
 }) {
+  const theme = useTheme();
   const [properties, setProperties] = useState([]);
   const [units, setUnits] = useState([]);
   const [tenants, setTenants] = useState([]);
@@ -185,7 +186,7 @@ function DocumentUpload({
             component="label"
             sx={{
               borderStyle: "dashed",
-              borderColor: alpha("currentColor", 0.4),
+              borderColor: alpha(theme.palette.text.secondary, 0.4),
               color: "text.secondary",
               justifyContent: "flex-start",
             }}

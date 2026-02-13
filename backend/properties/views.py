@@ -358,6 +358,7 @@ class MaintenanceRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
 
 
 class NotificationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = Notification.objects.select_related("recipient")
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "patch", "delete", "head", "options"]
@@ -386,6 +387,7 @@ class NotificationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
 
 class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = Message.objects.select_related("sender", "recipient", "parent")
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post", "patch", "head", "options"]
@@ -404,17 +406,10 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         organization = resolve_request_organization(self.request)
         if not organization:
-            if request.user.is_authenticated:
-                logger.warning(
-                    "Creating message without organization context. user=%s",
-                    request.user.id,
-                )
-                organization = None
-            else:
-                return Response(
-                    {"detail": "No organization assigned to this user."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         recipient_id = request.data.get("recipient")
         subject = (request.data.get("subject") or "").strip()
         body = (request.data.get("body") or "").strip()
@@ -442,13 +437,12 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             )
 
         organization = resolve_request_organization(self.request)
-        if organization:
-            recipient_profile = getattr(recipient, "profile", None)
-            if not recipient_profile or recipient_profile.organization_id != organization.id:
-                return Response(
-                    {"recipient": "Recipient must be in your organization."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        recipient_profile = getattr(recipient, "profile", None)
+        if not recipient_profile or recipient_profile.organization_id != organization.id:
+            return Response(
+                {"recipient": "Recipient must be in your organization."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         message = Message.objects.create(
             sender=request.user,
@@ -489,17 +483,10 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         original = self.get_object()
         organization = resolve_request_organization(self.request)
         if not organization:
-            if request.user.is_authenticated:
-                logger.warning(
-                    "Replying message without organization context. user=%s",
-                    request.user.id,
-                )
-                organization = None
-            else:
-                return Response(
-                    {"detail": "No organization assigned to this user."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         body = (request.data.get("body") or "").strip()
         subject = (
             request.data.get("subject") or f"Re: {original.subject}"
@@ -716,13 +703,6 @@ class DocumentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         organization = resolve_request_organization(self.request)
         if not organization:
-            if self.request.user.is_authenticated:
-                logger.warning(
-                    "Creating document without organization context. user=%s",
-                    self.request.user.id,
-                )
-                serializer.save()
-                return
             raise PermissionDenied("You must belong to an organization to create records.")
         serializer.save(organization=organization)
 

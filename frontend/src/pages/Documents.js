@@ -124,6 +124,16 @@ const typeChip = (type, theme) => {
   );
 };
 
+const toList = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (Array.isArray(value?.results)) {
+    return value.results;
+  }
+  return [];
+};
+
 function associatedWith(document) {
   if (document.property_detail?.name) {
     return document.property_detail.name;
@@ -165,7 +175,7 @@ function Documents({ templateOnly = false }) {
         params.document_type = typeFilter;
       }
       const response = await getDocuments(params);
-      setDocuments(response.data || []);
+      setDocuments(toList(response.data));
     } catch {
       setError("Unable to load documents.");
     } finally {
@@ -206,7 +216,7 @@ function Documents({ templateOnly = false }) {
       const url = URL.createObjectURL(response.data);
       const a = window.document.createElement("a");
       a.href = url;
-      a.download = document.file?.split("/").pop() || document.name;
+      a.download = document.name || "document";
       window.document.body.appendChild(a);
       a.click();
       a.remove();

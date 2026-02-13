@@ -60,6 +60,16 @@ const fullDate = (value) =>
       })
     : "";
 
+const normalizeMessageList = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (Array.isArray(payload?.results)) {
+    return payload.results;
+  }
+  return [];
+};
+
 function Messages() {
   const { user } = useUser();
   const theme = useTheme();
@@ -85,9 +95,11 @@ function Messages() {
         getSentMessages(),
         getMessageRecipients(),
       ]);
-      setInbox(inboxRes.data || []);
-      setSent(sentRes.data || []);
-      setUsers((usersRes.data || []).filter((u) => u.id !== user?.id));
+      setInbox(normalizeMessageList(inboxRes.data));
+      setSent(normalizeMessageList(sentRes.data));
+      setUsers(
+        normalizeMessageList(usersRes.data).filter((u) => u.id !== user?.id)
+      );
     } catch {
       setError("Unable to load messages.");
     } finally {
