@@ -36,6 +36,50 @@ import ApartmentIcon from "@mui/icons-material/Apartment";
 import BuildIcon from "@mui/icons-material/Build";
 import DescriptionIcon from "@mui/icons-material/Description";
 
+function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
+  const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <img
+        src="/logo-icon.png"
+        alt="Onyx PM"
+        style={{ height: iconSize, width: "auto", display: "block" }}
+      />
+      <Typography
+        sx={{
+          fontSize: onyxSize,
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: textColor,
+          lineHeight: 1,
+        }}
+      >
+        ONYX
+      </Typography>
+      <Box
+        component="span"
+        sx={{
+          backgroundColor: "rgba(124,92,252,0.15)",
+          color: "#7c5cfc",
+          px: "10px",
+          py: "3px",
+          borderRadius: "6px",
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 600,
+          letterSpacing: "0.05em",
+          fontSize: pmFontSize,
+          textTransform: "uppercase",
+          lineHeight: 1.4,
+        }}
+      >
+        PM
+      </Box>
+    </Box>
+  );
+}
+
 const featureCards = [
   {
     title: "Property & Unit Management",
@@ -231,9 +275,9 @@ function LandingPage() {
           transition: "background-color 0.3s ease, border-color 0.3s ease",
         }}
       >
-        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
+          <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
           <Box sx={{ minHeight: 68, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
-            <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Onyx PM</Typography>
+            <BrandLogo textColor="#1a1a1a" onyxSize={18} iconSize={26} />
             {isMobile ? (
               <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "#111827" }} aria-label="Open menu">
                 <MenuIcon />
@@ -317,6 +361,9 @@ function LandingPage() {
             }}
           >
             <Box sx={{ textAlign: "center", maxWidth: 980 }}>
+              <Box sx={{ mb: 1.5, display: "flex", justifyContent: "center" }}>
+                <img src="/logo-icon.png" alt="Onyx PM" style={{ height: 48 }} />
+              </Box>
               <Typography
                 sx={{
                   fontSize: { xs: "2.4rem", md: "3.5rem", lg: "3.8rem" },
@@ -664,7 +711,7 @@ function LandingPage() {
           </Box>
         </SectionFadeIn>
 
-        <SectionFadeIn id="faq" visibleSections={visibleSections} ref={registerSection("faq")}>
+            <SectionFadeIn id="faq" visibleSections={visibleSections} ref={registerSection("faq")}>
           <Typography sx={{ fontSize: 32, fontWeight: 700, textAlign: "center", color: "#111827" }}>
             Frequently asked questions
           </Typography>
@@ -689,7 +736,7 @@ function LandingPage() {
           </Box>
         </SectionFadeIn>
       </Container>
-      <Box sx={{ mt: 8, bgcolor: "#1a1a1a", color: "#fff", pt: 6, pb: 4 }}>
+          <Box sx={{ mt: 8, bgcolor: "#1a1a1a", color: "#fff", pt: 6, pb: 4 }}>
       <Container
         maxWidth="lg"
         sx={{ px: { xs: 2, md: 3 }, py: { xs: 8, md: 10 }, maxWidth: "1200px !important" }}
@@ -698,7 +745,7 @@ function LandingPage() {
             sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 2.5 }}
           >
             <Box>
-              <Typography sx={{ fontWeight: 700, mb: 1.4 }}>Product</Typography>
+              <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
               <Stack spacing={1}>
                 <MuiLink href="#features" underline="none" color="inherit" sx={{ fontSize: 13 }}>
                   Features

@@ -6,6 +6,51 @@ import { alpha } from "@mui/material/styles";
 import { login } from "../services/auth";
 import { useUser } from "../services/userContext";
 
+function BrandLogo({ textColor }) {
+  const onyxSize = 28;
+  const pmFontSize = Math.round(onyxSize * 0.7);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+      <img
+        src="/logo-icon.png"
+        alt="Onyx PM"
+        style={{ height: 40, width: "auto", display: "block" }}
+      />
+      <Typography
+        sx={{
+          fontSize: onyxSize,
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: textColor,
+          lineHeight: 1,
+        }}
+      >
+        ONYX
+      </Typography>
+      <Box
+        component="span"
+        sx={{
+          backgroundColor: "rgba(124,92,252,0.15)",
+          color: "#7c5cfc",
+          px: "10px",
+          py: "3px",
+          borderRadius: "6px",
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 600,
+          letterSpacing: "0.05em",
+          fontSize: `${pmFontSize}px`,
+          textTransform: "uppercase",
+          lineHeight: 1.4,
+        }}
+      >
+        PM
+      </Box>
+    </Box>
+  );
+}
+
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,19 +132,9 @@ function Login() {
             {"\u2190"} Back to home
           </Link>
         </Box>
-        <Typography
-          variant="body1"
-          sx={{
-            mb: 2,
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            textAlign: "center",
-            color: "text.primary",
-          }}
-        >
-          Onyx PM
-        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <BrandLogo textColor={mode === "dark" ? "#fff" : "#111827"} />
+        </Box>
         {successMessage ? (
           <Alert severity="success" sx={{ mb: 2 }}>
             {successMessage}

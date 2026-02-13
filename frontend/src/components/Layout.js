@@ -39,6 +39,51 @@ import NotificationBell from "./NotificationBell";
 
 const drawerWidth = 240;
 
+function BrandLogo({ isDark }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <img
+        src="/logo-icon.png"
+        alt="Onyx PM"
+        style={{ height: 22, width: "auto", display: "block" }}
+      />
+      <Typography
+        variant="body1"
+        sx={{
+          fontSize: 15,
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          lineHeight: 1.1,
+          color: isDark ? "#fff" : "text.primary",
+        }}
+      >
+        ONYX
+      </Typography>
+      <Box
+        component="span"
+        sx={{
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 600,
+          letterSpacing: "0.05em",
+          backgroundColor: "rgba(124,92,252,0.15)",
+          color: "#7c5cfc",
+          px: "10px",
+          py: "3px",
+          borderRadius: "6px",
+          fontSize: "70%",
+          lineHeight: 1.4,
+          marginTop: 0.1,
+          textTransform: "uppercase",
+        }}
+      >
+        PM
+      </Box>
+    </Box>
+  );
+}
+
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
   { label: "Pay Rent", path: "/pay-rent", icon: <CreditCardIcon />, tenantOnly: true, accent: "green" },
@@ -149,9 +194,7 @@ function Layout({ children }) {
       >
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <Toolbar sx={{ minHeight: 60, px: 2.2, pb: 1.2, flexDirection: "column", alignItems: "flex-start" }}>
-            <Typography variant="body1" sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-              Onyx PM
-            </Typography>
+            <BrandLogo isDark={isDark} />
             {orgName ? (
               <Typography variant="caption" sx={{ color: "text.secondary", fontSize: 11, mt: 0.3 }}>
                 {orgName}
