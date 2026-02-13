@@ -159,6 +159,12 @@ export const deleteMaintenanceRequest = (id) =>
   api.delete(`maintenance-requests/${id}/`);
 
 export const getMe = () => api.get("me/");
+export const getOrganization = () => api.get("organization/");
+export const updateOrganization = (data) => api.patch("organization/", data);
+export const inviteMember = (email, role) =>
+  api.post("organization/invite/", { email, role });
+export const getOrgMembers = () => api.get("organization/members/");
+export const getOrgInvitations = () => api.get("organization/invitations/");
 
 export const getNotifications = () => api.get("notifications/");
 export const markNotificationRead = (id) =>

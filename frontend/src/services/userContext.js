@@ -43,9 +43,12 @@ export function UserProvider({ children }) {
       loading,
       refreshUser,
       clearUser,
+      organization: user?.organization || null,
       role: user?.role || null,
       isTenant: user?.role === "tenant",
       isLandlord: user?.role === "landlord",
+      isOrgAdmin: Boolean(user?.is_org_admin),
+      orgMaxUnits: user?.organization?.max_units,
     }),
     [clearUser, loading, refreshUser, user]
   );
@@ -60,4 +63,3 @@ export function useUser() {
   }
   return context;
 }
-

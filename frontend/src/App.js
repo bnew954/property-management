@@ -1,5 +1,12 @@
-import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
-import { Box } from "@mui/material";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+import { Box, CircularProgress } from "@mui/material";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import "./App.css";
 import Layout from "./components/Layout";
@@ -29,10 +36,12 @@ import ScreeningList from "./pages/ScreeningList";
 import ScreeningRequest from "./pages/ScreeningRequest";
 import TenantForm from "./pages/TenantForm";
 import TenantList from "./pages/TenantList";
+import OrgSettings from "./pages/OrgSettings";
+import Welcome from "./pages/Welcome";
 import Templates from "./pages/Templates";
 import UnitForm from "./pages/UnitForm";
 import LandingPage from "./pages/LandingPage";
-import { UserProvider } from "./services/userContext";
+import { UserProvider, useUser } from "./services/userContext";
 import { ThemeModeProvider, useThemeMode } from "./services/themeContext";
 
 const createAppTheme = (mode) => {
@@ -180,6 +189,24 @@ const createAppTheme = (mode) => {
   });
 };
 
+function OrgAdminRoute({ children }) {
+  const { isOrgAdmin, loading } = useUser();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 2, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "30vh" }}>
+        <CircularProgress size={22} />
+      </Box>
+    );
+  }
+
+  if (!isOrgAdmin) {
+    return <Navigate to="/dashboard" replace state={{ from: location }} />;
+  }
+  return children;
+}
+
 function AppContent() {
   const { mode } = useThemeMode();
   const theme = createAppTheme(mode);
@@ -204,6 +231,7 @@ function AppContent() {
                 }
               >
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/welcome" element={<Welcome />} />
                 <Route path="/properties" element={<PropertyList />} />
                 <Route path="/properties/new" element={<PropertyForm />} />
                 <Route path="/properties/:id" element={<PropertyDetail />} />
@@ -235,6 +263,14 @@ function AppContent() {
                 <Route path="/maintenance" element={<MaintenanceList />} />
                 <Route path="/maintenance/new" element={<MaintenanceForm />} />
                 <Route path="/maintenance/:id/edit" element={<MaintenanceForm />} />
+                <Route
+                  path="/settings"
+                  element={
+                    <OrgAdminRoute>
+                      <OrgSettings />
+                    </OrgAdminRoute>
+                  }
+                />
               </Route>
             </Routes>
           </BrowserRouter>

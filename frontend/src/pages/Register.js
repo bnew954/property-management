@@ -50,7 +50,7 @@ function Register() {
 
     try {
       setSubmitting(true);
-      await register({
+      const response = await register({
         username: values.username.trim(),
         email: values.email.trim(),
         first_name: values.first_name.trim(),
@@ -58,9 +58,20 @@ function Register() {
         password: values.password,
         role: values.role,
       });
+      const organizationName = response?.data?.organization?.name || null;
+      const workspaceName = organizationName || "your workspace";
       navigate("/login", {
         replace: true,
-        state: { message: "Registration successful. Please sign in." },
+        state: {
+          message:
+            values.role === "landlord"
+              ? "Welcome to Onyx PM! Your workspace " +
+                workspaceName +
+                " has been created. Start by adding your first property."
+              : "Registration successful. Please sign in.",
+          showWelcome: values.role === "landlord",
+          organizationName,
+        },
       });
     } catch (error) {
       console.log("Register error:", error.response?.status, error.response?.data);
@@ -84,16 +95,16 @@ function Register() {
       <Paper
         component="form"
         onSubmit={handleSubmit}
-      sx={{
-        width: "100%",
-        maxWidth: 500,
-        p: 3,
+        sx={{
+          width: "100%",
+          maxWidth: 500,
+          p: 3,
           borderRadius: 1,
           bgcolor: "background.paper",
-        boxShadow:
-          mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
-        border: mode === "dark" ? undefined : "none",
-      }}
+          boxShadow:
+            mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
+          border: mode === "dark" ? undefined : "none",
+        }}
       >
         <Box sx={{ mb: 1.8 }}>
           <Link
@@ -105,20 +116,20 @@ function Register() {
               fontWeight: 500,
             }}
           >
-            ← Back to home
+            {"\u2190"} Back to home
           </Link>
         </Box>
         <Typography
           variant="body1"
-            sx={{
-              mb: 2,
-              fontSize: 18,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              textAlign: "center",
-              color: "text.primary",
-            }}
-          >
+          sx={{
+            mb: 2,
+            fontSize: 18,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            textAlign: "center",
+            color: "text.primary",
+          }}
+        >
           Onyx PM
         </Typography>
         {error ? (
@@ -127,9 +138,7 @@ function Register() {
           </Alert>
         ) : null}
         <Box sx={{ mb: 2 }}>
-          <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.8 }}>
-            Account Type
-          </Typography>
+          <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.8 }}>Account Type</Typography>
           <ToggleButtonGroup
             color="primary"
             value={values.role}
@@ -214,9 +223,7 @@ function Register() {
               label="Confirm Password"
               type="password"
               value={values.confirm_password}
-              onChange={(event) =>
-                setValues((prev) => ({ ...prev, confirm_password: event.target.value }))
-              }
+              onChange={(event) => setValues((prev) => ({ ...prev, confirm_password: event.target.value }))}
               fullWidth
               required
             />
@@ -226,7 +233,7 @@ function Register() {
           Register
         </Button>
         <Typography sx={{ textAlign: "center", mt: 1.5, fontSize: 12, color: "text.secondary" }}>
-          Already have an account?{" "}
+          Already have an account? {" "}
           <Link to="/login" style={{ color: theme.palette.primary.main, fontWeight: 500 }}>
             Sign In
           </Link>

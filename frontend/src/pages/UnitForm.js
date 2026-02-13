@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -11,7 +11,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { createUnit, getUnit, updateUnit } from "../services/api";
+import { createUnit, getUnit, getUnits, updateUnit } from "../services/api";
+import { useUser } from "../services/userContext";
 
 const initialValues = {
   unit_number: "",
@@ -30,17 +31,31 @@ function UnitForm() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(isEditMode);
   const [submitting, setSubmitting] = useState(false);
+  const [unitCount, setUnitCount] = useState(0);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
+  const { organization } = useUser();
+
+  const checkUnitLimit =
+    !isEditMode &&
+    organization?.plan === "free" &&
+    organization?.max_units != null &&
+    unitCount >= Number(organization.max_units);
 
   useEffect(() => {
-    if (!isEditMode) {
-      return;
-    }
-    const loadUnit = async () => {
+    const load = async () => {
+      if (!isEditMode) {
+        try {
+          const response = await getUnits();
+          setUnitCount((response.data || []).length);
+        } catch (err) {
+          // leave unitCount as 0 if units cannot be loaded
+        }
+        return;
+      }
       try {
         const response = await getUnit(unitId);
         setValues({
@@ -57,7 +72,7 @@ function UnitForm() {
         setLoading(false);
       }
     };
-    loadUnit();
+    load();
   }, [isEditMode, unitId]);
 
   const validate = () => {
@@ -89,6 +104,14 @@ function UnitForm() {
     const nextErrors = validate();
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
+      return;
+    }
+
+    if (checkUnitLimit) {
+      setErrors({
+        unit_limit:
+          "You've reached the unit limit on your current plan. Upgrade to Pro for unlimited units.",
+      });
       return;
     }
 
@@ -143,6 +166,14 @@ function UnitForm() {
           onSubmit={handleSubmit}
           sx={{ p: 3, borderRadius: 1, bgcolor: "background.paper", maxWidth: 600 }}
         >
+          {errors.unit_limit ? (
+            <Alert severity="warning" sx={{ mb: 1.4 }}>
+              {errors.unit_limit}{" "}
+              <Link to="/settings" style={{ color: "inherit", textDecoration: "underline" }}>
+                Go to settings
+              </Link>
+            </Alert>
+          ) : null}
           <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 2 }}>
             <Box>
               <TextField

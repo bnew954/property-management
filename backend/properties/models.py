@@ -1,5 +1,42 @@
-from django.contrib.auth.models import User
+﻿from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import Q
+from django.template.defaultfilters import slugify
+from django.utils.timezone import now
+
+
+class Organization(models.Model):
+    PLAN_FREE = "free"
+    PLAN_PRO = "pro"
+    PLAN_CHOICES = [(PLAN_FREE, "Free"), (PLAN_PRO, "Pro")]
+
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="owned_organizations"
+    )
+    plan = models.CharField(max_length=10, choices=PLAN_CHOICES, default=PLAN_FREE)
+    max_units = models.IntegerField(default=5)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.slug})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or "organization"
+            slug_candidate = base_slug
+            idx = 2
+            while Organization.objects.filter(slug=slug_candidate).exclude(pk=self.pk).exists():
+                slug_candidate = f"{base_slug}-{idx}"
+                idx += 1
+            self.slug = slug_candidate
+        super().save(*args, **kwargs)
 
 
 class Property(models.Model):
@@ -17,6 +54,13 @@ class Property(models.Model):
     state = models.CharField(max_length=100)
     zip_code = models.CharField(max_length=20)
     property_type = models.CharField(max_length=20, choices=PROPERTY_TYPE_CHOICES)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="properties",
+        null=True,
+        blank=True,
+    )
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -32,6 +76,13 @@ class Property(models.Model):
 class Unit(models.Model):
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="units"
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="units",
+        null=True,
+        blank=True,
     )
     unit_number = models.CharField(max_length=50)
     bedrooms = models.IntegerField()
@@ -55,6 +106,13 @@ class Tenant(models.Model):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=30)
     date_of_birth = models.DateField(blank=True, null=True)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="tenants",
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -68,6 +126,13 @@ class Tenant(models.Model):
 class Lease(models.Model):
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="leases")
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="leases")
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="leases",
+        null=True,
+        blank=True,
+    )
     start_date = models.DateField()
     end_date = models.DateField()
     monthly_rent = models.DecimalField(max_digits=10, decimal_places=2)
@@ -109,6 +174,13 @@ class Payment(models.Model):
     ]
 
     lease = models.ForeignKey(Lease, on_delete=models.CASCADE, related_name="payments")
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        null=True,
+        blank=True,
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_date = models.DateField()
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
@@ -153,6 +225,13 @@ class MaintenanceRequest(models.Model):
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="maintenance_requests"
     )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="maintenance_requests",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=255)
     description = models.TextField()
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES)
@@ -188,6 +267,14 @@ class UserProfile(models.Model):
         blank=True,
         related_name="user_profile",
     )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="members",
+    )
+    is_org_admin = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -196,6 +283,56 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} ({self.role})"
+
+
+class OrganizationInvitation(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_REVOKED = "revoked"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_REVOKED, "Revoked"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="invitations"
+    )
+    email = models.EmailField()
+    role = models.CharField(
+        max_length=20,
+        choices=UserProfile.ROLE_CHOICES,
+        default=UserProfile.ROLE_TENANT,
+    )
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="organization_invitations",
+    )
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="organization_invitations",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "email", "status"],
+                condition=Q(status="pending"),
+                name="uniq_pending_org_invitation",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.email} -> {self.organization.slug} ({self.status})"
 
 
 class Notification(models.Model):
@@ -214,6 +351,13 @@ class Notification(models.Model):
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications"
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        null=True,
+        blank=True,
     )
     title = models.CharField(max_length=255)
     message = models.TextField()
@@ -235,6 +379,13 @@ class Message(models.Model):
     )
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="received_messages"
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="messages",
+        null=True,
+        blank=True,
     )
     subject = models.CharField(max_length=255)
     body = models.TextField()
@@ -309,6 +460,13 @@ class ScreeningRequest(models.Model):
     requested_by = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="screening_requests"
     )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="screening_requests",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING
     )
@@ -363,6 +521,13 @@ class Document(models.Model):
 
     name = models.CharField(max_length=255)
     file = models.FileField(upload_to="documents/")
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="documents",
+        null=True,
+        blank=True,
+    )
     document_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     description = models.TextField(blank=True)
     uploaded_by = models.ForeignKey(
@@ -447,6 +612,13 @@ class Expense(models.Model):
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="expenses"
     )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="expenses",
+        null=True,
+        blank=True,
+    )
     unit = models.ForeignKey(
         Unit, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses"
     )
@@ -492,6 +664,13 @@ class RentLedgerEntry(models.Model):
     lease = models.ForeignKey(
         Lease, on_delete=models.CASCADE, related_name="ledger_entries"
     )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="ledger_entries",
+        null=True,
+        blank=True,
+    )
     entry_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -519,6 +698,13 @@ class LateFeeRule(models.Model):
 
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="late_fee_rules"
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="late_fee_rules",
+        null=True,
+        blank=True,
     )
     grace_period_days = models.IntegerField(default=5)
     fee_type = models.CharField(max_length=20, choices=TYPE_CHOICES)

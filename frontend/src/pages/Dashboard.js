@@ -62,27 +62,21 @@ function Dashboard() {
     const loadDashboard = async () => {
       try {
         if (role === "tenant") {
-          const [paymentsRes, maintenanceRes, leasesRes, tenantsRes] = await Promise.all([
+          const tenantId = user?.tenant_id;
+          const [paymentsRes, maintenanceRes, leasesRes] = await Promise.all([
             getPayments(),
             getMaintenanceRequests(),
             getLeases(),
-            getTenants(),
           ]);
-          const tenantRecord = (tenantsRes.data || [])[0];
-          const tenantId = tenantRecord?.id;
-
-          const paymentItems = (paymentsRes.data || []).filter((item) => {
-            const nestedId = item.lease_detail?.tenant_detail?.id ?? item.lease_detail?.tenant;
-            return !tenantId || nestedId === tenantId;
-          });
-          const maintenanceItems = (maintenanceRes.data || []).filter((item) => {
-            const nestedId = item.tenant_detail?.id ?? item.tenant;
-            return !tenantId || nestedId === tenantId;
-          });
-          const leaseItems = (leasesRes.data || []).filter((item) => {
-            const nestedId = item.tenant_detail?.id ?? item.tenant;
-            return !tenantId || nestedId === tenantId;
-          });
+          const paymentItems = tenantId
+          ? (paymentsRes.data || []).filter((item) => item.lease_detail?.tenant === tenantId)
+          : (paymentsRes.data || []);
+          const maintenanceItems = tenantId
+            ? (maintenanceRes.data || []).filter((item) => item.tenant_detail?.id === tenantId || item.tenant === tenantId)
+            : (maintenanceRes.data || []);
+          const leaseItems = tenantId
+            ? (leasesRes.data || []).filter((item) => item.tenant_detail?.id === tenantId || item.tenant === tenantId)
+            : (leasesRes.data || []);
           const activeLease = leaseItems
             .filter((item) => item.is_active)
             .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))[0];
@@ -95,13 +89,13 @@ function Dashboard() {
           }));
           setTenantAmountDue(activeLease ? Number(activeLease.monthly_rent || 0) : null);
         } else {
-          const [propertiesRes, unitsRes, tenantsRes, leasesRes, maintenanceRes, paymentsRes] = await Promise.all([
+          const [propertiesRes, unitsRes, leasesRes, maintenanceRes, paymentsRes, tenantsRes] = await Promise.all([
             getProperties(),
             getUnits(),
-            getTenants(),
             getLeases(),
             getMaintenanceRequests(),
             getPayments(),
+            getTenants(),
           ]);
 
           const units = unitsRes.data || [];
@@ -201,7 +195,7 @@ function Dashboard() {
     };
 
     loadDashboard();
-  }, [role]);
+  }, [role, user?.tenant_id, user?.id]);
 
   const totalUnits = occupancyData.reduce((sum, item) => sum + item.value, 0);
   const occupiedUnits = occupancyData.find((item) => item.name === "Occupied")?.value || 0;
@@ -299,10 +293,32 @@ function Dashboard() {
       <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}>
         Welcome back, {user?.first_name || user?.username || "User"}
       </Typography>
+      <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+        {user?.organization?.name || "No workspace"}
+      </Typography>
       <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
         {today}
       </Typography>
       {loading ? <Typography sx={{ mb: 2 }}>Loading...</Typography> : null}
+      {!loading &&
+      role === "landlord" &&
+      user?.organization?.plan === "free" &&
+      user?.organization?.max_units &&
+      counts.units >= Math.max(user.organization.max_units - 1, 1) ? (
+        <Typography
+          sx={{
+            mb: 1.5,
+            fontSize: 12,
+            color: "text.secondary",
+            p: 1,
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+          }}
+        >
+          {`You're using ${counts.units}/${user.organization.max_units} free units. Upgrade to Pro for unlimited units.`}
+        </Typography>
+      ) : null}
       {error ? (
         <Typography sx={{ mb: 2, color: "error.main" }}>{error}</Typography>
       ) : null}
@@ -583,6 +599,15 @@ function Dashboard() {
 }
 
 export default Dashboard;
+
+
+
+
+
+
+
+
+
 
 
 

@@ -12,7 +12,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         today = timezone.now().date()
-        landlords = User.objects.filter(profile__role=UserProfile.ROLE_LANDLORD)
+        landlords = User.objects.filter(
+            profile__role=UserProfile.ROLE_LANDLORD,
+            profile__organization__isnull=False,
+        )
         tenant_user_map = {
             profile.tenant_id: profile.user
             for profile in UserProfile.objects.select_related("user").filter(
@@ -21,9 +24,14 @@ class Command(BaseCommand):
         }
 
         created_count = 0
-        active_leases = Lease.objects.filter(is_active=True).select_related("tenant", "unit", "unit__property")
+        active_leases = Lease.objects.filter(is_active=True).select_related(
+            "tenant", "unit", "unit__property", "organization"
+        )
 
         for lease in active_leases:
+            organization = lease.organization
+            if not organization:
+                continue
             tenant_user = tenant_user_map.get(lease.tenant_id)
             if not tenant_user:
                 continue
@@ -40,6 +48,7 @@ class Command(BaseCommand):
                         f"is due on {due_date:%b %d, %Y}."
                     ),
                     notification_type=Notification.TYPE_RENT_DUE,
+                    organization=organization,
                     link="/pay-rent",
                     today=today,
                 )
@@ -53,6 +62,7 @@ class Command(BaseCommand):
                         "Please submit payment as soon as possible."
                     ),
                     notification_type=Notification.TYPE_RENT_OVERDUE,
+                    organization=organization,
                     link="/pay-rent",
                     today=today,
                 )
@@ -68,15 +78,22 @@ class Command(BaseCommand):
                     title="Lease expiring soon",
                     message=expiry_message,
                     notification_type=Notification.TYPE_LEASE_EXPIRING,
+                    organization=organization,
                     link="/my-lease",
                     today=today,
                 )
                 for landlord in landlords:
+                    if (
+                        getattr(getattr(landlord, "profile", None), "organization", None)
+                        != organization
+                    ):
+                        continue
                     created_count += self._create_once_per_day(
                         recipient=landlord,
                         title="Lease expiring soon",
                         message=expiry_message,
                         notification_type=Notification.TYPE_LEASE_EXPIRING,
+                        organization=organization,
                         link="/leases",
                         today=today,
                     )
@@ -88,7 +105,7 @@ class Command(BaseCommand):
         )
 
     def _create_once_per_day(
-        self, recipient, title, message, notification_type, link, today
+        self, recipient, title, message, notification_type, link, today, organization=None
     ):
         exists = Notification.objects.filter(
             recipient=recipient,
@@ -104,6 +121,7 @@ class Command(BaseCommand):
             title=title,
             message=message,
             notification_type=notification_type,
+            organization=organization,
             link=link or "",
         )
         return 1
@@ -127,4 +145,3 @@ class Command(BaseCommand):
         last_day_current_month = (next_month - timedelta(days=1)).day
         day = min(preferred_day, last_day_current_month)
         return reference_date.replace(day=day)
-

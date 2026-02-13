@@ -36,6 +36,7 @@ def create_ledger_entry_for_completed_payment(sender, instance, created, **kwarg
 
     RentLedgerEntry.objects.create(
         lease=instance.lease,
+        organization=instance.lease.organization,
         entry_type=RentLedgerEntry.TYPE_PAYMENT,
         description="Payment Received",
         amount=-abs(instance.amount),

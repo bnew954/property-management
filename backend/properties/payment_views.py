@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-import stripe
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
@@ -25,6 +24,14 @@ class CreatePaymentIntentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        try:
+            import stripe
+        except ImportError:
+            return Response(
+                {"detail": "Stripe dependency is not installed."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         lease_id = request.data.get("lease_id")
         if not lease_id:
             return Response(
@@ -32,8 +39,15 @@ class CreatePaymentIntentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        organization = getattr(request, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization context for this request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
-            lease = Lease.objects.get(id=lease_id)
+            lease = Lease.objects.get(id=lease_id, organization=organization)
         except Lease.DoesNotExist:
             return Response(
                 {"lease_id": "Lease not found."},
@@ -80,6 +94,14 @@ class ConfirmStripePaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        try:
+            import stripe
+        except ImportError:
+            return Response(
+                {"detail": "Stripe dependency is not installed."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         lease_id = request.data.get("lease_id")
         payment_intent_id = request.data.get("payment_intent_id")
         if not lease_id or not payment_intent_id:
@@ -88,8 +110,15 @@ class ConfirmStripePaymentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        organization = getattr(request, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization context for this request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
-            lease = Lease.objects.get(id=lease_id)
+            lease = Lease.objects.get(id=lease_id, organization=organization)
         except Lease.DoesNotExist:
             return Response(
                 {"lease_id": "Lease not found."},
@@ -104,7 +133,8 @@ class ConfirmStripePaymentView(APIView):
             )
 
         existing_payment = Payment.objects.filter(
-            stripe_payment_intent_id=payment_intent_id
+            stripe_payment_intent_id=payment_intent_id,
+            organization=organization,
         ).first()
         if existing_payment:
             return Response(PaymentSerializer(existing_payment).data)
@@ -128,6 +158,7 @@ class ConfirmStripePaymentView(APIView):
 
         payment = Payment.objects.create(
             lease=lease,
+            organization=organization,
             amount=paid_amount,
             payment_date=timezone.now().date(),
             payment_method=Payment.PAYMENT_METHOD_CREDIT_CARD,
@@ -146,9 +177,13 @@ class PaymentHistoryView(APIView):
 
     def get(self, request):
         queryset = Payment.objects.select_related("lease", "lease__tenant", "lease__unit")
+        organization = getattr(request, "organization", None)
+        if organization:
+            queryset = queryset.filter(organization=organization)
+        else:
+            queryset = queryset.none()
         tenant_id = _tenant_for_user(request.user)
         if tenant_id:
             queryset = queryset.filter(lease__tenant_id=tenant_id)
         serializer = PaymentSerializer(queryset, many=True)
         return Response(serializer.data)
-

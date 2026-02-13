@@ -13,6 +13,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import SettingsIcon from "@mui/icons-material/Settings";
 import {
   Avatar,
   Box,
@@ -57,15 +58,13 @@ function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, toggleTheme } = useThemeMode();
-  const { role, user, clearUser } = useUser();
+  const { role, user, clearUser, isOrgAdmin, organization } = useUser();
   const isDark = mode === "dark";
   const theme = useTheme();
 
   const visibleNavItems =
     role === "tenant"
-      ? navItems.filter((item) =>
-          ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance", "/documents", "/messages"].includes(item.path),
-        )
+      ? navItems.filter((item) => ["/dashboard", "/payments", "/maintenance"].includes(item.path))
       : navItems.filter((item) => !item.tenantOnly && item.path !== "/my-lease" && item.path !== "/pay-rent");
 
   const primaryNavItems = visibleNavItems.filter((item) => !item.utility);
@@ -121,6 +120,8 @@ function Layout({ children }) {
     ? `${firstName} ${user?.last_name || ""}`.trim()
     : user?.username || "User";
 
+  const orgName = organization?.name || "";
+
   return (
     <Box
       sx={{
@@ -147,12 +148,16 @@ function Layout({ children }) {
         }}
       >
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <Toolbar sx={{ minHeight: 60, alignItems: "center", px: 2.2 }}>
+          <Toolbar sx={{ minHeight: 60, px: 2.2, pb: 1.2, flexDirection: "column", alignItems: "flex-start" }}>
             <Typography variant="body1" sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
               Onyx PM
             </Typography>
+            {orgName ? (
+              <Typography variant="caption" sx={{ color: "text.secondary", fontSize: 11, mt: 0.3 }}>
+                {orgName}
+              </Typography>
+            ) : null}
           </Toolbar>
-          <Divider sx={{ borderColor: "divider" }} />
           <List sx={{ py: 1.3, minHeight: 0 }}>
             {primaryNavItems.map((item) => {
               const active = isActive(item.path);
@@ -236,6 +241,41 @@ function Layout({ children }) {
             })}
           </List>
           <Divider sx={{ borderColor: "divider" }} />
+          {isOrgAdmin ? (
+            <>
+              <List sx={{ py: 0.8 }}>
+                <ListItem disablePadding sx={{ px: 0.6, py: 0.1 }}>
+                  <ListItemButton
+                    component={Link}
+                    to="/settings"
+                    sx={{
+                      ...navItemSx(isActive("/settings")),
+                      border: "1px solid transparent",
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        color: isActive("/settings") ? "text.primary" : "text.secondary",
+                        minWidth: 32,
+                        "& svg": { fontSize: 18 },
+                      }}
+                    >
+                      <SettingsIcon />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Settings"
+                      primaryTypographyProps={{
+                        fontSize: 13,
+                        fontWeight: 400,
+                        color: isActive("/settings") ? "text.primary" : "text.secondary",
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              </List>
+              <Divider sx={{ borderColor: "divider" }} />
+            </>
+          ) : null}
           <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
               <Avatar sx={{ width: 26, height: 26, bgcolor: "divider", fontSize: "0.75rem", color: "text.secondary" }}>
@@ -317,3 +357,6 @@ function Layout({ children }) {
 }
 
 export default Layout;
+
+
+

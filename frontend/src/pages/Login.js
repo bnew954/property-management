@@ -28,8 +28,20 @@ function Login() {
     try {
       setSubmitting(true);
       await login(values.username.trim(), values.password);
-      await refreshUser();
-      navigate("/dashboard", { replace: true });
+      const refreshedUser = await refreshUser();
+      const shouldWelcome = Boolean(location.state?.showWelcome) && refreshedUser?.role === "landlord";
+      const from = location.state?.from?.pathname;
+
+      if (shouldWelcome) {
+        navigate("/welcome", { replace: true });
+        return;
+      }
+
+      if (from && from !== "/welcome") {
+        navigate(from, { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     } catch (requestError) {
       setError("Invalid username or password.");
     } finally {
@@ -72,7 +84,7 @@ function Login() {
               fontWeight: 500,
             }}
           >
-            ← Back to home
+            {"\u2190"} Back to home
           </Link>
         </Box>
         <Typography

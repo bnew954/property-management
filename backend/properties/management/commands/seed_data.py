@@ -15,6 +15,7 @@ from properties.models import (
     MaintenanceRequest,
     Message,
     Notification,
+    Organization,
     Payment,
     Property,
     RentLedgerEntry,
@@ -34,16 +35,21 @@ class Command(BaseCommand):
         today = timezone.now().date()
 
         with transaction.atomic():
-            self.stdout.write("Clearing existing data (keeping superusers)...")
-            self._clear_existing_data()
+            actor, organization = self._ensure_seed_admin_and_org()
+            self.stdout.write(
+                f"Using seed actor: {actor.username} ({actor.email})"
+            )
+            self.stdout.write(
+                f"Using seed organization: {organization.name} ({organization.slug})"
+            )
 
-            actor = self._ensure_seed_admin()
-            self.stdout.write(self.style.SUCCESS(f"Using seed actor: {actor.username}"))
+            self.stdout.write("Clearing existing demo data (keeping superusers)...")
+            self._clear_existing_data(organization)
 
-            properties = self._create_properties()
+            properties = self._create_properties(organization)
             self.stdout.write(self.style.SUCCESS(f"Created {len(properties)} properties"))
 
-            units = self._create_units(properties)
+            units = self._create_units(properties, organization)
             occupied_units = [u for u in units if not u.is_available]
             self.stdout.write(
                 self.style.SUCCESS(
@@ -51,13 +57,13 @@ class Command(BaseCommand):
                 )
             )
 
-            tenants = self._create_tenants()
+            tenants = self._create_tenants(organization)
             self.stdout.write(self.style.SUCCESS(f"Created {len(tenants)} tenants"))
 
-            tenant_users = self._create_tenant_users(tenants)
+            tenant_users = self._create_tenant_users(tenants, organization)
             self.stdout.write(self.style.SUCCESS(f"Created {len(tenant_users)} tenant users"))
 
-            leases = self._create_leases(occupied_units, tenants, today)
+            leases = self._create_leases(occupied_units, tenants, today, organization)
             active_leases = [lease for lease in leases if lease.is_active]
             self.stdout.write(
                 self.style.SUCCESS(
@@ -65,10 +71,10 @@ class Command(BaseCommand):
                 )
             )
 
-            self._create_late_fee_rules(properties)
+            self._create_late_fee_rules(properties, organization)
             self.stdout.write(self.style.SUCCESS("Created late fee rules for all properties"))
 
-            payments = self._create_payments(leases, today)
+            payments = self._create_payments(leases, today, organization)
             completed_payments = [p for p in payments if p.status == Payment.STATUS_COMPLETED]
             failed_payments = [p for p in payments if p.status == Payment.STATUS_FAILED]
             self.stdout.write(
@@ -78,71 +84,113 @@ class Command(BaseCommand):
                 )
             )
 
-            maintenance_requests = self._create_maintenance_requests(units, leases, tenants, today)
+            maintenance_requests = self._create_maintenance_requests(
+                units, leases, tenants, organization, today
+            )
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Created {len(maintenance_requests)} maintenance requests"
                 )
             )
 
-            charge_count, late_fee_count = self._create_rent_ledger_entries(active_leases, today)
+            charge_count, late_fee_count = self._create_rent_ledger_entries(
+                active_leases, today, organization
+            )
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Created {charge_count} charge entries and {late_fee_count} late fee entries"
                 )
             )
 
-            documents = self._create_documents(actor, properties, units, tenants, leases, today)
+            documents = self._create_documents(
+                actor, properties, units, tenants, leases, organization
+            )
             self.stdout.write(self.style.SUCCESS(f"Created {len(documents)} documents"))
 
-            expenses = self._create_expenses(actor, properties, units, documents, today)
+            expenses = self._create_expenses(
+                actor, properties, units, documents, organization, today
+            )
             self.stdout.write(self.style.SUCCESS(f"Created {len(expenses)} expenses"))
 
-            screenings = self._create_screenings(actor, tenants, today)
+            screenings = self._create_screenings(actor, tenants, organization)
             self.stdout.write(self.style.SUCCESS(f"Created {len(screenings)} screening requests"))
 
-            notifications = self._create_notifications(actor, tenant_users, leases, today)
-            self.stdout.write(self.style.SUCCESS(f"Created {len(notifications)} notifications"))
+            notifications = self._create_notifications(
+                actor, tenant_users, leases, organization, today
+            )
+            self.stdout.write(
+                self.style.SUCCESS(f"Created {len(notifications)} notifications")
+            )
 
-            messages = self._create_messages(actor, tenant_users, today)
+            messages = self._create_messages(actor, tenant_users, organization, today)
             self.stdout.write(self.style.SUCCESS(f"Created {len(messages)} messages"))
 
         self.stdout.write(self.style.SUCCESS("Seed complete. Run with: python manage.py seed_data"))
 
-    def _clear_existing_data(self):
-        RentLedgerEntry.objects.all().delete()
-        Expense.objects.all().delete()
-        LateFeeRule.objects.all().delete()
-        Notification.objects.all().delete()
-        Message.objects.all().delete()
-        ScreeningRequest.objects.all().delete()
-        Document.objects.all().delete()
-        Payment.objects.all().delete()
-        MaintenanceRequest.objects.all().delete()
-        Lease.objects.all().delete()
-        Unit.objects.all().delete()
-        Property.objects.all().delete()
-        Tenant.objects.all().delete()
-        User.objects.filter(is_superuser=False).delete()
+    def _clear_existing_data(self, organization):
+        if not organization:
+            return
 
-    def _ensure_seed_admin(self):
+        Message.objects.filter(organization=organization).delete()
+        Notification.objects.filter(organization=organization).delete()
+        RentLedgerEntry.objects.filter(organization=organization).delete()
+        Expense.objects.filter(organization=organization).delete()
+        LateFeeRule.objects.filter(organization=organization).delete()
+        ScreeningRequest.objects.filter(organization=organization).delete()
+        Document.objects.filter(organization=organization).delete()
+        Payment.objects.filter(organization=organization).delete()
+        MaintenanceRequest.objects.filter(organization=organization).delete()
+        Lease.objects.filter(organization=organization).delete()
+        Unit.objects.filter(organization=organization).delete()
+        Property.objects.filter(organization=organization).delete()
+        Tenant.objects.filter(organization=organization).delete()
+        UserProfile.objects.filter(
+            organization=organization
+        ).exclude(user__is_superuser=True).delete()
+        User.objects.filter(
+            profile__organization=organization,
+            is_superuser=False,
+        ).delete()
+
+    def _ensure_seed_admin_and_org(self):
         admin = User.objects.filter(is_superuser=True).order_by("id").first()
-        if admin:
-            UserProfile.objects.get_or_create(
-                user=admin,
-                defaults={"role": UserProfile.ROLE_LANDLORD},
+        if not admin:
+            admin = User.objects.create_superuser(
+                username="admin",
+                email="admin@onyx-pm.com",
+                password="Admin2026!",
+                first_name="Onyx",
+                last_name="Admin",
             )
-            return admin
-
-        return User.objects.create_superuser(
-            username="onyx_admin",
-            email="admin@onyxpm.io",
-            password="admin123!",
-            first_name="Onyx",
-            last_name="Admin",
+        profile, _ = UserProfile.objects.get_or_create(
+            user=admin,
+            defaults={
+                "role": UserProfile.ROLE_LANDLORD,
+                "is_org_admin": True,
+            },
         )
+        profile.role = UserProfile.ROLE_LANDLORD
+        profile.is_org_admin = True
+        profile.tenant = None
+        profile.save(update_fields=["role", "is_org_admin", "tenant"])
 
-    def _create_properties(self):
+        organization = Organization.objects.filter(
+            name="Demo Properties",
+            owner=admin,
+        ).first()
+        if not organization:
+            organization = Organization.objects.create(
+                name="Demo Properties",
+                owner=admin,
+            )
+        organization.owner = admin
+        organization.save(update_fields=["owner"])
+
+        profile.organization = organization
+        profile.save(update_fields=["organization"])
+        return admin, organization
+
+    def _create_properties(self, organization):
         property_seed = [
             {
                 "name": "Riverside Apartments",
@@ -208,22 +256,6 @@ class Command(BaseCommand):
                 "zip_code": "37920",
                 "property_type": Property.PROPERTY_TYPE_RESIDENTIAL,
             },
-            {
-                "name": "West End Commons",
-                "address_line1": "3418 Sutherland Avenue",
-                "city": "Knoxville",
-                "state": "TN",
-                "zip_code": "37919",
-                "property_type": Property.PROPERTY_TYPE_RESIDENTIAL,
-            },
-            {
-                "name": "Market Square Suites",
-                "address_line1": "16 Market Square",
-                "city": "Knoxville",
-                "state": "TN",
-                "zip_code": "37902",
-                "property_type": Property.PROPERTY_TYPE_COMMERCIAL,
-            },
         ]
 
         properties = []
@@ -233,35 +265,45 @@ class Command(BaseCommand):
                 if payload["property_type"] == Property.PROPERTY_TYPE_COMMERCIAL
                 else "Well-maintained community in a high-demand Knoxville neighborhood."
             )
-            properties.append(Property.objects.create(**payload, description=description))
+            properties.append(
+                Property.objects.create(
+                    organization=organization,
+                    description=description,
+                    **payload,
+                )
+            )
         return properties
 
-    def _create_units(self, properties):
-        units_per_property = [5, 4, 4, 5, 4, 3, 4, 4, 3, 4]
+    def _create_units(self, properties, organization):
+        units_per_property = [5, 4, 4, 5, 4, 3, 4, 4]
         units = []
         for prop, count in zip(properties, units_per_property):
             for idx in range(1, count + 1):
                 if prop.property_type == Property.PROPERTY_TYPE_COMMERCIAL:
                     unit = Unit.objects.create(
                         property=prop,
+                        organization=organization,
                         unit_number=f"Suite {100 + idx}",
                         bedrooms=0,
-                        bathrooms=Decimal(str(random.choice([1.0, 1.5, 2.0, 2.5, 3.0]))),
+                        bathrooms=Decimal("1.0"),
                         square_feet=random.randint(1100, 5000),
                         rent_amount=self._money(random.randint(1800, 6500)),
                         is_available=True,
                     )
                 else:
                     bedrooms = random.choice([1, 1, 2, 2, 3])
-                    bathrooms = random.choice([1.0, 1.0, 1.5, 2.0])
+                    bathrooms = random.choice(
+                        [Decimal("1.0"), Decimal("1.0"), Decimal("1.5"), Decimal("2.0")]
+                    )
                     sq_ft = random.randint(550, 1500)
                     base_rent = 700 + bedrooms * 350 + int((sq_ft - 500) * 0.45)
                     rent = min(max(base_rent + random.randint(-120, 140), 800), 2200)
                     unit = Unit.objects.create(
                         property=prop,
+                        organization=organization,
                         unit_number=str(100 + idx),
                         bedrooms=bedrooms,
-                        bathrooms=Decimal(str(bathrooms)),
+                        bathrooms=bathrooms,
                         square_feet=sq_ft,
                         rent_amount=self._money(rent),
                         is_available=True,
@@ -274,24 +316,45 @@ class Command(BaseCommand):
             unit.save(update_fields=["is_available"])
         return units
 
-    def _create_tenants(self):
+    def _create_tenants(self, organization):
         tenant_data = [
-            ("Liam", "Carter"), ("Olivia", "Bennett"), ("Noah", "Mitchell"),
-            ("Emma", "Reed"), ("Elijah", "Brooks"), ("Ava", "Coleman"),
-            ("James", "Bryant"), ("Sophia", "Hayes"), ("Benjamin", "Foster"),
-            ("Isabella", "Price"), ("Lucas", "Ward"), ("Mia", "Sullivan"),
-            ("Henry", "Parker"), ("Charlotte", "Murphy"), ("Alexander", "Powell"),
-            ("Amelia", "Russell"), ("Michael", "Long"), ("Harper", "Jenkins"),
-            ("Daniel", "Griffin"), ("Evelyn", "Perry"), ("Matthew", "Hughes"),
-            ("Abigail", "Washington"), ("Joseph", "Henderson"), ("Ella", "Gibson"),
-            ("Samuel", "Hamilton"), ("Scarlett", "Ford"), ("David", "Mason"),
-            ("Aria", "West"), ("Andrew", "Fisher"), ("Lily", "Owens"),
+            ("Liam", "Carter"),
+            ("Olivia", "Bennett"),
+            ("Noah", "Mitchell"),
+            ("Emma", "Reed"),
+            ("Elijah", "Brooks"),
+            ("Ava", "Coleman"),
+            ("James", "Bryant"),
+            ("Sophia", "Hayes"),
+            ("Benjamin", "Foster"),
+            ("Isabella", "Price"),
+            ("Lucas", "Ward"),
+            ("Mia", "Sullivan"),
+            ("Henry", "Parker"),
+            ("Charlotte", "Murphy"),
+            ("Alexander", "Powell"),
+            ("Amelia", "Russell"),
+            ("Michael", "Long"),
+            ("Harper", "Jenkins"),
+            ("Daniel", "Griffin"),
+            ("Evelyn", "Perry"),
+            ("Matthew", "Hughes"),
+            ("Abigail", "Washington"),
+            ("Joseph", "Henderson"),
+            ("Ella", "Gibson"),
+            ("Samuel", "Hamilton"),
+            ("Scarlett", "Ford"),
+            ("David", "Mason"),
+            ("Aria", "West"),
+            ("Andrew", "Fisher"),
+            ("Lily", "Owens"),
         ]
 
         tenants = []
         for idx, (first_name, last_name) in enumerate(tenant_data, start=1):
             tenants.append(
                 Tenant.objects.create(
+                    organization=organization,
                     first_name=first_name,
                     last_name=last_name,
                     email=f"{first_name.lower()}.{last_name.lower()}{idx}@example.com",
@@ -304,8 +367,7 @@ class Command(BaseCommand):
                 )
             )
         return tenants
-
-    def _create_tenant_users(self, tenants):
+    def _create_tenant_users(self, tenants, organization):
         tenant_users = []
         for tenant in tenants[:22]:
             username = f"{tenant.first_name.lower()}.{tenant.last_name.lower()}"
@@ -317,13 +379,15 @@ class Command(BaseCommand):
                 last_name=tenant.last_name,
             )
             profile = user.profile
+            profile.organization = organization
             profile.role = UserProfile.ROLE_TENANT
             profile.tenant = tenant
-            profile.save(update_fields=["role", "tenant"])
+            profile.is_org_admin = False
+            profile.save(update_fields=["organization", "role", "tenant", "is_org_admin"])
             tenant_users.append(user)
         return tenant_users
 
-    def _create_leases(self, occupied_units, tenants, today):
+    def _create_leases(self, occupied_units, tenants, today, organization):
         leases = []
         tenant_pool = tenants[:]
         random.shuffle(tenant_pool)
@@ -337,6 +401,7 @@ class Command(BaseCommand):
                 Lease.objects.create(
                     unit=unit,
                     tenant=tenant,
+                    organization=organization,
                     start_date=start_date,
                     end_date=end_date,
                     monthly_rent=unit.rent_amount,
@@ -346,18 +411,23 @@ class Command(BaseCommand):
             )
         return leases
 
-    def _create_late_fee_rules(self, properties):
+    def _create_late_fee_rules(self, properties, organization):
         for prop in properties:
             LateFeeRule.objects.create(
                 property=prop,
+                organization=organization,
                 grace_period_days=5,
-                fee_type=LateFeeRule.TYPE_PERCENTAGE if random.random() > 0.4 else LateFeeRule.TYPE_FLAT,
+                fee_type=(
+                    LateFeeRule.TYPE_PERCENTAGE
+                    if random.random() > 0.4
+                    else LateFeeRule.TYPE_FLAT
+                ),
                 fee_amount=self._money(random.choice([5, 7, 8, 10, 75, 100])),
                 max_fee=self._money(150),
                 is_active=True,
             )
 
-    def _create_payments(self, leases, today):
+    def _create_payments(self, leases, today, organization):
         payments = []
         failed_budget = 3
         method_choices = [
@@ -387,6 +457,7 @@ class Command(BaseCommand):
                         payments.append(
                             Payment.objects.create(
                                 lease=lease,
+                                organization=organization,
                                 amount=lease.monthly_rent,
                                 payment_date=due_date + timedelta(days=random.randint(0, 7)),
                                 payment_method=random.choice(method_choices),
@@ -401,6 +472,7 @@ class Command(BaseCommand):
                 payments.append(
                     Payment.objects.create(
                         lease=lease,
+                        organization=organization,
                         amount=lease.monthly_rent,
                         payment_date=due_date + timedelta(days=offset_days),
                         payment_method=random.choice(method_choices),
@@ -411,7 +483,7 @@ class Command(BaseCommand):
                 )
         return payments
 
-    def _create_maintenance_requests(self, units, leases, tenants, today):
+    def _create_maintenance_requests(self, units, leases, tenants, organization, today):
         request_templates = [
             ("Leaking faucet in kitchen", "Water dripping continuously under sink."),
             ("AC not cooling", "Air conditioner runs but does not cool apartment."),
@@ -448,6 +520,7 @@ class Command(BaseCommand):
                 MaintenanceRequest.objects.create(
                     unit=unit,
                     tenant=tenant,
+                    organization=organization,
                     title=title,
                     description=desc,
                     priority=random.choice(priorities),
@@ -456,16 +529,18 @@ class Command(BaseCommand):
             )
         return requests
 
-    def _create_rent_ledger_entries(self, active_leases, today):
+    def _create_rent_ledger_entries(self, active_leases, today, organization):
         charge_count = 0
         late_fee_count = 0
 
         completed_by_lease_month = {}
-        completed = Payment.objects.filter(status=Payment.STATUS_COMPLETED).select_related("lease")
+        completed = Payment.objects.filter(
+            status=Payment.STATUS_COMPLETED,
+            organization=organization,
+        ).select_related("lease")
         for payment in completed:
             key = (payment.lease_id, payment.payment_date.year, payment.payment_date.month)
-            existing = completed_by_lease_month.get(key)
-            if not existing or payment.payment_date < existing.payment_date:
+            if key not in completed_by_lease_month:
                 completed_by_lease_month[key] = payment
 
         for lease in active_leases:
@@ -477,12 +552,14 @@ class Command(BaseCommand):
                 description = due_date.strftime("%B %Y Rent")
                 if not RentLedgerEntry.objects.filter(
                     lease=lease,
+                    organization=organization,
                     entry_type=RentLedgerEntry.TYPE_CHARGE,
                     date=due_date,
                     description=description,
                 ).exists():
                     RentLedgerEntry.objects.create(
                         lease=lease,
+                        organization=organization,
                         entry_type=RentLedgerEntry.TYPE_CHARGE,
                         description=description,
                         amount=lease.monthly_rent,
@@ -493,16 +570,18 @@ class Command(BaseCommand):
 
                 payment = completed_by_lease_month.get((lease.id, month_cursor.year, month_cursor.month))
                 if payment and payment.payment_date > (due_date + timedelta(days=5)):
-                    late_fee_amount = self._money((lease.monthly_rent * Decimal("0.05")))
+                    late_fee_amount = self._money(lease.monthly_rent * Decimal("0.05"))
                     late_fee_desc = due_date.strftime("%B %Y Late Fee")
                     if not RentLedgerEntry.objects.filter(
                         lease=lease,
+                        organization=organization,
                         entry_type=RentLedgerEntry.TYPE_LATE_FEE,
                         date=payment.payment_date,
                         description=late_fee_desc,
                     ).exists():
                         RentLedgerEntry.objects.create(
                             lease=lease,
+                            organization=organization,
                             entry_type=RentLedgerEntry.TYPE_LATE_FEE,
                             description=late_fee_desc,
                             amount=late_fee_amount,
@@ -516,8 +595,7 @@ class Command(BaseCommand):
             recalculate_lease_balances(lease.id)
 
         return charge_count, late_fee_count
-
-    def _create_documents(self, actor, properties, units, tenants, leases, today):
+    def _create_documents(self, actor, properties, units, tenants, leases, organization):
         doc_seed = [
             ("Lease Agreement - Unit 101.pdf", Document.TYPE_LEASE_AGREEMENT),
             ("Move-in Inspection - Harbor View 3B.pdf", Document.TYPE_INSPECTION_REPORT),
@@ -532,17 +610,19 @@ class Command(BaseCommand):
             ("Roof Repair Receipt.pdf", Document.TYPE_RECEIPT),
             ("Parking Policy Notice.pdf", Document.TYPE_NOTICE),
         ]
-
         documents = []
         for idx, (name, doc_type) in enumerate(doc_seed, start=1):
             filename = name.lower().replace(" ", "_")
             ext = filename.split(".")[-1]
             chosen_property = random.choice(properties)
-            chosen_unit = random.choice([u for u in units if u.property_id == chosen_property.id] or units)
+            chosen_unit = random.choice(
+                [u for u in units if u.property_id == chosen_property.id] or units
+            )
             chosen_tenant = random.choice(tenants)
             chosen_lease = random.choice(leases)
             documents.append(
                 Document.objects.create(
+                    organization=organization,
                     name=name,
                     file=f"documents/{filename}",
                     document_type=doc_type,
@@ -559,7 +639,7 @@ class Command(BaseCommand):
             )
         return documents
 
-    def _create_expenses(self, actor, properties, units, documents, today):
+    def _create_expenses(self, actor, properties, units, documents, organization, today):
         categories = [
             Expense.CATEGORY_MAINTENANCE,
             Expense.CATEGORY_INSURANCE,
@@ -584,7 +664,6 @@ class Command(BaseCommand):
             Expense.CATEGORY_MANAGEMENT_FEE: (250, 900),
             Expense.CATEGORY_LANDSCAPING: (150, 600),
         }
-
         receipt_docs = [doc for doc in documents if doc.document_type == Document.TYPE_RECEIPT]
         expenses = []
         for _ in range(random.randint(30, 40)):
@@ -598,6 +677,7 @@ class Command(BaseCommand):
             }
             expenses.append(
                 Expense.objects.create(
+                    organization=organization,
                     property=prop,
                     unit=random.choice([u for u in units if u.property_id == prop.id] + [None]),
                     category=category,
@@ -614,18 +694,20 @@ class Command(BaseCommand):
                     amount=self._money(random.randint(min_amt, max_amt)),
                     date=today - timedelta(days=random.randint(1, 360)),
                     is_recurring=recurring,
-                    recurring_frequency=random.choice(
-                        [Expense.FREQ_MONTHLY, Expense.FREQ_QUARTERLY, Expense.FREQ_ANNUALLY]
-                    )
-                    if recurring and random.random() > 0.35
-                    else None,
+                    recurring_frequency=(
+                        random.choice(
+                            [Expense.FREQ_MONTHLY, Expense.FREQ_QUARTERLY, Expense.FREQ_ANNUALLY]
+                        )
+                        if recurring and random.random() > 0.35
+                        else None
+                    ),
                     receipt=random.choice(receipt_docs) if receipt_docs and random.random() > 0.55 else None,
                     created_by=actor,
                 )
             )
         return expenses
 
-    def _create_screenings(self, actor, tenants, today):
+    def _create_screenings(self, actor, tenants, organization):
         screenings = []
         selected_tenants = random.sample(tenants, random.randint(5, 8))
         for tenant in selected_tenants:
@@ -657,7 +739,11 @@ class Command(BaseCommand):
                 k=1,
             )[0]
 
-            if credit_score > 670 and background == ScreeningRequest.BACKGROUND_CLEAR and eviction == ScreeningRequest.EVICTION_NONE_FOUND:
+            if (
+                credit_score > 670
+                and background == ScreeningRequest.BACKGROUND_CLEAR
+                and eviction == ScreeningRequest.EVICTION_NONE_FOUND
+            ):
                 recommendation = ScreeningRequest.RECOMMENDATION_APPROVED
             elif credit_score < 580 or eviction == ScreeningRequest.EVICTION_RECORDS_FOUND:
                 recommendation = ScreeningRequest.RECOMMENDATION_DENIED
@@ -669,6 +755,7 @@ class Command(BaseCommand):
                 ScreeningRequest.objects.create(
                     tenant=tenant,
                     requested_by=actor,
+                    organization=organization,
                     status=ScreeningRequest.STATUS_COMPLETED,
                     credit_score=credit_score,
                     credit_rating=rating,
@@ -687,7 +774,7 @@ class Command(BaseCommand):
             )
         return screenings
 
-    def _create_notifications(self, landlord, tenant_users, leases, today):
+    def _create_notifications(self, landlord, tenant_users, leases, organization, today):
         notifications = []
         lease_samples = random.sample(leases, min(len(leases), 8))
         recipients = tenant_users[:]
@@ -707,21 +794,28 @@ class Command(BaseCommand):
             if notif_type == Notification.TYPE_RENT_DUE and lease:
                 title = "Rent due soon"
                 message = (
-                    f"Your rent for Unit {lease.unit.unit_number} at {lease.unit.property.name} is due soon."
+                    f"Your rent for Unit {lease.unit.unit_number} at {lease.unit.property.name} "
+                    "is due soon."
                 )
                 link = "/pay-rent"
             elif notif_type == Notification.TYPE_LEASE_EXPIRING and lease:
                 title = "Lease expiring soon"
-                message = f"Lease for Unit {lease.unit.unit_number} expires on {lease.end_date:%b %d, %Y}."
+                message = (
+                    f"Lease for Unit {lease.unit.unit_number} expires on "
+                    f"{lease.end_date:%b %d, %Y}."
+                )
                 link = "/my-lease"
             else:
                 title = "Maintenance update"
-                message = "A maintenance request has changed status. Review the latest update."
+                message = (
+                    "A maintenance request has changed status. Review the latest update."
+                )
                 link = "/maintenance"
 
             notifications.append(
                 Notification.objects.create(
                     recipient=random.choice(recipients),
+                    organization=organization,
                     title=title,
                     message=message,
                     notification_type=notif_type,
@@ -731,7 +825,7 @@ class Command(BaseCommand):
             )
         return notifications
 
-    def _create_messages(self, landlord, tenant_users, today):
+    def _create_messages(self, landlord, tenant_users, organization, today):
         messages = []
         subjects = [
             "Lease renewal reminder",
@@ -746,6 +840,7 @@ class Command(BaseCommand):
             parent = Message.objects.create(
                 sender=landlord,
                 recipient=recipient,
+                organization=organization,
                 subject=subject,
                 body="Please review this update and reply with any questions.",
                 is_read=random.random() > 0.4,
@@ -755,6 +850,7 @@ class Command(BaseCommand):
                 reply = Message.objects.create(
                     sender=recipient,
                     recipient=landlord,
+                    organization=organization,
                     subject=f"Re: {subject}",
                     body="Thanks for the update. I have received this message.",
                     is_read=random.random() > 0.5,

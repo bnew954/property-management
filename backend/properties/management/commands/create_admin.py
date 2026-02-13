@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from properties.models import UserProfile
+from properties.models import Organization, UserProfile
 
 
 class Command(BaseCommand):
@@ -29,16 +29,29 @@ class Command(BaseCommand):
             )
             created = True
 
+        org_name = "Onyx Properties"
         profile, _ = UserProfile.objects.get_or_create(
             user=user,
             defaults={"role": UserProfile.ROLE_LANDLORD},
         )
+
+        organization = Organization.objects.filter(owner=user).first()
+        if not organization:
+            organization = Organization.objects.create(name=org_name, owner=user)
+            created_org_msg = True
+        else:
+            created_org_msg = False
+
         if profile.role != UserProfile.ROLE_LANDLORD:
             profile.role = UserProfile.ROLE_LANDLORD
-            profile.tenant = None
-            profile.save(update_fields=["role", "tenant"])
+        profile.tenant = None
+        profile.is_org_admin = True
+        profile.organization = organization
+        profile.save(update_fields=["role", "tenant", "is_org_admin", "organization"])
 
         if created:
             self.stdout.write("Superuser created")
         else:
             self.stdout.write("Superuser already exists")
+        if created_org_msg:
+            self.stdout.write("Created default superuser organization")

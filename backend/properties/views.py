@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+﻿from datetime import date, timedelta
 from decimal import Decimal
 import random
 
@@ -9,16 +9,19 @@ from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .mixins import OrganizationQuerySetMixin
 from .models import (
     Lease,
     MaintenanceRequest,
     Message,
     Notification,
+    Organization,
+    OrganizationInvitation,
     Document,
     Expense,
     LateFeeRule,
@@ -30,7 +33,7 @@ from .models import (
     Unit,
     UserProfile,
 )
-from .permissions import IsLandlord
+from .permissions import IsLandlord, IsOrgAdmin
 from .serializers import (
     LeaseSerializer,
     MaintenanceRequestSerializer,
@@ -44,12 +47,157 @@ from .serializers import (
     RentLedgerEntrySerializer,
     ScreeningRequestSerializer,
     TenantSerializer,
-    UserSummarySerializer,
     UnitSerializer,
+    OrganizationSerializer,
+    UserSummarySerializer,
+    OrganizationInvitationSerializer,
 )
+from .signals import recalculate_lease_balances
 
 
-class PropertyViewSet(viewsets.ModelViewSet):
+class OrganizationDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = getattr(request.user, "profile", None)
+        organization = getattr(profile, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(OrganizationSerializer(organization).data)
+
+    def patch(self, request):
+        profile = getattr(request.user, "profile", None)
+        organization = getattr(profile, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not profile.is_org_admin:
+            return Response(
+                {"detail": "Only organization admins can update the organization."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = OrganizationSerializer(
+            organization,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class OrganizationInviteView(APIView):
+    permission_classes = [IsAuthenticated, IsOrgAdmin]
+
+    def post(self, request):
+        profile = getattr(request.user, "profile", None)
+        organization = getattr(profile, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = (request.data.get("email") or "").strip().lower()
+        role = (request.data.get("role") or UserProfile.ROLE_TENANT).strip().lower()
+        tenant_id = request.data.get("tenant_id")
+
+        errors = {}
+        if not email:
+            errors["email"] = "Email is required."
+        if role not in {UserProfile.ROLE_LANDLORD, UserProfile.ROLE_TENANT}:
+            errors["role"] = "Role must be either 'landlord' or 'tenant'."
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        tenant = None
+        if tenant_id:
+            try:
+                tenant = Tenant.objects.get(id=tenant_id, organization=organization)
+            except Tenant.DoesNotExist:
+                return Response(
+                    {"tenant_id": "Tenant not found in your organization."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        if OrganizationInvitation.objects.filter(
+            organization=organization,
+            email=email,
+            status=OrganizationInvitation.STATUS_PENDING,
+        ).exists():
+            return Response(
+                {"email": "An invitation is already pending for this email."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invitation = OrganizationInvitation.objects.create(
+            organization=organization,
+            email=email,
+            role=role,
+            invited_by=request.user,
+            tenant=tenant,
+        )
+        return Response(
+            OrganizationInvitationSerializer(invitation).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class OrganizationMembersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = getattr(request.user, "profile", None)
+        organization = getattr(profile, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        members = UserProfile.objects.filter(organization=organization).select_related(
+            "user", "tenant"
+        )
+        payload = [
+            {
+                "id": member.user.id,
+                "username": member.user.username,
+                "first_name": member.user.first_name,
+                "last_name": member.user.last_name,
+                "email": member.user.email,
+                "role": member.role,
+                "tenant_id": member.tenant_id,
+                "is_org_admin": member.is_org_admin,
+            }
+            for member in members
+        ]
+        return Response(payload)
+
+
+class OrganizationInvitationsView(APIView):
+    permission_classes = [IsAuthenticated, IsOrgAdmin]
+
+    def get(self, request):
+        profile = getattr(request.user, "profile", None)
+        organization = getattr(profile, "organization", None)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        queryset = OrganizationInvitation.objects.filter(organization=organization).order_by(
+            "-created_at"
+        )
+        return Response(OrganizationInvitationSerializer(queryset, many=True).data)
+
+
+class PropertyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Property.objects.all()
     serializer_class = PropertySerializer
 
@@ -58,13 +206,12 @@ class PropertyViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsLandlord()]
 
-
-class UnitViewSet(viewsets.ModelViewSet):
+class UnitViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
 
     def get_queryset(self):
-        queryset = Unit.objects.all()
+        queryset = super().get_queryset()
         property_id = self.request.query_params.get("property_id")
         if property_id:
             queryset = queryset.filter(property_id=property_id)
@@ -76,25 +223,33 @@ class UnitViewSet(viewsets.ModelViewSet):
         return [IsLandlord()]
 
 
-class TenantViewSet(viewsets.ModelViewSet):
+class TenantViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Tenant.objects.all()
     serializer_class = TenantSerializer
 
     def get_queryset(self):
+        queryset = super().get_queryset()
         profile = getattr(self.request.user, "profile", None)
         if profile and profile.role == UserProfile.ROLE_TENANT:
             if profile.tenant_id:
-                return Tenant.objects.filter(id=profile.tenant_id)
-            return Tenant.objects.none()
-        return Tenant.objects.all()
+                queryset = queryset.filter(id=profile.tenant_id)
+            else:
+                queryset = queryset.none()
+        return queryset
 
     def get_permissions(self):
         if self.action in {"list", "retrieve"}:
             return [IsAuthenticated()]
         return [IsLandlord()]
 
+    def perform_create(self, serializer):
+        organization = self.request.organization
+        if not organization:
+            raise PermissionDenied("You must belong to an organization to create records.")
+        serializer.save(organization=organization)
 
-class LeaseViewSet(viewsets.ModelViewSet):
+
+class LeaseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Lease.objects.all()
     serializer_class = LeaseSerializer
 
@@ -103,8 +258,18 @@ class LeaseViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsLandlord()]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        profile = getattr(self.request.user, "profile", None)
+        if profile and profile.role == UserProfile.ROLE_TENANT:
+            if profile.tenant_id:
+                queryset = queryset.filter(tenant_id=profile.tenant_id)
+            else:
+                queryset = queryset.none()
+        return queryset
 
-class PaymentViewSet(viewsets.ModelViewSet):
+
+class PaymentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
 
@@ -113,26 +278,34 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsLandlord()]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        profile = getattr(self.request.user, "profile", None)
+        if profile and profile.role == UserProfile.ROLE_TENANT:
+            if profile.tenant_id:
+                queryset = queryset.filter(lease__tenant_id=profile.tenant_id)
+            else:
+                queryset = queryset.none()
+        return queryset
 
-class MaintenanceRequestViewSet(viewsets.ModelViewSet):
+
+class MaintenanceRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = MaintenanceRequest.objects.all()
     serializer_class = MaintenanceRequestSerializer
 
     def get_queryset(self):
+        queryset = super().get_queryset()
         profile = getattr(self.request.user, "profile", None)
         if profile and profile.role == UserProfile.ROLE_TENANT:
             if profile.tenant_id:
-                queryset = MaintenanceRequest.objects.filter(
-                    tenant_id=profile.tenant_id
-                )
+                queryset = queryset.filter(tenant_id=profile.tenant_id)
             else:
-                queryset = MaintenanceRequest.objects.none()
-        else:
-            queryset = MaintenanceRequest.objects.all()
-        status = self.request.query_params.get("status")
+                queryset = queryset.none()
+
+        status_filter = self.request.query_params.get("status")
         unit_id = self.request.query_params.get("unit_id")
-        if status:
-            queryset = queryset.filter(status=status)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
         if unit_id:
             queryset = queryset.filter(unit_id=unit_id)
         return queryset
@@ -144,30 +317,47 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         profile = getattr(self.request.user, "profile", None)
+        organization = self.request.organization
+        if not organization:
+            raise PermissionDenied("You must belong to an organization to create records.")
         if profile and profile.role == UserProfile.ROLE_TENANT:
             if not profile.tenant_id:
                 raise ValidationError(
                     {"tenant": "Tenant users must be linked to a tenant record."}
                 )
-            serializer.save(tenant_id=profile.tenant_id)
+            serializer.save(
+                tenant_id=profile.tenant_id, organization=organization
+            )
             return
-        serializer.save()
+        serializer.save(organization=organization)
 
     def perform_update(self, serializer):
         profile = getattr(self.request.user, "profile", None)
+        organization = self.request.organization
+        if not organization:
+            raise PermissionDenied("You must belong to an organization to update records.")
         if profile and profile.role == UserProfile.ROLE_TENANT:
-            serializer.save(tenant_id=profile.tenant_id)
+            if not profile.tenant_id:
+                raise ValidationError(
+                    {"tenant": "Tenant users must be linked to a tenant record."}
+                )
+            serializer.save(
+                tenant_id=profile.tenant_id, organization=organization
+            )
             return
-        serializer.save()
+        serializer.save(organization=organization)
 
 
-class NotificationViewSet(viewsets.ModelViewSet):
+class NotificationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        queryset = super().get_queryset()
+        if not queryset:
+            return queryset
+        return queryset.filter(recipient=self.request.user)
 
     def partial_update(self, request, *args, **kwargs):
         notification = self.get_object()
@@ -186,20 +376,29 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return Response({"unread_count": count})
 
 
-class MessageViewSet(viewsets.ModelViewSet):
+class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_queryset(self):
-        queryset = Message.objects.filter(
+        queryset = super().get_queryset()
+        if not queryset:
+            return queryset
+        queryset = queryset.select_related("sender", "recipient", "parent").filter(
             Q(recipient=self.request.user) | Q(sender=self.request.user)
-        ).select_related("sender", "recipient", "parent")
+        )
         if self.action == "list":
             queryset = queryset.filter(recipient=self.request.user)
-        return queryset
+        return queryset.order_by("-created_at")
 
     def create(self, request, *args, **kwargs):
+        organization = self.request.organization
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         recipient_id = request.data.get("recipient")
         subject = (request.data.get("subject") or "").strip()
         body = (request.data.get("body") or "").strip()
@@ -225,26 +424,45 @@ class MessageViewSet(viewsets.ModelViewSet):
                 {"recipient": "Recipient not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        organization = self.request.organization
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        recipient_profile = getattr(recipient, "profile", None)
+        if not recipient_profile or recipient_profile.organization_id != organization.id:
+            return Response(
+                {"recipient": "Recipient must be in your organization."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         message = Message.objects.create(
             sender=request.user,
             recipient=recipient,
             subject=subject,
             body=body,
+            organization=organization,
         )
-        return Response(
-            self.get_serializer(message).data, status=status.HTTP_201_CREATED
-        )
+        return Response(self.get_serializer(message).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="sent")
     def sent(self, request):
-        queryset = Message.objects.filter(sender=request.user).select_related(
-            "sender", "recipient", "parent"
-        )
+        queryset = Message.objects.filter(
+            sender=request.user,
+            organization=request.organization,
+        ).select_related("sender", "recipient", "parent")
         return Response(self.get_serializer(queryset, many=True).data)
 
     @action(detail=False, methods=["get"], url_path="users")
     def users(self, request):
-        queryset = User.objects.all().order_by("username")
+        organization = self.request.organization
+        if not organization:
+            return Response([])
+        queryset = User.objects.filter(
+            profile__organization=organization,
+        ).order_by("username")
         return Response(UserSummarySerializer(queryset, many=True).data)
 
     @action(detail=True, methods=["patch"], url_path="mark-read")
@@ -257,10 +475,15 @@ class MessageViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="reply")
     def reply(self, request, pk=None):
         original = self.get_object()
+        organization = self.request.organization
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         body = (request.data.get("body") or "").strip()
         subject = (
-            request.data.get("subject")
-            or f"Re: {original.subject}"
+            request.data.get("subject") or f"Re: {original.subject}"
         ).strip()
         if not body:
             return Response(
@@ -274,12 +497,14 @@ class MessageViewSet(viewsets.ModelViewSet):
             recipient = original.sender
 
         root_parent = original.parent or original
+
         reply_message = Message.objects.create(
             sender=request.user,
             recipient=recipient,
             subject=subject,
             body=body,
             parent=root_parent,
+            organization=organization,
         )
         return Response(
             self.get_serializer(reply_message).data,
@@ -287,13 +512,19 @@ class MessageViewSet(viewsets.ModelViewSet):
         )
 
 
-class ScreeningRequestViewSet(viewsets.ModelViewSet):
+class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = ScreeningRequest.objects.select_related("tenant", "requested_by")
     serializer_class = ScreeningRequestSerializer
     permission_classes = [IsLandlord]
     http_method_names = ["get", "post", "head", "options"]
 
     def create(self, request, *args, **kwargs):
+        organization = self.request.organization
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         tenant_id = request.data.get("tenant")
         if not tenant_id:
             return Response(
@@ -301,15 +532,20 @@ class ScreeningRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            tenant = Tenant.objects.get(id=tenant_id)
+            tenant = Tenant.objects.get(
+                id=tenant_id,
+                organization=request.organization,
+            )
         except Tenant.DoesNotExist:
             return Response(
                 {"tenant": "Tenant not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
         screening = ScreeningRequest.objects.create(
             tenant=tenant,
             requested_by=request.user,
+            organization=organization,
             status=ScreeningRequest.STATUS_PENDING,
             notes=(request.data.get("notes") or "").strip(),
         )
@@ -333,7 +569,6 @@ class ScreeningRequestViewSet(viewsets.ModelViewSet):
             credit_rating = ScreeningRequest.CREDIT_RATING_FAIR
         else:
             credit_rating = ScreeningRequest.CREDIT_RATING_POOR
-
         background_check = random.choices(
             [
                 ScreeningRequest.BACKGROUND_CLEAR,
@@ -395,23 +630,27 @@ class ScreeningRequestViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(screening).data)
 
 
-class DocumentViewSet(viewsets.ModelViewSet):
+class DocumentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Document.objects.select_related(
         "uploaded_by", "property", "unit", "tenant", "lease"
     )
     serializer_class = DocumentSerializer
 
     def get_queryset(self):
-        queryset = Document.objects.select_related(
-            "uploaded_by", "property", "unit", "tenant", "lease"
-        )
+        queryset = super().get_queryset()
+        if not queryset:
+            return queryset
+
         profile = getattr(self.request.user, "profile", None)
         if profile and profile.role == UserProfile.ROLE_TENANT:
             tenant_id = profile.tenant_id
             lease_ids = []
             if tenant_id:
                 lease_ids = list(
-                    Lease.objects.filter(tenant_id=tenant_id).values_list("id", flat=True)
+                    Lease.objects.filter(
+                        tenant_id=tenant_id,
+                        organization=self.request.organization,
+                    ).values_list("id", flat=True)
                 )
             queryset = queryset.filter(
                 Q(tenant_id=tenant_id) | Q(lease_id__in=lease_ids)
@@ -448,6 +687,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return [IsLandlord()]
         return [IsAuthenticated()]
 
+    def perform_create(self, serializer):
+        organization = self.request.organization
+        if not organization:
+            raise PermissionDenied("You must belong to an organization to create records.")
+        serializer.save(organization=organization)
+
     @action(detail=True, methods=["get"], url_path="download")
     def download(self, request, pk=None):
         document = self.get_object()
@@ -459,13 +704,13 @@ class DocumentViewSet(viewsets.ModelViewSet):
         )
 
 
-class ExpenseViewSet(viewsets.ModelViewSet):
+class ExpenseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Expense.objects.select_related("property", "unit", "receipt", "created_by")
     serializer_class = ExpenseSerializer
     permission_classes = [IsLandlord]
 
     def get_queryset(self):
-        queryset = Expense.objects.select_related("property", "unit", "receipt", "created_by")
+        queryset = super().get_queryset()
         params = self.request.query_params
         property_id = params.get("property_id")
         category = params.get("category")
@@ -482,16 +727,19 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        organization = self.request.organization
+        if not organization:
+            raise PermissionDenied("You must belong to an organization to create records.")
+        serializer.save(created_by=self.request.user, organization=organization)
 
 
-class RentLedgerEntryViewSet(viewsets.ReadOnlyModelViewSet):
+class RentLedgerEntryViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyModelViewSet):
     queryset = RentLedgerEntry.objects.select_related("lease", "payment")
     serializer_class = RentLedgerEntrySerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = RentLedgerEntry.objects.select_related("lease", "payment")
+        queryset = super().get_queryset()
         profile = getattr(self.request.user, "profile", None)
         if profile and profile.role == UserProfile.ROLE_TENANT:
             if profile.tenant_id:
@@ -504,7 +752,7 @@ class RentLedgerEntryViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class LateFeeRuleViewSet(viewsets.ModelViewSet):
+class LateFeeRuleViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = LateFeeRule.objects.select_related("property")
     serializer_class = LateFeeRuleSerializer
     permission_classes = [IsLandlord]
@@ -519,7 +767,14 @@ class GenerateChargesView(APIView):
         charges_created = 0
         late_fees_created = 0
 
-        for lease in Lease.objects.filter(is_active=True).select_related("unit", "unit__property"):
+        organization = request.organization
+        for lease in (
+            Lease.objects.filter(
+                is_active=True,
+                organization=organization,
+            )
+            .select_related("unit", "unit__property")
+        ):
             charge_description = f"{month_label} Rent"
             existing_charge = RentLedgerEntry.objects.filter(
                 lease=lease,
@@ -531,6 +786,7 @@ class GenerateChargesView(APIView):
             if not existing_charge:
                 RentLedgerEntry.objects.create(
                     lease=lease,
+                    organization=organization,
                     entry_type=RentLedgerEntry.TYPE_CHARGE,
                     description=charge_description,
                     amount=lease.monthly_rent,
@@ -542,6 +798,7 @@ class GenerateChargesView(APIView):
             rule = (
                 LateFeeRule.objects.filter(
                     property=lease.unit.property,
+                    organization=organization,
                     is_active=True,
                 )
                 .order_by("-created_at")
@@ -560,6 +817,7 @@ class GenerateChargesView(APIView):
                 Payment.objects.filter(
                     lease=lease,
                     status=Payment.STATUS_COMPLETED,
+                    organization=organization,
                     payment_date__year=today.year,
                     payment_date__month=today.month,
                 ).aggregate(total=Sum("amount"))["total"]
@@ -580,12 +838,15 @@ class GenerateChargesView(APIView):
             if rule.fee_type == LateFeeRule.TYPE_FLAT:
                 late_fee_amount = Decimal(rule.fee_amount)
             else:
-                late_fee_amount = (Decimal(lease.monthly_rent) * Decimal(rule.fee_amount)) / Decimal("100")
+                late_fee_amount = (Decimal(lease.monthly_rent) * Decimal(rule.fee_amount)) / Decimal(
+                    "100"
+                )
             if rule.max_fee is not None:
                 late_fee_amount = min(late_fee_amount, Decimal(rule.max_fee))
 
             RentLedgerEntry.objects.create(
                 lease=lease,
+                organization=organization,
                 entry_type=RentLedgerEntry.TYPE_LATE_FEE,
                 description=f"{month_label} Late Fee",
                 amount=late_fee_amount,
@@ -594,9 +855,10 @@ class GenerateChargesView(APIView):
             )
             late_fees_created += 1
 
-        from .signals import recalculate_lease_balances  # local import avoids circular loading
-
-        for lease_id in Lease.objects.filter(is_active=True).values_list("id", flat=True):
+        for lease_id in Lease.objects.filter(
+            organization=organization,
+            is_active=True,
+        ).values_list("id", flat=True):
             recalculate_lease_balances(lease_id)
 
         return Response(
@@ -619,16 +881,21 @@ class AccountingReportsView(APIView):
 
         start_date = self._parse_date(date_from) or date(today.year, 1, 1)
         end_date = self._parse_date(date_to) or today
+        org = request.organization
 
         payments = Payment.objects.filter(
+            organization=org,
             status=Payment.STATUS_COMPLETED,
             payment_date__gte=start_date,
             payment_date__lte=end_date,
         ).select_related("lease__unit__property")
         expenses = Expense.objects.filter(
-            date__gte=start_date, date__lte=end_date
+            organization=org,
+            date__gte=start_date,
+            date__lte=end_date,
         ).select_related("property")
         charges = RentLedgerEntry.objects.filter(
+            organization=org,
             entry_type__in=[RentLedgerEntry.TYPE_CHARGE, RentLedgerEntry.TYPE_LATE_FEE],
             date__gte=start_date,
             date__lte=end_date,
@@ -648,13 +915,21 @@ class AccountingReportsView(APIView):
             key = payment.payment_date.strftime("%Y-%m")
             label = payment.payment_date.strftime("%b %Y")
             if key not in income_by_month_map:
-                income_by_month_map[key] = {"month": label, "income": Decimal("0.00"), "expenses": Decimal("0.00")}
+                income_by_month_map[key] = {
+                    "month": label,
+                    "income": Decimal("0.00"),
+                    "expenses": Decimal("0.00"),
+                }
             income_by_month_map[key]["income"] += payment.amount
         for expense in expenses:
             key = expense.date.strftime("%Y-%m")
             label = expense.date.strftime("%b %Y")
             if key not in income_by_month_map:
-                income_by_month_map[key] = {"month": label, "income": Decimal("0.00"), "expenses": Decimal("0.00")}
+                income_by_month_map[key] = {
+                    "month": label,
+                    "income": Decimal("0.00"),
+                    "expenses": Decimal("0.00"),
+                }
             income_by_month_map[key]["expenses"] += expense.amount
 
         income_by_month = [
@@ -663,7 +938,7 @@ class AccountingReportsView(APIView):
                 "income": float(v["income"]),
                 "expenses": float(v["expenses"]),
             }
-            for _, v in sorted(income_by_month_map.items(), key=lambda x: x[0])
+            for _, v in sorted(income_by_month_map.items(), key=lambda item: item[0])
         ]
 
         category_totals = {}
@@ -708,6 +983,17 @@ class MeView(APIView):
 
     def get(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        organization = profile.organization
+        organization_payload = None
+        if organization:
+            organization_payload = {
+                "id": organization.id,
+                "name": organization.name,
+                "slug": organization.slug,
+                "plan": organization.plan,
+                "max_units": organization.max_units,
+            }
+
         return Response(
             {
                 "id": request.user.id,
@@ -717,6 +1003,8 @@ class MeView(APIView):
                 "last_name": request.user.last_name,
                 "role": profile.role,
                 "tenant_id": profile.tenant_id,
+                "is_org_admin": profile.is_org_admin,
+                "organization": organization_payload,
             }
         )
 
@@ -768,6 +1056,9 @@ class RegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        owner_label = first_name.strip() or last_name.strip() or username
+        org_name = f"{owner_label}'s Properties"
+
         try:
             user = User.objects.create_user(
                 username=username,
@@ -779,12 +1070,37 @@ class RegisterView(APIView):
             profile, _ = UserProfile.objects.get_or_create(user=user)
             profile.role = role
             profile.tenant = tenant
-            profile.save(update_fields=["role", "tenant", "updated_at"])
+            profile.is_org_admin = role == UserProfile.ROLE_LANDLORD
+
+            if role == UserProfile.ROLE_LANDLORD:
+                organization = Organization.objects.filter(owner=user).first()
+                if not organization:
+                    organization = Organization.objects.create(name=org_name, owner=user)
+                elif organization.owner_id != user.id:
+                    organization.owner = user
+                    organization.save(update_fields=["owner"])
+                profile.organization = organization
+            else:
+                profile.organization = None
+
+            profile.save(
+                update_fields=["role", "tenant", "is_org_admin", "organization", "updated_at"]
+            )
         except IntegrityError:
             return Response(
                 {"detail": "Unable to create user with provided details."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        organization_payload = None
+        if profile.organization_id:
+            organization_payload = {
+                "id": profile.organization.id,
+                "name": profile.organization.name,
+                "slug": profile.organization.slug,
+                "plan": profile.organization.plan,
+                "max_units": profile.organization.max_units,
+            }
 
         return Response(
             {
@@ -795,6 +1111,8 @@ class RegisterView(APIView):
                 "last_name": user.last_name,
                 "role": profile.role,
                 "tenant_id": profile.tenant_id,
+                "is_org_admin": profile.is_org_admin,
+                "organization": organization_payload,
             },
             status=status.HTTP_201_CREATED,
         )
