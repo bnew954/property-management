@@ -18,6 +18,9 @@ import PropertyDetail from "./pages/PropertyDetail";
 import PropertyForm from "./pages/PropertyForm";
 import PropertyList from "./pages/PropertyList";
 import Register from "./pages/Register";
+import ScreeningDetail from "./pages/ScreeningDetail";
+import ScreeningList from "./pages/ScreeningList";
+import ScreeningRequest from "./pages/ScreeningRequest";
 import TenantForm from "./pages/TenantForm";
 import TenantList from "./pages/TenantList";
 import UnitForm from "./pages/UnitForm";
@@ -149,6 +152,9 @@ function App() {
               <Route path="/tenants" element={<TenantList />} />
               <Route path="/tenants/new" element={<TenantForm />} />
               <Route path="/tenants/:id/edit" element={<TenantForm />} />
+              <Route path="/screenings" element={<ScreeningList />} />
+              <Route path="/screenings/new" element={<ScreeningRequest />} />
+              <Route path="/screenings/:id" element={<ScreeningDetail />} />
               <Route path="/leases" element={<LeaseList />} />
               <Route path="/leases/new" element={<LeaseForm />} />
               <Route path="/leases/:id/edit" element={<LeaseForm />} />

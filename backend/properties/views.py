@@ -1,4 +1,6 @@
 from datetime import timedelta
+from decimal import Decimal
+import random
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError
@@ -18,6 +20,7 @@ from .models import (
     Notification,
     Payment,
     Property,
+    ScreeningRequest,
     Tenant,
     Unit,
     UserProfile,
@@ -30,6 +33,7 @@ from .serializers import (
     NotificationSerializer,
     PaymentSerializer,
     PropertySerializer,
+    ScreeningRequestSerializer,
     TenantSerializer,
     UserSummarySerializer,
     UnitSerializer,
@@ -272,6 +276,114 @@ class MessageViewSet(viewsets.ModelViewSet):
             self.get_serializer(reply_message).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class ScreeningRequestViewSet(viewsets.ModelViewSet):
+    queryset = ScreeningRequest.objects.select_related("tenant", "requested_by")
+    serializer_class = ScreeningRequestSerializer
+    permission_classes = [IsLandlord]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def create(self, request, *args, **kwargs):
+        tenant_id = request.data.get("tenant")
+        if not tenant_id:
+            return Response(
+                {"tenant": "Tenant is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response(
+                {"tenant": "Tenant not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        screening = ScreeningRequest.objects.create(
+            tenant=tenant,
+            requested_by=request.user,
+            status=ScreeningRequest.STATUS_PENDING,
+            notes=(request.data.get("notes") or "").strip(),
+        )
+        return Response(
+            self.get_serializer(screening).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="run-screening")
+    def run_screening(self, request, pk=None):
+        screening = self.get_object()
+        screening.status = ScreeningRequest.STATUS_PROCESSING
+        screening.save(update_fields=["status", "updated_at"])
+
+        credit_score = random.randint(550, 800)
+        if credit_score >= 740:
+            credit_rating = ScreeningRequest.CREDIT_RATING_EXCELLENT
+        elif credit_score >= 670:
+            credit_rating = ScreeningRequest.CREDIT_RATING_GOOD
+        elif credit_score >= 580:
+            credit_rating = ScreeningRequest.CREDIT_RATING_FAIR
+        else:
+            credit_rating = ScreeningRequest.CREDIT_RATING_POOR
+
+        background_check = random.choices(
+            [
+                ScreeningRequest.BACKGROUND_CLEAR,
+                ScreeningRequest.BACKGROUND_REVIEW_NEEDED,
+                ScreeningRequest.BACKGROUND_FLAGGED,
+            ],
+            weights=[0.7, 0.2, 0.1],
+            k=1,
+        )[0]
+        eviction_history = random.choices(
+            [
+                ScreeningRequest.EVICTION_NONE_FOUND,
+                ScreeningRequest.EVICTION_RECORDS_FOUND,
+            ],
+            weights=[0.84, 0.16],
+            k=1,
+        )[0]
+        income_verified = random.choices([True, False], weights=[0.88, 0.12], k=1)[0]
+        monthly_income = Decimal(random.randint(2800, 12500))
+
+        if (
+            credit_score > 670
+            and background_check == ScreeningRequest.BACKGROUND_CLEAR
+            and eviction_history == ScreeningRequest.EVICTION_NONE_FOUND
+        ):
+            recommendation = ScreeningRequest.RECOMMENDATION_APPROVED
+        elif (
+            credit_score < 580
+            or eviction_history == ScreeningRequest.EVICTION_RECORDS_FOUND
+        ):
+            recommendation = ScreeningRequest.RECOMMENDATION_DENIED
+        else:
+            recommendation = ScreeningRequest.RECOMMENDATION_CONDITIONAL
+
+        screening.status = ScreeningRequest.STATUS_COMPLETED
+        screening.credit_score = credit_score
+        screening.credit_rating = credit_rating
+        screening.background_check = background_check
+        screening.eviction_history = eviction_history
+        screening.income_verified = income_verified
+        screening.monthly_income = monthly_income
+        screening.recommendation = recommendation
+        screening.notes = (
+            "Automated screening simulation completed. "
+            f"Recommendation: {recommendation.replace('_', ' ')}."
+        )
+        screening.report_data = {
+            "provider": "mock_screening_engine",
+            "run_timestamp": timezone.now().isoformat(),
+            "credit_score": credit_score,
+            "credit_rating": credit_rating,
+            "background_check": background_check,
+            "eviction_history": eviction_history,
+            "income_verified": income_verified,
+            "monthly_income": str(monthly_income),
+            "recommendation": recommendation,
+        }
+        screening.save()
+        return Response(self.get_serializer(screening).data)
 
 
 class MeView(APIView):

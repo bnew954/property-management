@@ -253,3 +253,89 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.subject} ({self.sender.username} -> {self.recipient.username})"
+
+
+class ScreeningRequest(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_PROCESSING = "processing"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PROCESSING, "Processing"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    CREDIT_RATING_EXCELLENT = "excellent"
+    CREDIT_RATING_GOOD = "good"
+    CREDIT_RATING_FAIR = "fair"
+    CREDIT_RATING_POOR = "poor"
+    CREDIT_RATING_CHOICES = [
+        (CREDIT_RATING_EXCELLENT, "Excellent"),
+        (CREDIT_RATING_GOOD, "Good"),
+        (CREDIT_RATING_FAIR, "Fair"),
+        (CREDIT_RATING_POOR, "Poor"),
+    ]
+
+    BACKGROUND_CLEAR = "clear"
+    BACKGROUND_FLAGGED = "flagged"
+    BACKGROUND_REVIEW_NEEDED = "review_needed"
+    BACKGROUND_CHOICES = [
+        (BACKGROUND_CLEAR, "Clear"),
+        (BACKGROUND_FLAGGED, "Flagged"),
+        (BACKGROUND_REVIEW_NEEDED, "Review Needed"),
+    ]
+
+    EVICTION_NONE_FOUND = "none_found"
+    EVICTION_RECORDS_FOUND = "records_found"
+    EVICTION_CHOICES = [
+        (EVICTION_NONE_FOUND, "None Found"),
+        (EVICTION_RECORDS_FOUND, "Records Found"),
+    ]
+
+    RECOMMENDATION_APPROVED = "approved"
+    RECOMMENDATION_CONDITIONAL = "conditional"
+    RECOMMENDATION_DENIED = "denied"
+    RECOMMENDATION_CHOICES = [
+        (RECOMMENDATION_APPROVED, "Approved"),
+        (RECOMMENDATION_CONDITIONAL, "Conditional"),
+        (RECOMMENDATION_DENIED, "Denied"),
+    ]
+
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="screenings"
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="screening_requests"
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
+    credit_score = models.IntegerField(null=True, blank=True)
+    credit_rating = models.CharField(
+        max_length=20, choices=CREDIT_RATING_CHOICES, null=True, blank=True
+    )
+    background_check = models.CharField(
+        max_length=20, choices=BACKGROUND_CHOICES, null=True, blank=True
+    )
+    eviction_history = models.CharField(
+        max_length=20, choices=EVICTION_CHOICES, null=True, blank=True
+    )
+    income_verified = models.BooleanField(null=True)
+    monthly_income = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    recommendation = models.CharField(
+        max_length=20, choices=RECOMMENDATION_CHOICES, null=True, blank=True
+    )
+    notes = models.TextField(blank=True)
+    report_data = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Screening #{self.id} for {self.tenant}"

@@ -8,6 +8,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import {
   Avatar,
   Box,
@@ -35,6 +36,7 @@ const navItems = [
   { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
   { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
+  { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
   { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
   { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
@@ -59,6 +61,7 @@ function Layout({ children }) {
     if (location.pathname === "/") return "Dashboard";
     if (location.pathname.startsWith("/properties")) return "Properties";
     if (location.pathname.startsWith("/tenants")) return "Tenants";
+    if (location.pathname.startsWith("/screenings")) return "Screening";
     if (location.pathname.startsWith("/leases")) return "Leases";
     if (location.pathname.startsWith("/payments")) return "Payments";
     if (location.pathname.startsWith("/pay-rent")) return "Pay Rent";

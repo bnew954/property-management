@@ -15,6 +15,7 @@ from .views import (
     PaymentViewSet,
     PropertyViewSet,
     RegisterView,
+    ScreeningRequestViewSet,
     TenantViewSet,
     UnitViewSet,
 )
@@ -27,6 +28,7 @@ router.register("leases", LeaseViewSet, basename="lease")
 router.register("payments", PaymentViewSet, basename="payment")
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("messages", MessageViewSet, basename="message")
+router.register("screenings", ScreeningRequestViewSet, basename="screening")
 router.register(
     "maintenance-requests",
     MaintenanceRequestViewSet,

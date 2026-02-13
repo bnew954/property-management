@@ -101,6 +101,10 @@ export const getLease = (id) => api.get(`leases/${id}/`);
 export const createLease = (data) => api.post("leases/", data);
 export const updateLease = (id, data) => api.put(`leases/${id}/`, data);
 export const deleteLease = (id) => api.delete(`leases/${id}/`);
+export const getScreenings = () => api.get("screenings/");
+export const getScreening = (id) => api.get(`screenings/${id}/`);
+export const createScreening = (data) => api.post("screenings/", data);
+export const runScreening = (id) => api.post(`screenings/${id}/run-screening/`);
 
 export const getPayments = () => api.get("payments/");
 export const getPayment = (id) => api.get(`payments/${id}/`);

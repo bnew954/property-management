@@ -8,6 +8,7 @@ from .models import (
     Notification,
     Payment,
     Property,
+    ScreeningRequest,
     Tenant,
     Unit,
 )
@@ -77,4 +78,13 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
+        fields = "__all__"
+
+
+class ScreeningRequestSerializer(serializers.ModelSerializer):
+    tenant_detail = TenantSerializer(source="tenant", read_only=True)
+    requested_by_detail = UserSummarySerializer(source="requested_by", read_only=True)
+
+    class Meta:
+        model = ScreeningRequest
         fields = "__all__"
