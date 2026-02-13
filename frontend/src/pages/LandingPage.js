@@ -260,6 +260,44 @@ function LandingPage() {
   const sectionRefs = useRef({});
   const materialTheme = useMuiTheme();
   const isMobile = useMediaQuery(materialTheme.breakpoints.down("md"));
+  const heroParticles = useMemo(() => {
+    const ambientCount = 40;
+    const logoClusterCount = 15;
+
+    const ambientParticles = Array.from({ length: ambientCount }, () => {
+      const isLarge = Math.random() < 0.2;
+      const size = isLarge ? Math.floor(Math.random() * 2) + 3 : Math.floor(Math.random() * 2) + 2;
+      return {
+        left: `${(Math.random() * 90 + 5).toFixed(2)}%`,
+        top: `${(Math.random() * 50 + 60).toFixed(2)}%`,
+        size,
+        drift: `${(Math.random() * 40 - 20).toFixed(2)}px`,
+        duration: `${(Math.random() * 8 + 6).toFixed(2)}s`,
+        delay: `${(Math.random() * 6).toFixed(2)}s`,
+        color: isLarge
+          ? "rgba(124, 92, 252, 0.25)"
+          : "rgba(124, 92, 252, 0.3)",
+      };
+    });
+
+    const logoClusterParticles = Array.from({ length: logoClusterCount }, () => {
+      const isLarge = Math.random() < 0.15;
+      const size = isLarge ? 4 : Math.floor(Math.random() * 3) + 1;
+      return {
+        left: `${(Math.random() * 30 + 35).toFixed(2)}%`,
+        top: `${(Math.random() * 30 + 20).toFixed(2)}%`,
+        size,
+        drift: `${(Math.random() * 20 - 10).toFixed(2)}px`,
+        duration: `${(Math.random() * 8 + 6).toFixed(2)}s`,
+        delay: `${(Math.random() * 6).toFixed(2)}s`,
+        color: isLarge
+          ? "rgba(124, 92, 252, 0.25)"
+          : "rgba(124, 92, 252, 0.6)",
+      };
+    });
+
+    return [...ambientParticles, ...logoClusterParticles];
+  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -298,18 +336,33 @@ function LandingPage() {
   );
 
   return (
-    <Box
-      sx={{
-        bgcolor: "#0a0a0a",
-        color: "#e5e7eb",
-        fontFamily: "Inter, Roboto, sans-serif",
-        backgroundImage: "radial-gradient(ellipse at 50% 0%, rgba(124,92,252,0.08) 0%, transparent 70%)",
-        "@keyframes onyxFloat": {
-          "0%,100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-10px)" },
-        },
-      }}
-    >
+      <Box
+        sx={{
+          bgcolor: "#0a0a0a",
+          color: "#e5e7eb",
+          fontFamily: "Inter, Roboto, sans-serif",
+          "@keyframes onyxFloat": {
+            "0%,100%": { transform: "translateY(0px)" },
+            "50%": { transform: "translateY(-10px)" },
+          },
+          "@keyframes breatheGlow": {
+            "0%,100%": { filter: "drop-shadow(0 0 20px rgba(124,92,252,0.3))" },
+            "50%": { filter: "drop-shadow(0 0 40px rgba(124,92,252,0.6)) drop-shadow(0 0 80px rgba(124,92,252,0.2))" },
+          },
+          "@keyframes subtleFloat": {
+            "0%,100%": { transform: "translateY(0px)" },
+            "50%": { transform: "translateY(-5px)" },
+          },
+        }}
+      >
+        <style>{`
+          @keyframes floatUp {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-500px) translateX(var(--drift)); opacity: 0; }
+          }
+        `}</style>
       <AppBar
         position="fixed"
         elevation={0}
@@ -398,6 +451,7 @@ function LandingPage() {
             visibleSections={visibleSections}
             ref={registerSection("hero")}
             sx={{
+              position: "relative",
               minHeight: "calc(100vh - 96px)",
               pt: { xs: 4, md: 0 },
               pb: 8,
@@ -406,18 +460,64 @@ function LandingPage() {
               justifyItems: "center",
             }}
           >
-            <Box sx={{ textAlign: "center", maxWidth: 980 }}>
-              <Box sx={{ mb: 1.5, display: "flex", justifyContent: "center" }}>
-                <img
-                  src={`${process.env.PUBLIC_URL || ""}/logo-icon.png`}
-                  alt="Onyx PM"
-                  style={{
-                    height: 48,
-                    background: "transparent",
-                    filter: "brightness(1.1)",
-                    mixBlendMode: "screen",
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                overflow: "hidden",
+                minHeight: "100%",
+                pointerEvents: "none",
+                zIndex: 0,
+                willChange: "transform, opacity",
+              }}
+            >
+              {heroParticles.map((particle, index) => (
+                <Box
+                  key={`hero-particle-${index}`}
+                  sx={{
+                    position: "absolute",
+                    left: particle.left,
+                    top: particle.top,
+                    width: `${particle.size}px`,
+                    height: `${particle.size}px`,
+                    borderRadius: "50%",
+                    backgroundColor: particle.color,
+                    transform: "translate(0, 0)",
+                    animation: `floatUp ${particle.duration} linear infinite`,
+                    animationDelay: particle.delay,
+                    animationFillMode: "both",
+                    "--drift": particle.drift,
+                    willChange: "transform, opacity",
                   }}
                 />
+              ))}
+            </Box>
+            <Box sx={{ textAlign: "center", maxWidth: 980, position: "relative", zIndex: 1 }}>
+              <Box sx={{ mb: 1.5, display: "flex", justifyContent: "center", position: "relative", zIndex: 1 }}>
+                <Box
+                  sx={{
+                    position: "relative",
+                    display: "inline-block",
+                    textAlign: "center",
+                  }}
+                >
+                  <img
+                    src={`${process.env.PUBLIC_URL || ""}/logo-icon.png`}
+                    alt="Onyx PM"
+                    style={{
+                      height: 48,
+                      width: "auto",
+                      display: "block",
+                      position: "relative",
+                      zIndex: 2,
+                      background: "transparent",
+                      margin: "0 auto",
+                      mixBlendMode: "screen",
+                      animation: "breatheGlow 3.4s ease-in-out infinite, subtleFloat 6.2s ease-in-out infinite",
+                      willChange: "transform, opacity, filter",
+                    }}
+                  />
+                </Box>
               </Box>
               <Typography
                 sx={{
@@ -447,7 +547,7 @@ function LandingPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Get Started {"\u2014"} It's Free
+                  Get Started - It's Free
                 </Button>
                 <Button
                   size="medium"
@@ -477,7 +577,6 @@ function LandingPage() {
                 overflow: "hidden",
                 background: "#141414",
                 p: { xs: 1.5, md: 2.4 },
-                boxShadow: "0 0 120px rgba(124,92,252,0.12)",
                 transform: "perspective(2000px) rotateX(2deg)",
                 animation: "onyxFloat 7s ease-in-out infinite",
               }}
@@ -567,12 +666,6 @@ function LandingPage() {
               </Box>
             </Box>
           </SectionFadeIn>
-
-          <Box sx={{ mt: 4, mb: 8 }}>
-            <Typography sx={{ textAlign: "center", color: "#6b7280", fontSize: 14 }}>
-              Built for landlords with 1 unit or 1,000
-            </Typography>
-          </Box>
         </Container>
       </Box>
 
