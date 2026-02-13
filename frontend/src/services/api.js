@@ -178,6 +178,7 @@ export const getUnreadNotificationsCount = () =>
 export const getInboxMessages = () => api.get("messages/");
 export const getSentMessages = () => api.get("messages/sent/");
 export const getMessageRecipients = () => api.get("messages/users/");
+export const getOrganizationUsers = () => api.get("organization/users/");
 export const sendMessage = (data) => api.post("messages/", data);
 export const markMessageRead = (id) => api.patch(`messages/${id}/mark-read/`);
 export const replyMessage = (id, data) => api.post(`messages/${id}/reply/`, data);

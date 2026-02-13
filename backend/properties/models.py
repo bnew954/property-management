@@ -103,7 +103,7 @@ class Unit(models.Model):
 class Tenant(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    email = models.EmailField(unique=True)
+    email = models.EmailField()
     phone = models.CharField(max_length=30)
     date_of_birth = models.DateField(blank=True, null=True)
     organization = models.ForeignKey(
@@ -118,6 +118,7 @@ class Tenant(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        unique_together = ["organization", "email"]
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"

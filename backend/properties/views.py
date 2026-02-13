@@ -183,6 +183,31 @@ class OrganizationMembersView(APIView):
         return Response(payload)
 
 
+class OrganizationUsersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = getattr(request.user, "profile", None)
+        organization = getattr(profile, "organization", None)
+        if not organization:
+            return Response(
+                [],
+                status=status.HTTP_200_OK,
+            )
+        users = User.objects.filter(profile__organization=organization).order_by("username")
+        payload = [
+            {
+                "id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email": user.email,
+            }
+            for user in users
+        ]
+        return Response(payload)
+
+
 class OrganizationInvitationsView(APIView):
     permission_classes = [IsAuthenticated, IsOrgAdmin]
 

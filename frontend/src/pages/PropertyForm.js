@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   FormControl,
+  FormHelperText,
   InputLabel,
   MenuItem,
   Paper,
@@ -39,6 +40,24 @@ function PropertyForm() {
     message: "",
     severity: "success",
   });
+
+  const parseApiErrors = (error) => {
+    const detail = error?.response?.data;
+    if (!detail || typeof detail !== "object") {
+      return { __all__: "Unable to save property." };
+    }
+    const fieldErrors = {};
+    Object.entries(detail).forEach(([key, value]) => {
+      if (typeof value === "string") {
+        fieldErrors[key] = value;
+      } else if (Array.isArray(value)) {
+        fieldErrors[key] = value.join(" ");
+      } else if (typeof value === "object") {
+        fieldErrors[key] = JSON.stringify(value);
+      }
+    });
+    return Object.keys(fieldErrors).length > 0 ? fieldErrors : { __all__: "Unable to save property." };
+  };
 
   useEffect(() => {
     if (!isEditMode) {
@@ -124,9 +143,11 @@ function PropertyForm() {
         },
       });
     } catch (err) {
+      const fieldErrors = parseApiErrors(err);
+      setErrors((prev) => ({ ...prev, ...fieldErrors }));
       setSnackbar({
         open: true,
-        message: "Unable to save property.",
+        message: fieldErrors.__all__ || "Unable to save property.",
         severity: "error",
       });
     } finally {
@@ -174,6 +195,7 @@ function PropertyForm() {
                   <MenuItem value="residential">Residential</MenuItem>
                   <MenuItem value="commercial">Commercial</MenuItem>
                 </Select>
+                {errors.property_type ? <FormHelperText>{errors.property_type}</FormHelperText> : null}
               </FormControl>
             </Box>
             <Box sx={{ gridColumn: { xs: "1 / -1", md: "auto" } }}>

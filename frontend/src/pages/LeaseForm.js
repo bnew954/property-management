@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   FormControl,
+  FormHelperText,
   FormControlLabel,
   InputLabel,
   MenuItem,
@@ -50,6 +51,24 @@ function LeaseForm() {
     message: "",
     severity: "success",
   });
+
+  const parseApiErrors = (error) => {
+    const detail = error?.response?.data;
+    if (!detail || typeof detail !== "object") {
+      return { __all__: "Unable to save lease." };
+    }
+    const fieldErrors = {};
+    Object.entries(detail).forEach(([key, value]) => {
+      if (typeof value === "string") {
+        fieldErrors[key] = value;
+      } else if (Array.isArray(value)) {
+        fieldErrors[key] = value.join(" ");
+      } else if (typeof value === "object") {
+        fieldErrors[key] = JSON.stringify(value);
+      }
+    });
+    return Object.keys(fieldErrors).length > 0 ? fieldErrors : { __all__: "Unable to save lease." };
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -150,9 +169,11 @@ function LeaseForm() {
         },
       });
     } catch (err) {
+      const fieldErrors = parseApiErrors(err);
+      setErrors((prev) => ({ ...prev, ...fieldErrors }));
       setSnackbar({
         open: true,
-        message: "Unable to save lease.",
+        message: fieldErrors.__all__ || "Unable to save lease.",
         severity: "error",
       });
     } finally {
@@ -187,6 +208,7 @@ function LeaseForm() {
                     </MenuItem>
                   ))}
                 </Select>
+                {errors.unit ? <FormHelperText>{errors.unit}</FormHelperText> : null}
               </FormControl>
             </Box>
             <Box>
@@ -199,6 +221,7 @@ function LeaseForm() {
                     </MenuItem>
                   ))}
                 </Select>
+                {errors.tenant ? <FormHelperText>{errors.tenant}</FormHelperText> : null}
               </FormControl>
             </Box>
             <Box>

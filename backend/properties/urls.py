@@ -18,6 +18,7 @@ from .views import (
     OrganizationInviteView,
     OrganizationInvitationsView,
     OrganizationMembersView,
+    OrganizationUsersView,
     MessageViewSet,
     MeView,
     NotificationViewSet,
@@ -70,6 +71,7 @@ urlpatterns = [
     path("organization/", OrganizationDetailView.as_view(), name="organization-detail"),
     path("organization/invite/", OrganizationInviteView.as_view(), name="organization-invite"),
     path("organization/members/", OrganizationMembersView.as_view(), name="organization-members"),
+    path("organization/users/", OrganizationUsersView.as_view(), name="organization-users"),
     path(
         "organization/invitations/",
         OrganizationInvitationsView.as_view(),

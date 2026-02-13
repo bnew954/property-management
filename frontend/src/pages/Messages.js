@@ -19,7 +19,7 @@ import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getInboxMessages,
-  getMessageRecipients,
+  getOrganizationUsers,
   getSentMessages,
   markMessageRead,
   replyMessage,
@@ -93,7 +93,7 @@ function Messages() {
       const [inboxRes, sentRes, usersRes] = await Promise.all([
         getInboxMessages(),
         getSentMessages(),
-        getMessageRecipients(),
+        getOrganizationUsers(),
       ]);
       setInbox(normalizeMessageList(inboxRes.data));
       setSent(normalizeMessageList(sentRes.data));
