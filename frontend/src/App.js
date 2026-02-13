@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import MyLease from "./pages/MyLease";
 import PaymentForm from "./pages/PaymentForm";
 import PaymentsList from "./pages/PaymentsList";
+import PayRent from "./pages/PayRent";
 import PropertyDetail from "./pages/PropertyDetail";
 import PropertyForm from "./pages/PropertyForm";
 import PropertyList from "./pages/PropertyList";
@@ -153,6 +154,7 @@ function App() {
               <Route path="/payments" element={<PaymentsList />} />
               <Route path="/payments/new" element={<PaymentForm />} />
               <Route path="/payments/:id/edit" element={<PaymentForm />} />
+              <Route path="/pay-rent" element={<PayRent />} />
               <Route path="/my-lease" element={<MyLease />} />
               <Route path="/maintenance" element={<MaintenanceList />} />
               <Route path="/maintenance/new" element={<MaintenanceForm />} />

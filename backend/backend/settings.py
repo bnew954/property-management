@@ -138,3 +138,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
 }
+
+# In production, load Stripe keys from environment variables.
+STRIPE_SECRET_KEY = 'sk_test_placeholder'
+STRIPE_PUBLISHABLE_KEY = 'pk_test_placeholder'

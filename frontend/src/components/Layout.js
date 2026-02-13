@@ -1,6 +1,7 @@
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import BuildIcon from "@mui/icons-material/Build";
+import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DescriptionIcon from "@mui/icons-material/Description";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -28,6 +29,7 @@ const drawerWidth = 240;
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: <DashboardIcon /> },
+  { label: "Pay Rent", path: "/pay-rent", icon: <CreditCardIcon />, tenantOnly: true, accent: "green" },
   { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
   { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
@@ -44,9 +46,9 @@ function Layout({ children }) {
   const visibleNavItems =
     role === "tenant"
       ? navItems.filter((item) =>
-          ["/", "/my-lease", "/payments", "/maintenance"].includes(item.path)
+          ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance"].includes(item.path)
         )
-      : navItems.filter((item) => item.path !== "/my-lease");
+      : navItems.filter((item) => item.path !== "/my-lease" && item.path !== "/pay-rent");
 
   const isActive = (path) => {
     if (path === "/") {
@@ -101,6 +103,10 @@ function Layout({ children }) {
                       py: 0.75,
                       backgroundColor: active ? "rgba(124,92,252,0.1)" : "transparent",
                       boxShadow: active ? "inset 2px 0 0 #7c5cfc" : "none",
+                      border:
+                        item.accent === "green" && role === "tenant"
+                          ? "1px solid rgba(34,197,94,0.22)"
+                          : "1px solid transparent",
                       "&:hover": {
                         backgroundColor: "rgba(255,255,255,0.04)",
                         "& .MuiListItemIcon-root": { color: "#fff" },
@@ -108,7 +114,18 @@ function Layout({ children }) {
                       },
                     }}
                   >
-                    <ListItemIcon sx={{ color: active ? "#ffffff" : "#878C9E", minWidth: 32, "& svg": { fontSize: 18 } }}>
+                    <ListItemIcon
+                      sx={{
+                        color:
+                          active
+                            ? "#ffffff"
+                            : item.accent === "green" && role === "tenant"
+                              ? "rgba(34,197,94,0.9)"
+                              : "#878C9E",
+                        minWidth: 32,
+                        "& svg": { fontSize: 18 },
+                      }}
+                    >
                       {item.icon}
                     </ListItemIcon>
                     <ListItemText
@@ -116,7 +133,12 @@ function Layout({ children }) {
                       primaryTypographyProps={{
                         fontSize: 13,
                         fontWeight: 400,
-                        color: active ? "#ffffff" : "#878C9E",
+                        color:
+                          active
+                            ? "#ffffff"
+                            : item.accent === "green" && role === "tenant"
+                              ? "rgba(187,247,208,0.95)"
+                              : "#878C9E",
                       }}
                     />
                   </ListItemButton>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import BuildIcon from "@mui/icons-material/Build";
+import CreditCardIcon from "@mui/icons-material/CreditCard";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
@@ -49,6 +50,7 @@ function Dashboard() {
     { name: "Vacant", value: 0, color: "#2a2a2a" },
   ]);
   const [maintenanceStatusData, setMaintenanceStatusData] = useState([]);
+  const [tenantAmountDue, setTenantAmountDue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -77,6 +79,9 @@ function Dashboard() {
             const nestedId = item.tenant_detail?.id ?? item.tenant;
             return !tenantId || nestedId === tenantId;
           });
+          const activeLease = leaseItems
+            .filter((item) => item.is_active)
+            .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))[0];
 
           setCounts((prev) => ({
             ...prev,
@@ -84,6 +89,7 @@ function Dashboard() {
             myMaintenance: maintenanceItems.length,
             myLeaseInfo: leaseItems.filter((item) => item.is_active).length,
           }));
+          setTenantAmountDue(activeLease ? Number(activeLease.monthly_rent || 0) : null);
         } else {
           const [propertiesRes, unitsRes, tenantsRes, leasesRes, maintenanceRes, paymentsRes] = await Promise.all([
             getProperties(),
@@ -181,6 +187,7 @@ function Dashboard() {
               total: Number(monthBuckets.get(month.key) || 0),
             }))
           );
+          setTenantAmountDue(null);
         }
       } catch (err) {
         setError("Unable to load dashboard data.");
@@ -259,6 +266,42 @@ function Dashboard() {
           gap: 1.5,
         }}
       >
+        {role === "tenant" ? (
+          <Card
+            component={Link}
+            to="/pay-rent"
+            sx={{
+              gridColumn: { xs: "1 / -1", md: "1 / -1" },
+              bgcolor: "rgba(34,197,94,0.07)",
+              borderColor: "rgba(34,197,94,0.25)",
+              textDecoration: "none",
+              "&:hover": {
+                borderColor: "rgba(34,197,94,0.45)",
+                backgroundColor: "rgba(34,197,94,0.1)",
+              },
+            }}
+          >
+            <CardContent sx={{ p: 1.8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
+              <Box>
+                <Typography sx={{ fontSize: 12, color: "rgba(187,247,208,0.95)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Pay Rent
+                </Typography>
+                <Typography sx={{ fontSize: 20, lineHeight: 1.2, fontWeight: 600, color: "#fff" }}>
+                  {tenantAmountDue !== null
+                    ? Number(tenantAmountDue).toLocaleString("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      })
+                    : "No amount due"}
+                </Typography>
+                <Typography sx={{ mt: 0.2, fontSize: 12, color: "text.secondary" }}>
+                  Pay securely online with card
+                </Typography>
+              </Box>
+              <CreditCardIcon sx={{ color: "rgba(34,197,94,0.9)", fontSize: 22 }} />
+            </CardContent>
+          </Card>
+        ) : null}
         {cards.map((card) => (
           <Card
             key={card.title}

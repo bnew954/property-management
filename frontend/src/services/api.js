@@ -107,6 +107,11 @@ export const getPayment = (id) => api.get(`payments/${id}/`);
 export const createPayment = (data) => api.post("payments/", data);
 export const updatePayment = (id, data) => api.put(`payments/${id}/`, data);
 export const deletePayment = (id) => api.delete(`payments/${id}/`);
+export const createPaymentIntent = (leaseId) =>
+  api.post("payments/create-intent/", { lease_id: leaseId });
+export const confirmStripePayment = (data) =>
+  api.post("payments/confirm/", data);
+export const getPaymentHistory = () => api.get("payments/history/");
 
 export const getMaintenanceRequests = () => api.get("maintenance-requests/");
 export const getMaintenanceRequest = (id) => api.get(`maintenance-requests/${id}/`);

@@ -1,6 +1,11 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .payment_views import (
+    ConfirmStripePaymentView,
+    CreatePaymentIntentView,
+    PaymentHistoryView,
+)
 from .views import (
     LeaseViewSet,
     MaintenanceRequestViewSet,
@@ -24,8 +29,23 @@ router.register(
     basename="maintenance-request",
 )
 
-urlpatterns = router.urls
-urlpatterns += [
+urlpatterns = [
+    path(
+        "payments/create-intent/",
+        CreatePaymentIntentView.as_view(),
+        name="payments-create-intent",
+    ),
+    path(
+        "payments/confirm/",
+        ConfirmStripePaymentView.as_view(),
+        name="payments-confirm",
+    ),
+    path(
+        "payments/history/",
+        PaymentHistoryView.as_view(),
+        name="payments-history",
+    ),
     path("register/", RegisterView.as_view(), name="register"),
     path("me/", MeView.as_view(), name="me"),
 ]
+urlpatterns += router.urls
