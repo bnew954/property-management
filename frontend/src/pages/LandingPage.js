@@ -36,10 +36,11 @@ import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 
 function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
   const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
+  const logoSrc = `${process.env.PUBLIC_URL || ""}/logo-icon.png`;
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       <img
-        src={`${process.env.PUBLIC_URL}/logo-icon.png`}
+        src={logoSrc}
         alt="Onyx PM"
         style={{
           height: iconSize,
@@ -408,7 +409,7 @@ function LandingPage() {
             <Box sx={{ textAlign: "center", maxWidth: 980 }}>
               <Box sx={{ mb: 1.5, display: "flex", justifyContent: "center" }}>
                 <img
-                  src={`${process.env.PUBLIC_URL}/logo-icon.png`}
+                  src={`${process.env.PUBLIC_URL || ""}/logo-icon.png`}
                   alt="Onyx PM"
                   style={{
                     height: 48,
