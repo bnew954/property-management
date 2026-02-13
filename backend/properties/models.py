@@ -196,3 +196,60 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} ({self.role})"
+
+
+class Notification(models.Model):
+    TYPE_RENT_DUE = "rent_due"
+    TYPE_RENT_OVERDUE = "rent_overdue"
+    TYPE_LEASE_EXPIRING = "lease_expiring"
+    TYPE_MAINTENANCE_UPDATE = "maintenance_update"
+    TYPE_GENERAL = "general"
+    TYPE_CHOICES = [
+        (TYPE_RENT_DUE, "Rent Due"),
+        (TYPE_RENT_OVERDUE, "Rent Overdue"),
+        (TYPE_LEASE_EXPIRING, "Lease Expiring"),
+        (TYPE_MAINTENANCE_UPDATE, "Maintenance Update"),
+        (TYPE_GENERAL, "General"),
+    ]
+
+    recipient = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="notifications"
+    )
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    is_read = models.BooleanField(default=False)
+    link = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} -> {self.recipient.username}"
+
+
+class Message(models.Model):
+    sender = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="sent_messages"
+    )
+    recipient = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="received_messages"
+    )
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    is_read = models.BooleanField(default=False)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replies",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.subject} ({self.sender.username} -> {self.recipient.username})"

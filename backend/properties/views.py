@@ -1,6 +1,11 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.db import IntegrityError
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -9,6 +14,8 @@ from rest_framework.views import APIView
 from .models import (
     Lease,
     MaintenanceRequest,
+    Message,
+    Notification,
     Payment,
     Property,
     Tenant,
@@ -19,9 +26,12 @@ from .permissions import IsLandlord
 from .serializers import (
     LeaseSerializer,
     MaintenanceRequestSerializer,
+    MessageSerializer,
+    NotificationSerializer,
     PaymentSerializer,
     PropertySerializer,
     TenantSerializer,
+    UserSummarySerializer,
     UnitSerializer,
 )
 
@@ -136,6 +146,132 @@ class MaintenanceRequestViewSet(viewsets.ModelViewSet):
             serializer.save(tenant_id=profile.tenant_id)
             return
         serializer.save()
+
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user)
+
+    def partial_update(self, request, *args, **kwargs):
+        notification = self.get_object()
+        notification.is_read = bool(request.data.get("is_read", True))
+        notification.save(update_fields=["is_read"])
+        return Response(self.get_serializer(notification).data)
+
+    @action(detail=False, methods=["patch"], url_path="mark-all-read")
+    def mark_all_read(self, request):
+        updated_count = self.get_queryset().filter(is_read=False).update(is_read=True)
+        return Response({"updated": updated_count})
+
+    @action(detail=False, methods=["get"], url_path="unread-count")
+    def unread_count(self, request):
+        count = self.get_queryset().filter(is_read=False).count()
+        return Response({"unread_count": count})
+
+
+class MessageViewSet(viewsets.ModelViewSet):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        queryset = Message.objects.filter(
+            Q(recipient=self.request.user) | Q(sender=self.request.user)
+        ).select_related("sender", "recipient", "parent")
+        if self.action == "list":
+            queryset = queryset.filter(recipient=self.request.user)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        recipient_id = request.data.get("recipient")
+        subject = (request.data.get("subject") or "").strip()
+        body = (request.data.get("body") or "").strip()
+        if not recipient_id:
+            return Response(
+                {"recipient": "Recipient is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not subject:
+            return Response(
+                {"subject": "Subject is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not body:
+            return Response(
+                {"body": "Message body is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            recipient = User.objects.get(id=recipient_id)
+        except User.DoesNotExist:
+            return Response(
+                {"recipient": "Recipient not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        message = Message.objects.create(
+            sender=request.user,
+            recipient=recipient,
+            subject=subject,
+            body=body,
+        )
+        return Response(
+            self.get_serializer(message).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=False, methods=["get"], url_path="sent")
+    def sent(self, request):
+        queryset = Message.objects.filter(sender=request.user).select_related(
+            "sender", "recipient", "parent"
+        )
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="users")
+    def users(self, request):
+        queryset = User.objects.all().order_by("username")
+        return Response(UserSummarySerializer(queryset, many=True).data)
+
+    @action(detail=True, methods=["patch"], url_path="mark-read")
+    def mark_read(self, request, pk=None):
+        message = self.get_object()
+        message.is_read = True
+        message.save(update_fields=["is_read"])
+        return Response(self.get_serializer(message).data)
+
+    @action(detail=True, methods=["post"], url_path="reply")
+    def reply(self, request, pk=None):
+        original = self.get_object()
+        body = (request.data.get("body") or "").strip()
+        subject = (
+            request.data.get("subject")
+            or f"Re: {original.subject}"
+        ).strip()
+        if not body:
+            return Response(
+                {"body": "Reply body is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.user.id == original.sender_id:
+            recipient = original.recipient
+        else:
+            recipient = original.sender
+
+        root_parent = original.parent or original
+        reply_message = Message.objects.create(
+            sender=request.user,
+            recipient=recipient,
+            subject=subject,
+            body=body,
+            parent=root_parent,
+        )
+        return Response(
+            self.get_serializer(reply_message).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MeView(APIView):

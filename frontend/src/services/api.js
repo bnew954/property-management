@@ -124,4 +124,20 @@ export const deleteMaintenanceRequest = (id) =>
 
 export const getMe = () => api.get("me/");
 
+export const getNotifications = () => api.get("notifications/");
+export const markNotificationRead = (id) =>
+  api.patch(`notifications/${id}/`, { is_read: true });
+export const markAllNotificationsRead = () =>
+  api.patch("notifications/mark-all-read/");
+export const deleteNotification = (id) => api.delete(`notifications/${id}/`);
+export const getUnreadNotificationsCount = () =>
+  api.get("notifications/unread-count/");
+
+export const getInboxMessages = () => api.get("messages/");
+export const getSentMessages = () => api.get("messages/sent/");
+export const getMessageRecipients = () => api.get("messages/users/");
+export const sendMessage = (data) => api.post("messages/", data);
+export const markMessageRead = (id) => api.patch(`messages/${id}/mark-read/`);
+export const replyMessage = (id, data) => api.post(`messages/${id}/reply/`, data);
+
 export default api;

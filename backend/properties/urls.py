@@ -9,7 +9,9 @@ from .payment_views import (
 from .views import (
     LeaseViewSet,
     MaintenanceRequestViewSet,
+    MessageViewSet,
     MeView,
+    NotificationViewSet,
     PaymentViewSet,
     PropertyViewSet,
     RegisterView,
@@ -23,6 +25,8 @@ router.register("units", UnitViewSet, basename="unit")
 router.register("tenants", TenantViewSet, basename="tenant")
 router.register("leases", LeaseViewSet, basename="lease")
 router.register("payments", PaymentViewSet, basename="payment")
+router.register("notifications", NotificationViewSet, basename="notification")
+router.register("messages", MessageViewSet, basename="message")
 router.register(
     "maintenance-requests",
     MaintenanceRequestViewSet,

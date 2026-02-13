@@ -1,6 +1,16 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Lease, MaintenanceRequest, Payment, Property, Tenant, Unit
+from .models import (
+    Lease,
+    MaintenanceRequest,
+    Message,
+    Notification,
+    Payment,
+    Property,
+    Tenant,
+    Unit,
+)
 
 
 class PropertySerializer(serializers.ModelSerializer):
@@ -44,4 +54,27 @@ class MaintenanceRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MaintenanceRequest
+        fields = "__all__"
+
+
+class UserSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "username", "first_name", "last_name", "email"]
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    recipient_detail = UserSummarySerializer(source="recipient", read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = "__all__"
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_detail = UserSummarySerializer(source="sender", read_only=True)
+    recipient_detail = UserSummarySerializer(source="recipient", read_only=True)
+
+    class Meta:
+        model = Message
         fields = "__all__"

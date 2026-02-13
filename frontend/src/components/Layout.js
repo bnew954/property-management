@@ -1,6 +1,7 @@
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import BuildIcon from "@mui/icons-material/Build";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DescriptionIcon from "@mui/icons-material/Description";
@@ -24,6 +25,7 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../services/auth";
 import { useUser } from "../services/userContext";
+import NotificationBell from "./NotificationBell";
 
 const drawerWidth = 240;
 
@@ -36,6 +38,7 @@ const navItems = [
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
   { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
   { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
+  { label: "Messages", path: "/messages", icon: <ChatBubbleOutlineIcon />, utility: true },
 ];
 
 function Layout({ children }) {
@@ -46,9 +49,24 @@ function Layout({ children }) {
   const visibleNavItems =
     role === "tenant"
       ? navItems.filter((item) =>
-          ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance"].includes(item.path)
+          ["/", "/pay-rent", "/my-lease", "/payments", "/maintenance", "/messages"].includes(item.path)
         )
       : navItems.filter((item) => item.path !== "/my-lease" && item.path !== "/pay-rent");
+  const primaryNavItems = visibleNavItems.filter((item) => !item.utility);
+  const utilityNavItems = visibleNavItems.filter((item) => item.utility);
+
+  const pageTitle = (() => {
+    if (location.pathname === "/") return "Dashboard";
+    if (location.pathname.startsWith("/properties")) return "Properties";
+    if (location.pathname.startsWith("/tenants")) return "Tenants";
+    if (location.pathname.startsWith("/leases")) return "Leases";
+    if (location.pathname.startsWith("/payments")) return "Payments";
+    if (location.pathname.startsWith("/pay-rent")) return "Pay Rent";
+    if (location.pathname.startsWith("/my-lease")) return "My Lease";
+    if (location.pathname.startsWith("/maintenance")) return "Maintenance";
+    if (location.pathname.startsWith("/messages")) return "Messages";
+    return "CloudProp";
+  })();
 
   const isActive = (path) => {
     if (path === "/") {
@@ -87,8 +105,8 @@ function Layout({ children }) {
             </Typography>
           </Toolbar>
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
-          <List sx={{ py: 1.3, flexGrow: 1, minHeight: 0 }}>
-            {visibleNavItems.map((item) => {
+          <List sx={{ py: 1.3, minHeight: 0 }}>
+            {primaryNavItems.map((item) => {
               const active = isActive(item.path);
               return (
                 <ListItem key={item.path} disablePadding sx={{ px: 0.6, py: 0.1 }}>
@@ -147,6 +165,47 @@ function Layout({ children }) {
             })}
           </List>
           <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
+          <List sx={{ py: 0.8 }}>
+            {utilityNavItems.map((item) => {
+              const active = isActive(item.path);
+              return (
+                <ListItem key={item.path} disablePadding sx={{ px: 0.6, py: 0.1 }}>
+                  <ListItemButton
+                    component={Link}
+                    to={item.path}
+                    sx={{
+                      borderRadius: 0.75,
+                      ml: 0.5,
+                      mr: 0.5,
+                      px: 2,
+                      py: 0.75,
+                      backgroundColor: active ? "rgba(124,92,252,0.1)" : "transparent",
+                      boxShadow: active ? "inset 2px 0 0 #7c5cfc" : "none",
+                      border: "1px solid transparent",
+                      "&:hover": {
+                        backgroundColor: "rgba(255,255,255,0.04)",
+                        "& .MuiListItemIcon-root": { color: "#fff" },
+                        "& .MuiTypography-root": { color: "#fff" },
+                      },
+                    }}
+                  >
+                    <ListItemIcon sx={{ color: active ? "#ffffff" : "#878C9E", minWidth: 32, "& svg": { fontSize: 18 } }}>
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.label}
+                      primaryTypographyProps={{
+                        fontSize: 13,
+                        fontWeight: 400,
+                        color: active ? "#ffffff" : "#878C9E",
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
           <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
               <Avatar sx={{ width: 26, height: 26, bgcolor: "#2a2a2a", fontSize: "0.75rem", color: "#a1a1aa" }}>
@@ -186,8 +245,27 @@ function Layout({ children }) {
           </Box>
         </Box>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 2.5 } }}>
-        {children}
+      <Box component="main" sx={{ flexGrow: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <Box
+          sx={{
+            px: { xs: 2, md: 2.5 },
+            py: 1.2,
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1.2,
+          }}
+        >
+          <Typography sx={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{pageTitle}</Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <NotificationBell />
+            <Avatar sx={{ width: 28, height: 28, bgcolor: "#232323", fontSize: "0.75rem", color: "#d1d5db" }}>
+              {(user?.first_name || user?.username || "U").slice(0, 1).toUpperCase()}
+            </Avatar>
+          </Box>
+        </Box>
+        <Box sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}>{children}</Box>
       </Box>
     </Box>
   );
