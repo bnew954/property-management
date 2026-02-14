@@ -100,6 +100,8 @@ from .utils import (
     seed_chart_of_accounts,
     apply_classification_rules,
     auto_match_reconciliation,
+    run_all_due_recurring,
+    run_recurring_transaction,
 )
 from .emails import (
     send_application_received,
@@ -3949,28 +3951,32 @@ class RecurringTransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewS
     @action(detail=True, methods=["post"], url_path="run")
     def run(self, request, pk=None):
         recurring = self.get_object()
-        template_lines = recurring.template_data.get("lines", [])
-        if not isinstance(template_lines, list) or not template_lines:
-            return Response({"detail": "No template lines defined."}, status=status.HTTP_400_BAD_REQUEST)
-
-        event_date = date.today()
         try:
-            journal_entry = _create_posted_journal_entry(
-                organization=recurring.organization,
-                entry_date=event_date,
-                memo=recurring.name,
-                lines=template_lines,
-                user=request.user,
-                source_type="import",
-                source_id=recurring.id,
-                status=JournalEntry.STATUS_POSTED,
-            )
+            if not recurring.is_active:
+                return Response(
+                    {"detail": "Recurring transaction is not active."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not recurring.next_run_date:
+                return Response(
+                    {"detail": "Recurring transaction is missing a next run date."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            journal_entry = run_recurring_transaction(recurring)
         except ValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(JournalEntrySerializer(journal_entry).data, status=status.HTTP_201_CREATED)
 
-        recurring.next_run_date = event_date + timedelta(days=30)
-        recurring.save(update_fields=["next_run_date"])
-        return Response({"journal_entry": JournalEntrySerializer(journal_entry).data}, status=status.HTTP_201_CREATED)
+    @action(detail=False, methods=["post"], url_path="run-all")
+    def run_all(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        created_count = run_all_due_recurring(organization)
+        return Response({"created": created_count})
 
 class AccountingDashboardView(APIView):
     permission_classes = [IsLandlord]

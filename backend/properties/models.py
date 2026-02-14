@@ -1346,10 +1346,12 @@ class RecurringTransaction(models.Model):
     FREQUENCY_MONTHLY = "monthly"
     FREQUENCY_QUARTERLY = "quarterly"
     FREQUENCY_ANNUALLY = "annually"
+    FREQUENCY_WEEKLY = "weekly"
     FREQUENCY_CHOICES = [
         (FREQUENCY_MONTHLY, "Monthly"),
         (FREQUENCY_QUARTERLY, "Quarterly"),
         (FREQUENCY_ANNUALLY, "Annually"),
+        (FREQUENCY_WEEKLY, "Weekly"),
     ]
 
     organization = models.ForeignKey(
@@ -1358,8 +1360,34 @@ class RecurringTransaction(models.Model):
         related_name="recurring_transactions",
     )
     name = models.CharField(max_length=200)
+    description = models.CharField(max_length=255, blank=True, default="")
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    debit_account = models.ForeignKey(
+        AccountingCategory,
+        on_delete=models.PROTECT,
+        related_name="recurring_debit_transactions",
+        null=True,
+        blank=True,
+    )
+    credit_account = models.ForeignKey(
+        AccountingCategory,
+        on_delete=models.PROTECT,
+        related_name="recurring_credit_transactions",
+        null=True,
+        blank=True,
+    )
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.SET_NULL,
+        related_name="recurring_transactions",
+        null=True,
+        blank=True,
+    )
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
     next_run_date = models.DateField()
+    last_run_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     template_data = models.JSONField(default=dict)
     auto_post = models.BooleanField(default=False)

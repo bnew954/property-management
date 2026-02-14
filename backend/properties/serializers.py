@@ -620,10 +620,65 @@ class AccountingPeriodSerializer(serializers.ModelSerializer):
 
 
 class RecurringTransactionSerializer(serializers.ModelSerializer):
+    debit_account = serializers.PrimaryKeyRelatedField(
+        queryset=AccountingCategory.objects.all()
+    )
+    credit_account = serializers.PrimaryKeyRelatedField(
+        queryset=AccountingCategory.objects.all()
+    )
+    property = serializers.PrimaryKeyRelatedField(
+        queryset=Property.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    debit_account_name = serializers.SerializerMethodField(read_only=True)
+    credit_account_name = serializers.SerializerMethodField(read_only=True)
+    property_name = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = RecurringTransaction
-        fields = "__all__"
-        read_only_fields = ["organization", "created_by"]
+        fields = [
+            "id",
+            "name",
+            "description",
+            "frequency",
+            "amount",
+            "debit_account",
+            "debit_account_name",
+            "credit_account",
+            "credit_account_name",
+            "property",
+            "property_name",
+            "start_date",
+            "end_date",
+            "next_run_date",
+            "last_run_date",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = [
+            "organization",
+            "created_by",
+            "created_at",
+            "debit_account_name",
+            "credit_account_name",
+            "property_name",
+        ]
+
+    def get_debit_account_name(self, obj):
+        if not obj.debit_account_id:
+            return None
+        return obj.debit_account.name
+
+    def get_credit_account_name(self, obj):
+        if not obj.credit_account_id:
+            return None
+        return obj.credit_account.name
+
+    def get_property_name(self, obj):
+        if not obj.property_id:
+            return None
+        return obj.property.name
 
 
 class BankReconciliationSerializer(serializers.ModelSerializer):

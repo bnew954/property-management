@@ -18,6 +18,188 @@ def _escape(value):
     return "" if value is None else str(value)
 
 
+def _to_decimal(value):
+    from decimal import Decimal
+
+    if value is None:
+        return Decimal("0.00")
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (TypeError, ValueError, ArithmeticError):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError("Invalid decimal value.")
+
+
+def _is_period_locked(organization, target_date):
+    if not organization or not target_date:
+        return False
+
+    from .models import AccountingPeriod
+
+    return AccountingPeriod.objects.filter(
+        organization=organization,
+        is_locked=True,
+        period_start__lte=target_date,
+        period_end__gte=target_date,
+    ).exists()
+
+
+def _to_month_date(base_date, months):
+    import calendar
+
+    total_month = base_date.month - 1 + months
+    target_year = base_date.year + (total_month // 12)
+    target_month = (total_month % 12) + 1
+    max_day = calendar.monthrange(target_year, target_month)[1]
+    return date(target_year, target_month, min(base_date.day, max_day))
+
+
+def _advance_recurring_date(base_date, frequency):
+    from .models import RecurringTransaction
+    from datetime import timedelta
+
+    try:
+        from dateutil.relativedelta import relativedelta  # type: ignore
+        if frequency == RecurringTransaction.FREQUENCY_MONTHLY:
+            return base_date + relativedelta(months=1)
+        if frequency == RecurringTransaction.FREQUENCY_QUARTERLY:
+            return base_date + relativedelta(months=3)
+        if frequency == RecurringTransaction.FREQUENCY_ANNUALLY:
+            return base_date + relativedelta(years=1)
+        if frequency == RecurringTransaction.FREQUENCY_WEEKLY:
+            return base_date + timedelta(days=7)
+    except Exception:
+        if frequency == RecurringTransaction.FREQUENCY_MONTHLY:
+            return _to_month_date(base_date, 1)
+        if frequency == RecurringTransaction.FREQUENCY_QUARTERLY:
+            return _to_month_date(base_date, 3)
+        if frequency == RecurringTransaction.FREQUENCY_ANNUALLY:
+            return _to_month_date(base_date, 12)
+        if frequency == RecurringTransaction.FREQUENCY_WEEKLY:
+            return base_date + timedelta(days=7)
+
+    from django.core.exceptions import ValidationError
+
+    raise ValidationError("Invalid recurring frequency.")
+
+
+def run_recurring_transaction(recurring_txn):
+    from django.core.exceptions import ValidationError
+    from .models import RecurringTransaction
+
+    if not recurring_txn:
+        raise ValidationError("Recurring transaction not found.")
+
+    if not recurring_txn.is_active:
+        raise ValidationError("Recurring transaction is not active.")
+
+    today = timezone.localdate()
+    if not recurring_txn.next_run_date:
+        raise ValidationError("Recurring transaction has no next run date.")
+    if recurring_txn.next_run_date > today:
+        raise ValidationError("Recurring transaction is not due yet.")
+    if recurring_txn.end_date and recurring_txn.end_date < recurring_txn.next_run_date:
+        raise ValidationError("Recurring transaction schedule has ended.")
+
+    if not recurring_txn.debit_account_id:
+        raise ValidationError("Recurring transaction is missing a debit account.")
+    if not recurring_txn.credit_account_id:
+        raise ValidationError("Recurring transaction is missing a credit account.")
+
+    amount = _to_decimal(recurring_txn.amount)
+    if amount <= 0:
+        raise ValidationError("Recurring transaction amount must be greater than 0.")
+
+    if _is_period_locked(recurring_txn.organization, recurring_txn.next_run_date):
+        raise ValidationError("Cannot create recurring journal entry in a locked accounting period.")
+
+    entry_date = recurring_txn.next_run_date
+    memo = (recurring_txn.description or recurring_txn.name).strip() or "Recurring transaction"
+
+    lines = [
+        {
+            "account_id": recurring_txn.debit_account_id,
+            "debit_amount": amount,
+            "credit_amount": _to_decimal("0.00"),
+            "property_id": recurring_txn.property_id,
+            "description": "",
+        },
+        {
+            "account_id": recurring_txn.credit_account_id,
+            "debit_amount": _to_decimal("0.00"),
+            "credit_amount": amount,
+            "property_id": recurring_txn.property_id,
+            "description": "",
+        },
+    ]
+
+    from django.db import transaction as db_transaction
+
+    with db_transaction.atomic():
+        journal_entry = JournalEntry.objects.create(
+            organization=recurring_txn.organization,
+            entry_date=entry_date,
+            memo=memo[:500],
+            status=JournalEntry.STATUS_POSTED,
+            source_type="recurring",
+            source_id=recurring_txn.id,
+            created_by=None,
+            posted_at=timezone.now(),
+        )
+        JournalEntryLine.objects.bulk_create(
+            [
+                JournalEntryLine(
+                    journal_entry=journal_entry,
+                    organization=recurring_txn.organization,
+                    account_id=line["account_id"],
+                    debit_amount=line["debit_amount"],
+                    credit_amount=line["credit_amount"],
+                    description=line["description"],
+                    property_id=line["property_id"],
+                )
+                for line in lines
+            ]
+        )
+        recurring_txn.last_run_date = entry_date
+        recurring_txn.next_run_date = _advance_recurring_date(entry_date, recurring_txn.frequency)
+        recurring_txn.save(update_fields=["last_run_date", "next_run_date"])
+
+    return journal_entry
+
+
+def run_all_due_recurring(organization):
+    from django.utils.timezone import localdate
+
+    if not organization:
+        return 0
+
+    today = localdate()
+    from .models import RecurringTransaction
+    from django.core.exceptions import ValidationError
+
+    recurrences = RecurringTransaction.objects.filter(
+        organization=organization,
+        is_active=True,
+        next_run_date__lte=today,
+    ).order_by("next_run_date", "id")
+
+    created_count = 0
+    for recurring in recurrences:
+        while recurring.next_run_date <= today:
+            if recurring.end_date and recurring.end_date < recurring.next_run_date:
+                break
+            try:
+                run_recurring_transaction(recurring)
+            except ValidationError:
+                break
+            created_count += 1
+
+    return created_count
+
+
 def generate_lease_document(lease):
     property_obj = lease.unit.property if lease.unit else None
     property_name = _escape(property_obj.name if property_obj else "")
