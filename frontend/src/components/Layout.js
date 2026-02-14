@@ -34,7 +34,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../services/auth";
 import { useUser } from "../services/userContext";
@@ -152,11 +152,22 @@ function Layout({ children }) {
   const { role, user, clearUser, isOrgAdmin, organization } = useUser();
   const isDark = mode === "dark";
   const theme = useTheme();
-  const [expandedGroups, setExpandedGroups] = useState(() => ({
-    leasing: true,
-    operations: true,
-    finance: true,
-  }));
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    const initial = {
+      leasing: false,
+      operations: false,
+      finance: false,
+    };
+
+    const initialPath = location.pathname;
+    landlordGroups.forEach((group) => {
+      if (group.items.some((item) => initialPath.startsWith(item.path))) {
+        initial[group.key] = true;
+      }
+    });
+
+    return initial;
+  });
 
   const isActive = (path) => {
     if (path === "/dashboard") {
@@ -184,20 +195,12 @@ function Layout({ children }) {
     return "Onyx";
   })();
 
-  useEffect(() => {
-    setExpandedGroups((current) => {
-      let next = { ...current };
-      let changed = false;
-      landlordGroups.forEach((group) => {
-        const shouldOpen = group.items.some((item) => location.pathname.startsWith(item.path));
-        if (shouldOpen && !current[group.key]) {
-          next[group.key] = true;
-          changed = true;
-        }
-      });
-      return changed ? next : current;
-    });
-  }, [location.pathname]);
+  const toggleGroup = (key) => {
+    setExpandedGroups((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  };
 
   const navItemSx = (active) => ({
     borderRadius: "6px",
@@ -301,29 +304,24 @@ function Layout({ children }) {
               </Typography>
             ) : null}
           </Toolbar>
+          <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+            <List sx={{ py: 1.3, minHeight: 0 }}>
+              {role === "tenant"
+                ? [topNavItems[0], ...tenantNavItems].map((item) => renderNavItem(item))
+                : [topNavItems[0]].map((item) => renderNavItem(item))}
+            </List>
 
-          <List sx={{ py: 1.3, minHeight: 0 }}>
-            {role === "tenant"
-              ? [topNavItems[0], ...tenantNavItems].map((item) => renderNavItem(item))
-              : [topNavItems[0]].map((item) => renderNavItem(item))}
-          </List>
-
-          {role === "tenant" ? null : (
-            <>
+            {role === "tenant" ? null : (
+              <>
                 {landlordGroups.map((group, groupIndex) => {
                 const isExpanded = expandedGroups[group.key];
                 return (
                   <Box key={group.key}>
-                    <List sx={{ py: 0.2 }}>
+                    <List sx={{ py: 0.2, mt: 1.5 }}>
                       <ListItem disablePadding sx={{ px: 0.6, py: 0.05 }}>
                         <ListItemButton
                           disableRipple
-                          onClick={() =>
-                            setExpandedGroups((current) => ({
-                              ...current,
-                              [group.key]: !current[group.key],
-                            }))
-                          }
+                          onClick={() => toggleGroup(group.key)}
                           sx={groupHeaderSx}
                         >
                           <ListItemText
@@ -382,42 +380,43 @@ function Layout({ children }) {
                   </Box>
                 );
               })}
-            </>
-          )}
+              </>
+            )}
 
-          <Divider sx={{ borderColor: "divider" }} />
-          {isOrgAdmin ? (
-            <>
-              <List sx={{ py: 0.8 }}>
-                <ListItem disablePadding sx={{ px: 0.6, py: 0.1 }}>
-                  <ListItemButton
-                    component={Link}
-                    to="/settings"
-                    sx={navItemSx(isActive("/settings"))}
-                  >
-                    <ListItemIcon
-                      sx={{
-                        color: isActive("/settings") ? "text.primary" : "text.secondary",
-                        minWidth: 32,
-                        "& svg": { fontSize: 18 },
-                      }}
+            <Divider sx={{ borderColor: "divider" }} />
+            {isOrgAdmin ? (
+              <>
+                <List sx={{ py: 0.8 }}>
+                  <ListItem disablePadding sx={{ px: 0.6, py: 0.1 }}>
+                    <ListItemButton
+                      component={Link}
+                      to="/settings"
+                      sx={navItemSx(isActive("/settings"))}
                     >
-                      <SettingsIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary="Settings"
-                      primaryTypographyProps={{
-                        fontSize: 13,
-                        fontWeight: 400,
-                        color: isActive("/settings") ? "text.primary" : "text.secondary",
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              </List>
-              <Divider sx={{ borderColor: "divider" }} />
-            </>
-          ) : null}
+                      <ListItemIcon
+                        sx={{
+                          color: isActive("/settings") ? "text.primary" : "text.secondary",
+                          minWidth: 32,
+                          "& svg": { fontSize: 18 },
+                        }}
+                      >
+                        <SettingsIcon />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="Settings"
+                        primaryTypographyProps={{
+                          fontSize: 13,
+                          fontWeight: 400,
+                          color: isActive("/settings") ? "text.primary" : "text.secondary",
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                </List>
+                <Divider sx={{ borderColor: "divider" }} />
+              </>
+            ) : null}
+          </Box>
 
           <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
