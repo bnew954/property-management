@@ -5,6 +5,11 @@
 `onyx` is a full-stack property-management application with a Django REST Framework backend and a React SPA frontend.  
 The code base is already organized around tenant-facing flows, landlord operations, accounting, and document/signature workflows.
 
+Primary references for onboarding and planning:
+
+- `README.md` (architecture + API + data flow)
+- `ROADMAP.md` (current completed work and planned phases)
+
 ## High-level architecture
 
 - **Backend**: Django 6 + Django REST Framework in `backend/`
@@ -22,8 +27,9 @@ The code base is already organized around tenant-facing flows, landlord operatio
   - `Property` and `Unit` (including listing metadata for public marketing)
   - `Tenant`, `Lease`, `RentalApplication`, `ScreeningRequest`
   - `Payment`, `Transaction`, `RentLedgerEntry`, `LateFeeRule`
+  - `AccountingCategory`, `JournalEntry`, `JournalEntryLine`, `AccountingPeriod`, `RecurringTransaction`
   - `MaintenanceRequest`, `Notification`, `Message`
-  - `Document`, `Expense`, `AccountingCategory`, `OwnerStatement`
+  - `Document`, `Expense`, `OwnerStatement`
 - `backend/properties/serializers.py`
   - Domain serializers + read-only computed fields + validation for public screening/lease forms
 - `backend/properties/views.py`
@@ -115,12 +121,15 @@ Protected/admin endpoints are under `/api/` (JWT required unless noted), served 
 
 - New journal models and extended `Transaction` model are present.
 - New accounting routes are in `backend/properties/urls.py`.
-- New serializers exist for journal/period/recurring.
+- New serializers exist for journal/period/recurring and COA hierarchy data.
 - New COA seeding helper is in `backend/properties/utils.py` and is invoked during accounting reads.
+- Legacy `ensure_default_categories` seeding is now deprecated/no-op in favor of chart-of-accounts bootstrap.
+- Added management command `cleanup_accounts` to remove duplicate `AccountingCategory` entries by organization.
 - Stripe payment path now creates posted JE and links `Transaction.journal_entry`.
-- Frontend API helpers and 5-tab accounting page are not yet rebuilt to match Phase 1 spec.
-- `seed_accounts` and `run_recurring_transactions` management commands are still pending.
-- Some reporting views still aggregate `Transaction` instead of posted JE lines entirely.
+- Frontend COA display now handles both nested and flat chart payloads, sorts by account code, indents hierarchy, and exposes account code + header/balance rendering behavior.
+- Rent roll API and UI now include/read explicit `property_name` and `unit_number` fields.
+- `seed_accounts` and `run_recurring_transactions` commands are still pending; duplicate cleanup command is now available.
+- Some accounting report paths still read legacy `Transaction` totals in selected legacy views while journal-line-backed endpoints are now primary for new reporting flows.
 
 ## Frontend architecture
 
@@ -237,6 +246,8 @@ Configured as Django management commands (callable manually, suitable for schedu
   - emits rent due/overdue and lease-expiry notifications
 - `backend/properties/management/commands/apply_late_fees.py`
   - computes late fees for delinquent active leases
+- `backend/properties/management/commands/cleanup_accounts.py`
+  - removes duplicate COA categories per organization for name-based collisions
 - `backend/properties/management/commands/seed_data.py`
   - loads demo dataset for local environments
 - `backend/properties/management/commands/create_admin.py`
