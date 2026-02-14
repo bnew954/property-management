@@ -5,7 +5,9 @@
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
+  CircularProgress,
   Collapse,
   Dialog,
   DialogActions,
@@ -13,6 +15,7 @@
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   Link,
@@ -22,6 +25,10 @@
   MenuItem,
   Paper,
   Select,
+  Step,
+  StepLabel,
+  Stepper,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -30,9 +37,7 @@
   TableRow,
   Tabs,
   Tab,
-  FormControlLabel,
   TextField,
-  Switch,
   Typography,
 } from "@mui/material";
 import { Add, ChevronRight, ExpandLess, ExpandMore, MoreVert, Refresh } from "@mui/icons-material";
@@ -44,9 +49,15 @@ import {
   createAccountingCategory,
   createJournalEntry,
   createRecurringTransaction,
+  bulkApproveTransactions,
+  bookImport,
   getAccountingCashflow,
   getAccountingCategories,
   getAccountingCategoryLedger,
+  getTransactionImport,
+  createTransactionImport,
+  updateImportedTransaction,
+  confirmImportMapping,
   getAccountingPeriods,
   getAccountingRentRoll,
   deleteAccountingCategory,
@@ -91,6 +102,12 @@ const parseList = (payload) => {
   if (Array.isArray(payload.rows)) return payload.rows;
   if (Array.isArray(payload.data)) return payload.data;
   return [];
+};
+
+const formatSignedMoney = (value) => {
+  const amount = Number(value || 0);
+  const abs = Math.abs(amount).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return amount < 0 ? `(${abs})` : abs;
 };
 
 const parseNumber = (value) => {
@@ -228,6 +245,29 @@ const accountTypeLabel = {
   revenue: "Revenue",
   expense: "Expenses",
 };
+const importSteps = ["Upload CSV", "Map Columns", "Review & Classify"];
+const normalizeHeader = (value) => String(value || "").trim().toLowerCase();
+
+const detectImportMapping = (headers = []) => {
+  const normalized = headers.map((h) => ({
+    raw: h,
+    key: normalizeHeader(h),
+  }));
+  const find = (checkers) =>
+    normalized.find((entry) => checkers.some((checker) => checker(entry.key)) )?.raw || "";
+
+  const dateColumn = find([(v) => v.includes("date")]);
+  const descriptionColumn = find([(v) => v.includes("description"), (v) => v.includes("memo"), (v) => v.includes("details")]);
+  const amountColumn = find([(v) => v.includes("amount"), (v) => v.includes("total"), (v) => v.includes("debit"), (v) => v.includes("credit"), (v) => v.includes("value")]);
+  const referenceColumn = find([(v) => v.includes("reference"), (v) => v.includes("ref"), (v) => v.includes("check"), (v) => v.includes("txn"), (v) => v.includes("transaction")]);
+
+  return {
+    date_column: dateColumn || "",
+    description_column: descriptionColumn || "",
+    amount_column: amountColumn || "",
+    reference_column: referenceColumn || "",
+  };
+};
 
 function Accounting() {
   const { role } = useUser();
@@ -285,6 +325,7 @@ function Accounting() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState("");
   const [coaMenuAnchor, setCoaMenuAnchor] = useState(null);
   const [coaMenuAccount, setCoaMenuAccount] = useState(null);
@@ -294,6 +335,23 @@ function Accounting() {
   const [transferForm, setTransferForm] = useState(transferFormInitial);
   const [journalForm, setJournalForm] = useState(journalFormInitial);
   const [addAccountForm, setAddAccountForm] = useState(addAccountInitial);
+  const [importUploadFile, setImportUploadFile] = useState(null);
+  const [importStep, setImportStep] = useState(0);
+  const [importDetectedHeaders, setImportDetectedHeaders] = useState([]);
+  const [activeImport, setActiveImport] = useState(null);
+  const [importRows, setImportRows] = useState([]);
+  const [importError, setImportError] = useState("");
+  const [importMapping, setImportMapping] = useState({
+    date_column: "",
+    description_column: "",
+    amount_column: "",
+    reference_column: "",
+  });
+  const [importSummary, setImportSummary] = useState({ created: 0, skipped: 0, duplicates: 0 });
+  const [importSelectedRows, setImportSelectedRows] = useState([]);
+  const [importBulkCategory, setImportBulkCategory] = useState("");
+  const [importBookingSummary, setImportBookingSummary] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
 
   const [periods, setPeriods] = useState([]);
   const [periodsLoading, setPeriodsLoading] = useState(false);
@@ -578,6 +636,185 @@ function Accounting() {
     setShowJournal(false);
     setJournalForm(journalFormInitial);
     await resetAndReload();
+  };
+
+  const resetImportFlow = () => {
+    setImportUploadFile(null);
+    setImportStep(0);
+    setImportDetectedHeaders([]);
+    setActiveImport(null);
+    setImportRows([]);
+    setImportMapping({
+      date_column: "",
+      description_column: "",
+      amount_column: "",
+      reference_column: "",
+    });
+    setImportSummary({ created: 0, skipped: 0, duplicates: 0 });
+    setImportSelectedRows([]);
+    setImportBulkCategory("");
+    setImportBookingSummary(null);
+  };
+
+  const startImportDialog = () => {
+    resetImportFlow();
+    setShowImportDialog(true);
+  };
+
+  const closeImportDialog = () => {
+    setShowImportDialog(false);
+    setImportLoading(false);
+    setImportError("");
+  };
+
+  const setDefaultImportMapping = (headers = []) => {
+    const mapping = detectImportMapping(headers);
+    setImportMapping(mapping);
+  };
+
+  const loadCurrentImportRows = async (importRecord) => {
+    const target = importRecord || activeImport;
+    if (!target?.id) return [];
+    const response = await getTransactionImport(target.id);
+    const rows = parseList(response.data?.transactions || response.data);
+    setImportRows(rows);
+    if (response.data?.import) {
+      setActiveImport(response.data.import);
+    }
+    return rows;
+  };
+
+  const handleUploadImport = async () => {
+    if (!importUploadFile) return;
+    setImportLoading(true);
+    setImportError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", importUploadFile);
+      const response = await createTransactionImport(formData);
+      const createdImport = response.data?.import || response.data;
+      const headers = parseList(response.data?.detected_headers || createdImport?.column_mapping?.headers || []);
+      setActiveImport(createdImport);
+      setImportDetectedHeaders(headers);
+      setDefaultImportMapping(headers);
+      setImportSummary({ created: 0, skipped: 0, duplicates: 0 });
+      setImportRows([]);
+      setImportSelectedRows([]);
+      setImportStep(1);
+    } catch {
+      setImportError("Unable to upload CSV.");
+      setError("Unable to upload CSV.");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleConfirmImportMapping = async () => {
+    if (!activeImport?.id) return;
+    if (!importMapping.date_column || !importMapping.description_column || !importMapping.amount_column) {
+      setImportError("Please map date, description, and amount columns.");
+      return;
+    }
+    setImportLoading(true);
+    setImportError("");
+    try {
+      const response = await confirmImportMapping(activeImport.id, {
+        date_column: importMapping.date_column,
+        description_column: importMapping.description_column,
+        amount_column: importMapping.amount_column,
+        reference_column: importMapping.reference_column || "",
+      });
+      if (response.data?.import) {
+        setActiveImport(response.data.import);
+      }
+      const rows = await loadCurrentImportRows(response.data?.import || activeImport);
+      setImportRows(rows);
+      setImportSummary({
+        created: parseNumber(response.data?.created),
+        skipped: parseNumber(response.data?.skipped),
+        duplicates: parseNumber(response.data?.duplicates),
+      });
+      setImportStep(2);
+    } catch {
+      setImportError("Unable to map columns.");
+      setError("Unable to map columns.");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const updateImportRow = async (rowId, payload) => {
+    const response = await updateImportedTransaction(rowId, payload);
+    const updated = response.data || {};
+    setImportRows((previous) => previous.map((row) => (row.id === rowId ? { ...row, ...updated } : row)));
+    return response.data || {};
+  };
+
+  const setImportRowCategory = async (rowId, categoryId) => {
+    await updateImportRow(rowId, { category: categoryId || null });
+  };
+
+  const setImportRowProperty = async (rowId, propertyId) => {
+    await updateImportRow(rowId, { property_link: propertyId || null });
+  };
+
+  const setImportRowStatus = async (rowId, status) => {
+    await updateImportRow(rowId, { status });
+    await loadCurrentImportRows();
+  };
+
+  const toggleImportRowSelection = (rowId) => {
+    const nextId = String(rowId);
+    setImportSelectedRows((prev) =>
+      prev.includes(nextId) ? prev.filter((value) => value !== nextId) : [...prev, nextId]
+    );
+  };
+
+  const toggleAllImportRows = () => {
+    const selectable = parseList(importRows).map((row) => String(row.id));
+    const allSelected = selectable.length > 0 && selectable.every((id) => importSelectedRows.includes(id));
+    if (allSelected) {
+      setImportSelectedRows([]);
+      return;
+    }
+    setImportSelectedRows(selectable);
+  };
+
+  const handleBulkApprove = async () => {
+    if (!activeImport?.id || importSelectedRows.length === 0) return;
+    setImportLoading(true);
+    setImportError("");
+    try {
+      await bulkApproveTransactions({
+        ids: importSelectedRows,
+        category: importBulkCategory || undefined,
+      });
+      await loadCurrentImportRows();
+      setImportSelectedRows([]);
+    } catch {
+      setImportError("Unable to bulk approve rows.");
+      setError("Unable to bulk approve rows.");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleBookImport = async () => {
+    if (!activeImport?.id) return;
+    setImportLoading(true);
+    setImportError("");
+    try {
+      const response = await bookImport(activeImport.id);
+      setImportBookingSummary(response.data || null);
+      await loadCurrentImportRows();
+      await loadTransactions();
+      await loadDashboardData();
+    } catch {
+      setImportError("Unable to book import.");
+      setError("Unable to book import.");
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   const closeCoaMenu = () => {
@@ -963,6 +1200,9 @@ function Accounting() {
               onClick={() => setShowJournal(true)}
             >
               Journal Entry
+            </Button>
+            <Button size="small" variant="outlined" onClick={startImportDialog}>
+              Import
             </Button>
             <Button size="small" sx={{ ml: "auto" }} onClick={loadTransactions} startIcon={<Refresh />}>
               Refresh
@@ -1784,6 +2024,337 @@ function Accounting() {
         </Paper>
       ) : null}
 
+      <Dialog open={showImportDialog} onClose={closeImportDialog} fullWidth maxWidth="md">
+        <DialogTitle>Import Transactions</DialogTitle>
+        <DialogContent dividers sx={{ display: "grid", gap: 1.4 }}>
+          <Stepper activeStep={importStep} alternativeLabel>
+            {importSteps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+          {importError ? <Alert severity="error">{importError}</Alert> : null}
+
+          {importStep === 0 ? (
+            <Box sx={{ display: "grid", gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Upload a CSV bank statement to begin.
+              </Typography>
+              <Button component="label" variant="outlined" color="inherit">
+                Choose CSV File
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  hidden
+                  onChange={(e) => setImportUploadFile((e.target.files || [])[0] || null)}
+                />
+              </Button>
+              {importUploadFile ? (
+                <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                  {importUploadFile.name}
+                </Typography>
+              ) : null}
+              <Button
+                size="small"
+                variant="contained"
+                sx={{ bgcolor: accent }}
+                disabled={!importUploadFile || importLoading}
+                onClick={handleUploadImport}
+              >
+                {importLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                Upload &amp; Continue
+              </Button>
+            </Box>
+          ) : null}
+
+          {importStep === 1 ? (
+            <Box sx={{ display: "grid", gap: 1 }}>
+              <Alert severity="info">
+                Detected columns: {importDetectedHeaders.length ? importDetectedHeaders.join(", ") : "No headers detected"}
+              </Alert>
+              <FormControl size="small">
+                <InputLabel>Date column</InputLabel>
+                <Select
+                  value={importMapping.date_column}
+                  label="Date column"
+                  onChange={(e) => setImportMapping((prev) => ({ ...prev, date_column: e.target.value }))}
+                >
+                  <MenuItem value="">Select</MenuItem>
+                  {importDetectedHeaders.map((header) => (
+                    <MenuItem key={header} value={header}>
+                      {header}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small">
+                <InputLabel>Description column</InputLabel>
+                <Select
+                  value={importMapping.description_column}
+                  label="Description column"
+                  onChange={(e) => setImportMapping((prev) => ({ ...prev, description_column: e.target.value }))}
+                >
+                  <MenuItem value="">Select</MenuItem>
+                  {importDetectedHeaders.map((header) => (
+                    <MenuItem key={header} value={header}>
+                      {header}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small">
+                <InputLabel>Amount column</InputLabel>
+                <Select
+                  value={importMapping.amount_column}
+                  label="Amount column"
+                  onChange={(e) => setImportMapping((prev) => ({ ...prev, amount_column: e.target.value }))}
+                >
+                  <MenuItem value="">Select</MenuItem>
+                  {importDetectedHeaders.map((header) => (
+                    <MenuItem key={header} value={header}>
+                      {header}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small">
+                <InputLabel>Reference column</InputLabel>
+                <Select
+                  value={importMapping.reference_column}
+                  label="Reference column"
+                  onChange={(e) => setImportMapping((prev) => ({ ...prev, reference_column: e.target.value }))}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {importDetectedHeaders.map((header) => (
+                    <MenuItem key={header} value={header}>
+                      {header}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  size="small"
+                  onClick={() => setImportStep(0)}
+                  disabled={importLoading}
+                >
+                  Back
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  sx={{ bgcolor: accent }}
+                  disabled={
+                    importLoading ||
+                    !importMapping.date_column ||
+                    !importMapping.description_column ||
+                    !importMapping.amount_column
+                  }
+                  onClick={handleConfirmImportMapping}
+                >
+                  {importLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                  Confirm Mapping
+                </Button>
+              </Box>
+            </Box>
+          ) : null}
+
+          {importStep === 2 ? (
+            <Box sx={{ display: "grid", gap: 1 }}>
+              <Alert severity="info">
+                Parsed {importSummary.created} rows, skipped {importSummary.skipped}, duplicates {importSummary.duplicates}
+              </Alert>
+              {importBookingSummary ? (
+                <Alert severity="success">
+                  Booked {importBookingSummary.booked} rows for {formatSignedMoney(importBookingSummary.total || 0)}
+                </Alert>
+              ) : null}
+
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                Review and classify each row, then approve and post into journal entries.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={
+                        parseList(importRows).length > 0 &&
+                        parseList(importRows).every((row) => importSelectedRows.includes(String(row.id)))
+                      }
+                      onChange={toggleAllImportRows}
+                    />
+                  }
+                    label="Select all"
+                />
+                <FormControl size="small" sx={{ minWidth: 240 }}>
+                  <InputLabel>Default category</InputLabel>
+                  <Select
+                    value={importBulkCategory}
+                    label="Default category"
+                    onChange={(e) => setImportBulkCategory(e.target.value)}
+                  >
+                    <MenuItem value="">No category</MenuItem>
+                    {allPostingAccounts.map((account) => (
+                      <MenuItem key={account.id} value={String(account.id)}>
+                        {account.account_code ? `${account.account_code} ` : ""}
+                        {account.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button
+                  size="small"
+                  variant="contained"
+                  sx={{ bgcolor: accent }}
+                  disabled={importLoading || importSelectedRows.length === 0}
+                  onClick={handleBulkApprove}
+                >
+                  {importLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                  Approve Selected
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  sx={{ bgcolor: "success.main" }}
+                  disabled={importLoading || !parseList(importRows).some((row) => row.status === "approved")}
+                  onClick={handleBookImport}
+                >
+                  {importLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                  Book All Approved
+                </Button>
+              </Box>
+              {importRows.length === 0 ? (
+                <Typography>No rows to review yet.</Typography>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={headerCellStyle}>Select</TableCell>
+                        <TableCell sx={headerCellStyle}>Date</TableCell>
+                        <TableCell sx={headerCellStyle}>Description</TableCell>
+                        <TableCell sx={headerCellStyle} align="right">
+                          Amount
+                        </TableCell>
+                        <TableCell sx={headerCellStyle}>Category</TableCell>
+                        <TableCell sx={headerCellStyle}>Property</TableCell>
+                        <TableCell sx={headerCellStyle}>Status</TableCell>
+                        <TableCell sx={headerCellStyle}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {parseList(importRows).map((row) => (
+                        <TableRow
+                          key={row.id}
+                          sx={row.is_duplicate ? { bgcolor: "rgba(250, 204, 21, 0.08)" } : undefined}
+                        >
+                          <TableCell>
+                            <Checkbox
+                              checked={importSelectedRows.includes(String(row.id))}
+                              onChange={() => toggleImportRowSelection(row.id)}
+                              disabled={row.status === "booked"}
+                            />
+                          </TableCell>
+                          <TableCell>{toDateStr(row.date)}</TableCell>
+                          <TableCell>{row.description || "-"}</TableCell>
+                          <TableCell align="right" sx={{ color: parseNumber(row.amount) < 0 ? "error.main" : "success.main", fontFamily: "monospace" }}>
+                            {formatSignedMoney(row.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <FormControl size="small" fullWidth>
+                              <InputLabel>Category</InputLabel>
+                              <Select
+                                value={String(row.category || "")}
+                                label="Category"
+                                onChange={(e) => setImportRowCategory(row.id, e.target.value)}
+                                disabled={row.status === "booked"}
+                              >
+                                <MenuItem value="">None</MenuItem>
+                                {allPostingAccounts.map((account) => (
+                                  <MenuItem key={account.id} value={String(account.id)}>
+                                    {account.account_code ? `${account.account_code} ` : ""}
+                                    {account.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+                          <TableCell>
+                            <FormControl size="small" fullWidth>
+                              <InputLabel>Property</InputLabel>
+                              <Select
+                                value={String(row.property_link || "")}
+                                label="Property"
+                                onChange={(e) => setImportRowProperty(row.id, e.target.value)}
+                                disabled={row.status === "booked"}
+                              >
+                                <MenuItem value="">None</MenuItem>
+                                {properties.map((property) => (
+                                  <MenuItem key={property.id} value={String(property.id)}>
+                                    {property.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={row.status || "pending"}
+                              color={
+                                row.status === "booked"
+                                  ? "success"
+                                  : row.status === "approved"
+                                    ? "info"
+                                    : "default"
+                              }
+                              size="small"
+                            />
+                            {row.is_duplicate ? (
+                              <Chip
+                                size="small"
+                                label="Possible duplicate"
+                                color="warning"
+                                sx={{ ml: 0.6, mt: 0.6 }}
+                              />
+                            ) : null}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              onClick={() => setImportRowStatus(row.id, "approved")}
+                              disabled={row.status === "approved" || row.status === "booked"}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="small"
+                              color="warning"
+                              onClick={() => setImportRowStatus(row.id, "skipped")}
+                              disabled={row.status === "booked"}
+                            >
+                              Skip
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeImportDialog}>Close</Button>
+          {importStep === 2 ? (
+            <Button onClick={() => setImportStep(1)} disabled={importLoading}>
+              Back
+            </Button>
+          ) : null}
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={showIncome} onClose={() => setShowIncome(false)} fullWidth maxWidth="sm">
         <DialogTitle>Record Income</DialogTitle>
         <DialogContent sx={{ display: "grid", gap: 1.2, mt: 0.5 }}>
@@ -2220,6 +2791,7 @@ function Accounting() {
 }
 
 export default Accounting;
+
 
 
 

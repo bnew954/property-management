@@ -21,6 +21,8 @@ from .models import (
     Expense,
     RentLedgerEntry,
     Transaction,
+    TransactionImport,
+    ImportedTransaction,
     LateFeeRule,
     OwnerStatement,
     AccountingCategory,
@@ -619,6 +621,69 @@ class RecurringTransactionSerializer(serializers.ModelSerializer):
         model = RecurringTransaction
         fields = "__all__"
         read_only_fields = ["organization", "created_by"]
+
+
+class TransactionImportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TransactionImport
+        fields = ["id", "filename", "uploaded_at", "status", "row_count", "column_mapping"]
+        read_only_fields = ["id", "uploaded_at", "row_count", "filename", "status"]
+
+
+class CSVColumnMappingSerializer(serializers.Serializer):
+    date_column = serializers.CharField()
+    description_column = serializers.CharField()
+    amount_column = serializers.CharField()
+    reference_column = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+
+class ImportedTransactionSerializer(serializers.ModelSerializer):
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=AccountingCategory.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    property_link = serializers.PrimaryKeyRelatedField(
+        queryset=Property.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    category_name = serializers.SerializerMethodField(read_only=True)
+    property_name = serializers.SerializerMethodField(read_only=True)
+    journal_entry = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ImportedTransaction
+        fields = [
+            "id",
+            "date",
+            "description",
+            "amount",
+            "reference",
+            "category",
+            "category_name",
+            "property_link",
+            "property_name",
+            "status",
+            "is_duplicate",
+            "journal_entry",
+        ]
+        read_only_fields = ["id", "category_name", "property_name", "is_duplicate", "journal_entry"]
+
+    def get_category_name(self, obj):
+        if not obj.category_id:
+            return None
+        return obj.category.name
+
+    def get_property_name(self, obj):
+        if not obj.property_link_id:
+            return None
+        return obj.property_link.name
+
+    def get_journal_entry(self, obj):
+        if not obj.journal_entry_id:
+            return None
+        return obj.journal_entry_id
 
 
 class TransactionSerializer(serializers.ModelSerializer):

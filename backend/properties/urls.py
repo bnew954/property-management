@@ -48,6 +48,8 @@ from .views import (
     RegisterView,
     RentLedgerEntryViewSet,
     RentalApplicationViewSet,
+    TransactionImportViewSet,
+    ImportedTransactionViewSet,
     ScreeningRequestViewSet,
     ScreeningConsentPublicView,
     LeaseSigningPublicView,
@@ -66,6 +68,12 @@ router.register("accounting/transactions", TransactionViewSet, basename="transac
 router.register("accounting/owner-statements", OwnerStatementViewSet, basename="owner-statement")
 router.register("accounting/periods", AccountingPeriodViewSet, basename="accounting-period")
 router.register("accounting/recurring", RecurringTransactionViewSet, basename="accounting-recurring")
+router.register("accounting/imports", TransactionImportViewSet, basename="accounting-import")
+router.register(
+    "accounting/imported-transactions",
+    ImportedTransactionViewSet,
+    basename="accounting-imported-transaction",
+)
 router.register("payments", PaymentViewSet, basename="payment")
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("messages", MessageViewSet, basename="message")

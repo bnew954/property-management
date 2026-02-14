@@ -185,6 +185,21 @@ export const recordExpense = (payload) =>
   api.post("accounting/record-expense/", payload);
 export const recordTransfer = (payload) =>
   api.post("accounting/record-transfer/", payload);
+export const getTransactionImports = () => api.get("accounting/imports/");
+export const createTransactionImport = (formData) =>
+  api.post("accounting/imports/", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+export const getTransactionImport = (id) => api.get(`accounting/imports/${id}/`);
+export const confirmImportMapping = (id, mapping) =>
+  api.post(`accounting/imports/${id}/confirm-mapping/`, mapping);
+export const bookImport = (id) => api.post(`accounting/imports/${id}/book/`);
+export const getImportedTransactions = (importId) =>
+  api.get(`accounting/imported-transactions/?import_id=${importId}`);
+export const updateImportedTransaction = (id, payload) =>
+  api.patch(`accounting/imported-transactions/${id}/`, payload);
+export const bulkApproveTransactions = (payload) =>
+  api.post("accounting/imported-transactions/bulk-approve/", payload);
 export const getTrialBalanceReport = (params = {}) =>
   api.get("accounting/reports/trial-balance/", { params });
 export const getBalanceSheetReport = (params = {}) =>

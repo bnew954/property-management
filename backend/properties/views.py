@@ -1,10 +1,14 @@
 from datetime import date, timedelta
 from collections import defaultdict
+import csv
+from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Iterable
+import io
 import logging
 import random
 import uuid
+import hashlib
 
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
@@ -16,6 +20,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,6 +28,8 @@ from rest_framework.views import APIView
 from .mixins import OrganizationQuerySetMixin, resolve_request_organization
 from .models import (
     AccountingCategory,
+    ImportedTransaction,
+    TransactionImport,
     Document,
     Expense,
     Lease,
@@ -76,6 +83,9 @@ from .serializers import (
     JournalEntryLineSerializer,
     AccountingPeriodSerializer,
     RecurringTransactionSerializer,
+    TransactionImportSerializer,
+    ImportedTransactionSerializer,
+    CSVColumnMappingSerializer,
 )
 from .signals import recalculate_lease_balances
 from .utils import generate_lease_document, seed_chart_of_accounts
@@ -164,6 +174,66 @@ def _parse_date_value(value):
         return date.fromisoformat(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_csv_date(value):
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    parse_formats = [
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%m/%d/%y",
+        "%m-%d-%Y",
+        "%Y/%m/%d",
+    ]
+    for fmt in parse_formats:
+        try:
+            return datetime.strptime(normalized, fmt).date()
+        except (TypeError, ValueError):
+            pass
+    try:
+        from dateutil import parser as _dateutil_parser  # type: ignore
+
+        return _dateutil_parser.parse(normalized).date()
+    except Exception:
+        return None
+
+
+def _parse_amount_value(value):
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    negative = raw.startswith("(") and raw.endswith(")")
+    if negative:
+        raw = raw[1:-1]
+    raw = raw.replace("$", "").replace(",", "").strip()
+    if not raw:
+        return None
+    try:
+        amount = Decimal(raw)
+    except (ArithmeticError, ValueError):
+        return None
+    if negative:
+        amount = -amount
+    return amount
+
+
+def _parse_csv_bytes(raw_bytes):
+    if raw_bytes is None:
+        return ""
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return raw_bytes.decode(encoding)
+        except (UnicodeDecodeError, AttributeError):
+            continue
+    return raw_bytes.decode("utf-8", errors="ignore")
 
 
 def _month_labels(start_date, end_date):
@@ -607,6 +677,25 @@ def _transaction_to_journal_entry(transaction_obj):
         source_id=transaction_obj.id,
         status=JournalEntry.STATUS_POSTED,
     )
+
+
+class _ImportPagination(PageNumberPagination):
+    page_size = 100
+
+
+def _normalize_mapping_row(row):
+    return {
+        str(k or ""): ("" if v is None else str(v).strip())
+        for k, v in (row or {}).items()
+    }
+
+
+def _load_import_rows(transaction_import):
+    mapping_payload = (
+        transaction_import.column_mapping if isinstance(transaction_import.column_mapping, dict) else {}
+    )
+    rows = mapping_payload.get("rows")
+    return rows if isinstance(rows, list) else []
 
 
 logger = logging.getLogger(__name__)
@@ -2690,6 +2779,331 @@ class JournalEntryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         journal_entry.status = JournalEntry.STATUS_VOIDED
         journal_entry.save(update_fields=["status"])
         return Response(JournalEntrySerializer(journal_entry).data)
+
+
+class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = TransactionImport.objects.all()
+    serializer_class = TransactionImportSerializer
+    permission_classes = [IsLandlord]
+    pagination_class = _ImportPagination
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            return TransactionImport.objects.none()
+        return TransactionImport.objects.filter(organization=organization).order_by("-uploaded_at")
+
+    def create(self, request, *args, **kwargs):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        upload_file = request.FILES.get("file")
+        if not upload_file:
+            return Response({"file": "A CSV file is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        filename = getattr(upload_file, "name", "import.csv")
+        if not str(filename).lower().endswith(".csv"):
+            return Response({"file": "Only CSV files are supported."}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_text = _parse_csv_bytes(upload_file.read())
+        if not raw_text:
+            return Response({"file": "Unable to read CSV file."}, status=status.HTTP_400_BAD_REQUEST)
+
+        reader = csv.DictReader(io.StringIO(raw_text))
+        if not reader.fieldnames:
+            return Response({"file": "CSV must contain a header row."}, status=status.HTTP_400_BAD_REQUEST)
+
+        headers = [str(h or "").strip() for h in reader.fieldnames]
+        imported_rows = []
+        for row in reader:
+            normalized = _normalize_mapping_row(row)
+            if any(v for v in normalized.values()):
+                imported_rows.append(normalized)
+
+        import_record = TransactionImport.objects.create(
+            organization=organization,
+            uploaded_by=request.user,
+            filename=filename,
+            status=TransactionImport.STATUS_PENDING,
+            row_count=len(imported_rows),
+            column_mapping={"headers": headers, "rows": imported_rows},
+        )
+
+        return Response(
+            {
+                "import": TransactionImportSerializer(import_record).data,
+                "detected_headers": headers,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="confirm-mapping")
+    def confirm_mapping(self, request, pk=None):
+        instance = self.get_object()
+        mapping_serializer = CSVColumnMappingSerializer(data=request.data)
+        mapping_serializer.is_valid(raise_exception=True)
+
+        mapping = mapping_serializer.validated_data
+        organization = instance.organization
+
+        rows = _load_import_rows(instance)
+        if not rows:
+            return Response({"detail": "No import rows found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_col = mapping["date_column"]
+        description_col = mapping["description_column"]
+        amount_col = mapping["amount_column"]
+        reference_col = mapping.get("reference_column") or ""
+
+        created_count = 0
+        duplicate_count = 0
+        skipped_count = 0
+
+        with db_transaction.atomic():
+            ImportedTransaction.objects.filter(transaction_import=instance).delete()
+
+            for raw_row in rows:
+                raw_date = raw_row.get(date_col)
+                raw_description = (raw_row.get(description_col) or "").strip()
+                raw_amount = raw_row.get(amount_col)
+                raw_reference = (
+                    (raw_row.get(reference_col) or "").strip() if reference_col else ""
+                )
+
+                parsed_date = _parse_csv_date(raw_date)
+                parsed_amount = _parse_amount_value(raw_amount)
+                if parsed_date is None or parsed_amount is None or not raw_description:
+                    skipped_count += 1
+                    continue
+
+                txn_hash = TransactionImport.compute_hash(
+                    organization.id,
+                    parsed_date,
+                    parsed_amount,
+                    raw_description,
+                )
+                duplicate = ImportedTransaction.objects.filter(
+                    organization=organization,
+                    transaction_hash=txn_hash,
+                ).exists()
+                if duplicate:
+                    duplicate_count += 1
+
+                ImportedTransaction.objects.create(
+                    transaction_import=instance,
+                    organization=organization,
+                    date=parsed_date,
+                    description=raw_description,
+                    amount=parsed_amount,
+                    reference=raw_reference,
+                    status=ImportedTransaction.STATUS_PENDING,
+                    is_duplicate=duplicate,
+                    transaction_hash=txn_hash,
+                )
+                created_count += 1
+
+            instance.status = TransactionImport.STATUS_MAPPED
+            instance.column_mapping = {
+                **(instance.column_mapping if isinstance(instance.column_mapping, dict) else {}),
+                "confirmed_mapping": {
+                    "date_column": date_col,
+                    "description_column": description_col,
+                    "amount_column": amount_col,
+                    "reference_column": reference_col,
+                },
+            }
+            instance.row_count = created_count
+            instance.save(update_fields=["status", "column_mapping", "row_count"])
+
+        return Response(
+            {
+                "import": TransactionImportSerializer(instance).data,
+                "created": created_count,
+                "skipped": skipped_count,
+                "duplicates": duplicate_count,
+                "status": instance.status,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        transactions = ImportedTransaction.objects.filter(
+            transaction_import=instance
+        ).order_by("id")
+        serializer = self.get_serializer(instance)
+
+        if self.paginator:
+            page = self.paginator.paginate_queryset(transactions, request)
+            tx_data = ImportedTransactionSerializer(page, many=True).data
+            pagination = self.paginator.get_paginated_response(tx_data).data
+            pagination["import"] = serializer.data
+            pagination["transactions"] = tx_data
+            return Response(pagination)
+
+        return Response(
+            {
+                "import": serializer.data,
+                "transactions": ImportedTransactionSerializer(transactions, many=True).data,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="book")
+    def book(self, request, pk=None):
+        instance = self.get_object()
+        organization = instance.organization
+
+        rows = ImportedTransaction.objects.filter(
+            transaction_import=instance,
+            status=ImportedTransaction.STATUS_APPROVED,
+            journal_entry__isnull=True,
+        ).select_related("category")
+        if not rows.exists():
+            return Response({"detail": "No approved rows to book."}, status=status.HTTP_400_BAD_REQUEST)
+
+        cash_account = _cash_account_for_organization(organization)
+        if not cash_account:
+            return Response({"detail": "Cash account not configured."}, status=status.HTTP_400_BAD_REQUEST)
+
+        booked = 0
+        skipped = 0
+        total = Decimal("0.00")
+        skipped_rows = []
+
+        with db_transaction.atomic():
+            for row in rows:
+                amount = row.amount
+                if amount is None or amount == 0:
+                    skipped += 1
+                    skipped_rows.append(row.id)
+                    continue
+                if not row.category or row.category.is_header or not row.category.is_active:
+                    skipped += 1
+                    skipped_rows.append(row.id)
+                    continue
+
+                if amount > 0:
+                    lines = [
+                        {
+                            "account_id": cash_account.id,
+                            "debit_amount": amount,
+                            "credit_amount": Decimal("0.00"),
+                            "reference": row.reference,
+                        },
+                        {
+                            "account_id": row.category.id,
+                            "debit_amount": Decimal("0.00"),
+                            "credit_amount": amount,
+                            "reference": row.reference,
+                        },
+                    ]
+                else:
+                    abs_amount = abs(amount)
+                    lines = [
+                        {
+                            "account_id": row.category.id,
+                            "debit_amount": abs_amount,
+                            "credit_amount": Decimal("0.00"),
+                            "reference": row.reference,
+                        },
+                        {
+                            "account_id": cash_account.id,
+                            "debit_amount": Decimal("0.00"),
+                            "credit_amount": abs_amount,
+                            "reference": row.reference,
+                        },
+                    ]
+
+                try:
+                    journal_entry = _create_posted_journal_entry(
+                        organization=organization,
+                        entry_date=row.date,
+                        memo=f"Import #{instance.id} row #{row.id}",
+                        lines=lines,
+                        user=request.user,
+                        source_type="import",
+                        source_id=row.id,
+                        status=JournalEntry.STATUS_POSTED,
+                    )
+                except ValidationError:
+                    skipped += 1
+                    skipped_rows.append(row.id)
+                    continue
+
+                row.status = ImportedTransaction.STATUS_BOOKED
+                row.journal_entry = journal_entry
+                row.save(update_fields=["status", "journal_entry"])
+                booked += 1
+                total += row.amount
+
+            instance.status = TransactionImport.STATUS_COMPLETED
+            instance.save(update_fields=["status"])
+
+        return Response(
+            {
+                "booked": booked,
+                "total": _to_float(total),
+                "skipped": skipped,
+                "skipped_rows": skipped_rows,
+            }
+        )
+
+
+class ImportedTransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = ImportedTransaction.objects.all()
+    serializer_class = ImportedTransactionSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        queryset = ImportedTransaction.objects.filter(transaction_import__organization=organization)
+        if self.action == "list":
+            import_id = self.request.query_params.get("import_id")
+            if not import_id:
+                return queryset.none()
+            queryset = queryset.filter(transaction_import_id=import_id)
+        return queryset.order_by("-id")
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["post"], url_path="bulk-approve")
+    def bulk_approve(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        ids = request.data.get("ids")
+        category_id = request.data.get("category")
+        if not ids or not isinstance(ids, list):
+            return Response({"ids": "A list of transaction ids is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = ImportedTransaction.objects.filter(
+            id__in=ids,
+            transaction_import__organization=organization,
+        )
+
+        category = None
+        if category_id not in (None, "", 0, "0"):
+            category = _resolve_chart_account(organization, account_id=category_id)
+            if not category or category.is_header:
+                return Response({"category": "Invalid category."}, status=status.HTTP_400_BAD_REQUEST)
+
+        approved_count = 0
+        with db_transaction.atomic():
+            for row in queryset:
+                if category and not row.category_id:
+                    row.category = category
+                row.status = ImportedTransaction.STATUS_APPROVED
+                row.save(update_fields=["category", "status"])
+                approved_count += 1
+
+        return Response({"approved": approved_count})
 
 
 class RecordIncomeView(APIView):

@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.template.defaultfilters import slugify
 from django.utils.timezone import now
 import uuid
+import hashlib
 
 
 class Organization(models.Model):
@@ -1063,6 +1064,99 @@ class Transaction(models.Model):
         return f"{self.transaction_type.upper()} #{self.id}: {self.amount}"
 
 
+class TransactionImport(models.Model):
+    STATUS_PENDING = "pending_mapping"
+    STATUS_MAPPED = "mapped"
+    STATUS_REVIEWED = "reviewed"
+    STATUS_COMPLETED = "completed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending Mapping"),
+        (STATUS_MAPPED, "Mapped"),
+        (STATUS_REVIEWED, "Reviewed"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="transaction_imports",
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="uploaded_transaction_imports",
+    )
+    filename = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    column_mapping = models.JSONField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    row_count = models.IntegerField(default=0)
+
+    def __str__(self):
+        return f"Import {self.id} ({self.filename})"
+
+    @staticmethod
+    def compute_hash(organization_id, txn_date, amount, description):
+        payload = f"{organization_id}:{txn_date}:{amount}:{description.strip().lower()}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+class ImportedTransaction(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_SKIPPED = "skipped"
+    STATUS_BOOKED = "booked"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending Review"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_SKIPPED, "Skipped"),
+        (STATUS_BOOKED, "Booked"),
+    ]
+
+    transaction_import = models.ForeignKey(
+        TransactionImport,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="imported_transactions",
+    )
+    date = models.DateField()
+    description = models.CharField(max_length=500)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reference = models.CharField(max_length=100, blank=True, default="")
+    category = models.ForeignKey(
+        "AccountingCategory",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imported_transactions",
+    )
+    property_link = models.ForeignKey(
+        "Property",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imported_transactions",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    journal_entry = models.ForeignKey(
+        "JournalEntry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imported_transactions",
+    )
+    transaction_hash = models.CharField(max_length=64, db_index=True)
+    is_duplicate = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-date", "id"]
+
+    def __str__(self):
+        return f"Imported tx {self.id} ({self.amount})"
 class JournalEntry(models.Model):
     STATUS_DRAFT = "draft"
     STATUS_POSTED = "posted"
