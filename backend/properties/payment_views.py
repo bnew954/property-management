@@ -2,13 +2,23 @@ from decimal import Decimal
 import logging
 
 from django.conf import settings
+from django.db import transaction as db_transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import AccountingCategory, Lease, Payment, Transaction, UserProfile
+from .models import (
+    AccountingCategory,
+    JournalEntry,
+    JournalEntryLine,
+    Lease,
+    Payment,
+    Transaction,
+    UserProfile,
+)
 from .mixins import resolve_request_organization
 from .serializers import PaymentSerializer
 from .emails import send_payment_confirmation, send_payment_received_landlord
@@ -21,6 +31,21 @@ def _tenant_for_user(user):
     if profile.role != UserProfile.ROLE_TENANT:
         return None
     return profile.tenant_id
+
+
+def _resolve_chart_account(organization, account_code):
+    if not account_code:
+        return None
+
+    return (
+        AccountingCategory.objects.filter(
+            Q(organization=organization) | Q(organization__isnull=True),
+            account_code=str(account_code).strip(),
+            is_active=True,
+        )
+        .order_by("organization__isnull", "organization_id")
+        .first()
+    )
 
 
 def _get_rent_income_category(organization):
@@ -40,6 +65,67 @@ def _get_rent_income_category(organization):
     ).first()
 
 
+def _create_payment_journal_entry(payment, transaction_obj, user):
+    if not payment.organization:
+        return
+
+    if JournalEntry.objects.filter(source_type="rent_payment", source_id=payment.id).exists():
+        return
+
+    cash_account = _resolve_chart_account(payment.organization, "1020")
+    income_account = _resolve_chart_account(payment.organization, "4100")
+    if not cash_account or not income_account:
+        return
+
+    lease = payment.lease
+    property_obj = lease.unit.property if lease and lease.unit else None
+    unit = lease.unit if lease else None
+    tenant = lease.tenant if lease else None
+
+    with db_transaction.atomic():
+        journal_entry = JournalEntry.objects.create(
+            organization=payment.organization,
+            entry_date=payment.payment_date,
+            memo=transaction_obj.description or f"Payment for lease {payment.lease_id}",
+            status=JournalEntry.STATUS_POSTED,
+            source_type="rent_payment",
+            source_id=payment.id,
+            created_by=user,
+            posted_at=timezone.now(),
+        )
+        JournalEntryLine.objects.bulk_create(
+            [
+                JournalEntryLine(
+                    journal_entry=journal_entry,
+                    organization=payment.organization,
+                    account=cash_account,
+                    debit_amount=payment.amount,
+                    credit_amount=Decimal("0.00"),
+                    description=transaction_obj.description,
+                    property=property_obj,
+                    unit=unit,
+                    tenant=tenant,
+                    lease=lease,
+                ),
+                JournalEntryLine(
+                    journal_entry=journal_entry,
+                    organization=payment.organization,
+                    account=income_account,
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=payment.amount,
+                    description=transaction_obj.description,
+                    property=property_obj,
+                    unit=unit,
+                    tenant=tenant,
+                    lease=lease,
+                ),
+            ]
+        )
+
+    transaction_obj.journal_entry = journal_entry
+    transaction_obj.save(update_fields=["journal_entry"])
+
+
 def _create_payment_transaction(payment, user):
     if not payment.organization or not payment.lease:
         return
@@ -47,7 +133,7 @@ def _create_payment_transaction(payment, user):
         return
 
     category = _get_rent_income_category(payment.organization)
-    Transaction.objects.create(
+    transaction_obj = Transaction.objects.create(
         organization=payment.organization,
         transaction_type=Transaction.TYPE_INCOME,
         category=category,
@@ -61,6 +147,13 @@ def _create_payment_transaction(payment, user):
         payment=payment,
         created_by=user,
     )
+
+    try:
+        _create_payment_journal_entry(payment, transaction_obj, user)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Unable to create journal entry for payment=%s", payment.id
+        )
 
 
 class CreatePaymentIntentView(APIView):

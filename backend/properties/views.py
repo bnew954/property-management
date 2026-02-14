@@ -1,13 +1,14 @@
 from datetime import date, timedelta
 from collections import defaultdict
 from decimal import Decimal
+from typing import Dict, Iterable
 import logging
 import random
 import uuid
 
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction as db_transaction
 from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, Count, Max
 from django.db.models.functions import Coalesce, TruncMonth
 from django.http import FileResponse
@@ -39,6 +40,10 @@ from .models import (
     ScreeningRequest,
     Tenant,
     Transaction,
+    JournalEntry,
+    JournalEntryLine,
+    AccountingPeriod,
+    RecurringTransaction,
     Unit,
     UserProfile,
 )
@@ -67,9 +72,13 @@ from .serializers import (
     TenantConsentSerializer,
     TenantSerializer,
     UnitSerializer,
+    JournalEntrySerializer,
+    JournalEntryLineSerializer,
+    AccountingPeriodSerializer,
+    RecurringTransactionSerializer,
 )
 from .signals import recalculate_lease_balances
-from .utils import generate_lease_document
+from .utils import generate_lease_document, seed_chart_of_accounts
 from .emails import (
     send_application_received,
     send_application_status_update,
@@ -279,6 +288,351 @@ def _latest_lease_balances(org, lease_ids):
     for lease_id, balance in balances:
         balance_map[lease_id] = balance
     return balance_map
+
+
+def _to_decimal(value):
+    if value in (None, ""):
+        return Decimal("0.00")
+    try:
+        return Decimal(str(value))
+    except (TypeError, ValueError, ArithmeticError):
+        return Decimal("0.00")
+
+
+def _ensure_chart_of_accounts(organization):
+    if not organization:
+        return
+    try:
+        seed_chart_of_accounts(organization)
+    except Exception:
+        logger = logging.getLogger(__name__)
+        logger.exception(
+            "Failed to seed default chart of accounts for organization=%s", organization.id
+        )
+
+
+def _resolve_chart_account(
+    organization,
+    account_id=None,
+    account_code=None,
+    account_name=None,
+    fallback_code=None,
+):
+    if organization is None:
+        return None
+
+    candidates = []
+    if account_id:
+        try:
+            candidates.append(("id", int(account_id)))
+        except (TypeError, ValueError):
+            pass
+    if account_code:
+        candidates.append(("code", str(account_code).strip()))
+    if account_name:
+        candidates.append(("name", str(account_name).strip()))
+    if fallback_code:
+        candidates.append(("code", str(fallback_code).strip()))
+
+    if account_code is not None and account_code not in ("", "0"):
+        candidates.append(("code", str(account_code).strip()))
+
+    for key, value in candidates:
+        if not value:
+            continue
+        if key == "id":
+            acct = AccountingCategory.objects.filter(
+                organization=organization, id=value, is_active=True
+            ).first()
+            if acct:
+                return acct
+        elif key == "code":
+            acct = AccountingCategory.objects.filter(
+                Q(organization=organization) | Q(organization__isnull=True),
+                account_code=value,
+                is_active=True,
+            ).first()
+            if acct:
+                return acct
+        elif key == "name":
+            acct = AccountingCategory.objects.filter(
+                Q(organization=organization) | Q(organization__isnull=True),
+                name=value,
+                is_active=True,
+            ).first()
+            if acct:
+                return acct
+    return None
+
+
+def _validate_account_can_post(account):
+    if account.is_system and account.parent_account_id is None and account.is_header is False:
+        # Allow system leaf accounts (e.g. seeded accounts).
+        return True
+    if account.is_header:
+        raise ValidationError("Cannot post to a header account.")
+    if not account.is_active:
+        raise ValidationError("Cannot post to an inactive account.")
+
+
+def _period_is_locked(organization, entry_date):
+    return AccountingPeriod.objects.filter(
+        organization=organization,
+        is_locked=True,
+        period_start__lte=entry_date,
+        period_end__gte=entry_date,
+    ).exists()
+
+
+def _normalize_journal_lines(lines):
+    total_debit = Decimal("0.00")
+    total_credit = Decimal("0.00")
+
+    for line in lines:
+        if not isinstance(line, dict):
+            raise ValidationError("Each journal line must be an object.")
+        debit = _to_decimal(line.get("debit_amount"))
+        credit = _to_decimal(line.get("credit_amount"))
+        if debit > 0 and credit > 0:
+            raise ValidationError("Each line cannot have both debit and credit.")
+        if debit <= 0 and credit <= 0:
+            raise ValidationError("Each line must have either debit or credit amount.")
+        account = line.get("account")
+        if account is None:
+            raise ValidationError("Each line requires an account.")
+        if not hasattr(account, "id"):
+            account = _resolve_chart_account(
+                None if line.get("organization") is None else line["organization"],
+                account_id=account,
+            )
+        if account is None:
+            raise ValidationError("Invalid account in journal line.")
+        _validate_account_can_post(account)
+        total_debit += debit
+        total_credit += credit
+
+    if total_debit != total_credit:
+        raise ValidationError("Journal entry must be balanced (total debits must equal total credits).")
+    return total_debit, total_credit
+
+
+def _posted_line_queryset(
+    organization,
+    property_id=None,
+    account_id=None,
+    date_from=None,
+    date_to=None,
+):
+    queryset = JournalEntryLine.objects.filter(
+        journal_entry__organization=organization,
+        journal_entry__status=JournalEntry.STATUS_POSTED,
+    ).select_related("journal_entry", "account", "property", "unit", "tenant", "lease")
+
+    if property_id:
+        queryset = queryset.filter(property_id=property_id)
+    if account_id:
+        queryset = queryset.filter(account_id=account_id)
+    if date_from:
+        queryset = queryset.filter(journal_entry__entry_date__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(journal_entry__entry_date__lte=date_to)
+    return queryset
+
+
+def _account_running_balance(lines):
+    balance = Decimal("0.00")
+    rows = []
+    for line in lines:
+        account = line.account
+        debit = line.debit_amount or Decimal("0.00")
+        credit = line.credit_amount or Decimal("0.00")
+        if account.normal_balance == AccountingCategory.NORMAL_BALANCE_CREDIT:
+            balance += (credit - debit)
+        else:
+            balance += (debit - credit)
+        rows.append(
+            {
+                "line_id": line.id,
+                "entry_id": line.journal_entry_id,
+                "entry_date": str(line.journal_entry.entry_date),
+                "memo": line.journal_entry.memo,
+                "account_id": account.id,
+                "account_name": account.name,
+                "account_code": account.account_code,
+                "debit_amount": _to_float(debit),
+                "credit_amount": _to_float(credit),
+                "balance": _to_float(balance),
+                "property_id": line.property_id,
+                "property_name": line.property.name if line.property else None,
+                "unit_name": line.unit.unit_number if line.unit else None,
+                "tenant_id": line.tenant_id,
+                "lease_id": line.lease_id,
+            }
+        )
+    return rows, balance
+
+
+def _create_posted_journal_entry(
+    organization,
+    entry_date,
+    memo,
+    lines,
+    user=None,
+    source_type="manual",
+    source_id=None,
+    status=JournalEntry.STATUS_DRAFT,
+    is_adjusting=False,
+    auto_post=False,
+):
+    if not lines:
+        raise ValidationError("Journal entry lines are required.")
+    if _period_is_locked(organization, entry_date):
+        raise ValidationError("Cannot create or post entries in a locked accounting period.")
+
+    resolved_lines = []
+    total_debit = Decimal("0.00")
+    total_credit = Decimal("0.00")
+
+    for line in lines:
+        account = _resolve_chart_account(
+            organization,
+            account_id=line.get("account_id"),
+            account_code=line.get("account_code"),
+            account_name=line.get("account_name"),
+        )
+        if not account:
+            raise ValidationError("One or more journal lines reference unknown accounts.")
+        _validate_account_can_post(account)
+        debit = _to_decimal(line.get("debit_amount"))
+        credit = _to_decimal(line.get("credit_amount"))
+        if debit > 0 and credit > 0:
+            raise ValidationError("Journal lines cannot contain both debit and credit values.")
+        if debit <= 0 and credit <= 0:
+            raise ValidationError("Each journal line must contain debit or credit.")
+
+        total_debit += debit
+        total_credit += credit
+        resolved_lines.append(
+            {
+                "account": account,
+                "debit_amount": debit,
+                "credit_amount": credit,
+                "description": line.get("description", ""),
+                "property_id": line.get("property_id"),
+                "unit_id": line.get("unit_id"),
+                "tenant_id": line.get("tenant_id"),
+                "lease_id": line.get("lease_id"),
+                "vendor": line.get("vendor", ""),
+                "reference": line.get("reference", ""),
+            }
+        )
+
+    if total_debit != total_credit:
+        raise ValidationError("Journal entry must be balanced.")
+
+    with db_transaction.atomic():
+        journal_entry = JournalEntry.objects.create(
+            organization=organization,
+            entry_date=entry_date,
+            memo=memo[:500] if memo else "",
+            status=status,
+            source_type=source_type,
+            source_id=source_id,
+            is_adjusting=is_adjusting,
+            created_by=user,
+        )
+        if status == JournalEntry.STATUS_POSTED:
+            journal_entry.posted_at = timezone.now()
+            journal_entry.save(update_fields=["posted_at"])
+
+        lines_to_create = [
+            JournalEntryLine(
+                journal_entry=journal_entry,
+                organization=organization,
+                account=line["account"],
+                debit_amount=line["debit_amount"],
+                credit_amount=line["credit_amount"],
+                description=line["description"],
+                property_id=line["property_id"],
+                unit_id=line["unit_id"],
+                tenant_id=line["tenant_id"],
+                lease_id=line["lease_id"],
+                vendor=line["vendor"],
+                reference=line["reference"],
+            )
+            for line in resolved_lines
+        ]
+        JournalEntryLine.objects.bulk_create(lines_to_create)
+
+        if auto_post and journal_entry.status == JournalEntry.STATUS_DRAFT:
+            journal_entry.status = JournalEntry.STATUS_POSTED
+            journal_entry.posted_at = timezone.now()
+            journal_entry.save(update_fields=["status", "posted_at"])
+
+    return journal_entry
+
+
+def _legacy_account_from_category(organization, category):
+    if not category:
+        return None
+
+    org_account = AccountingCategory.objects.filter(
+        organization=organization,
+        name=category.name,
+        is_active=True,
+    ).first()
+    if org_account:
+        return org_account
+
+    global_account = AccountingCategory.objects.filter(
+        name=category.name,
+        is_active=True,
+        organization__isnull=True,
+    ).first()
+    if global_account:
+        return global_account
+
+    return None
+
+
+def _cash_account_for_organization(organization):
+    return (
+        _resolve_chart_account(organization, account_code="1020")
+        or _resolve_chart_account(organization, account_code="1010")
+    )
+
+
+def _transaction_to_journal_entry(transaction_obj):
+    account = _legacy_account_from_category(transaction_obj.organization, transaction_obj.category)
+    if not account:
+        return None
+
+    cash_account = _cash_account_for_organization(transaction_obj.organization)
+    if not cash_account:
+        return None
+
+    if transaction_obj.transaction_type == Transaction.TYPE_INCOME:
+        lines = [
+            {"account_id": cash_account.id, "debit_amount": transaction_obj.amount, "credit_amount": "0.00"},
+            {"account_id": account.id, "debit_amount": "0.00", "credit_amount": transaction_obj.amount},
+        ]
+    else:
+        lines = [
+            {"account_id": account.id, "debit_amount": transaction_obj.amount, "credit_amount": "0.00"},
+            {"account_id": cash_account.id, "debit_amount": "0.00", "credit_amount": transaction_obj.amount},
+        ]
+
+    return _create_posted_journal_entry(
+        organization=transaction_obj.organization,
+        entry_date=transaction_obj.date,
+        memo=transaction_obj.description or "Transaction sync",
+        lines=lines,
+        user=transaction_obj.created_by,
+        source_type="manual",
+        source_id=transaction_obj.id,
+        status=JournalEntry.STATUS_POSTED,
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -2014,11 +2368,24 @@ class AccountingCategoryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
     def get_queryset(self):
         organization = resolve_request_organization(self.request)
         ensure_default_categories(organization)
+        _ensure_chart_of_accounts(organization)
         if not organization:
             return AccountingCategory.objects.none()
         return AccountingCategory.objects.filter(
             Q(organization__isnull=True) | Q(organization=organization)
         )
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        if (request.query_params.get("tree") or "").lower() in {"true", "1", "yes"}:
+            queryset = queryset.filter(parent_account__isnull=True).order_by(
+                "account_code",
+                "name",
+            )
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+        return super().list(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         organization = resolve_request_organization(self.request)
@@ -2036,6 +2403,40 @@ class AccountingCategoryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
         if instance.is_system:
             raise PermissionDenied("System categories cannot be deleted.")
         instance.delete()
+
+    @action(detail=True, methods=["get"])
+    def ledger(self, request, pk=None):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        account = self.get_object()
+        date_from = _parse_date_value(request.query_params.get("date_from"))
+        date_to = _parse_date_value(request.query_params.get("date_to"))
+        property_id = request.query_params.get("property_id")
+
+        lines = _posted_line_queryset(
+            organization=organization,
+            account_id=account.id,
+            property_id=property_id,
+            date_from=date_from,
+            date_to=date_to,
+        ).order_by("journal_entry__entry_date", "journal_entry_id")
+        rows, balance = _account_running_balance(lines)
+        return Response(
+            {
+                "account": {
+                    "id": account.id,
+                    "name": account.name,
+                    "account_code": account.account_code,
+                },
+                "entries": rows,
+                "ending_balance": balance,
+            }
+        )
 
 
 class TransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
@@ -2089,39 +2490,688 @@ class TransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 
         if is_bulk:
             rows = []
+            created_txn_ids = []
             for row in serializer.validated_data:
-                rows.append(
-                    Transaction(
-                        organization=organization,
-                        created_by=request.user,
-                        category=row.get("category"),
-                        transaction_type=row.get("transaction_type"),
-                        amount=row.get("amount"),
-                        date=row.get("date"),
-                        description=row.get("description"),
-                        property=row.get("property"),
-                        unit=row.get("unit"),
-                        tenant=row.get("tenant"),
-                        lease=row.get("lease"),
-                        payment=row.get("payment"),
-                        is_recurring=row.get("is_recurring", False),
-                        recurring_frequency=row.get("recurring_frequency"),
-                        vendor=row.get("vendor", ""),
-                        reference_number=row.get("reference_number", ""),
-                        receipt_document=row.get("receipt_document"),
-                        notes=row.get("notes", ""),
-                    )
+                transaction_row = Transaction(
+                    organization=organization,
+                    created_by=request.user,
+                    category=row.get("category"),
+                    transaction_type=row.get("transaction_type"),
+                    amount=row.get("amount"),
+                    date=row.get("date"),
+                    description=row.get("description"),
+                    property=row.get("property"),
+                    unit=row.get("unit"),
+                    tenant=row.get("tenant"),
+                    lease=row.get("lease"),
+                    payment=row.get("payment"),
+                    is_recurring=row.get("is_recurring", False),
+                    recurring_frequency=row.get("recurring_frequency"),
+                    vendor=row.get("vendor", ""),
+                    reference_number=row.get("reference_number", ""),
+                    receipt_document=row.get("receipt_document"),
+                    notes=row.get("notes", ""),
                 )
+                rows.append(transaction_row)
+
             objs = Transaction.objects.bulk_create(rows)
-            response = self.get_serializer(objs, many=True)
+            for obj in objs:
+                created_txn_ids.append(obj.id)
+                try:
+                    journal_entry = _transaction_to_journal_entry(obj)
+                    if journal_entry:
+                        obj.journal_entry = journal_entry
+                        obj.save(update_fields=["journal_entry"])
+                except ValidationError:
+                    logger.info("Skipping journal sync for transaction=%s", obj.id)
+            response = self.get_serializer(
+                Transaction.objects.filter(id__in=created_txn_ids), many=True
+            )
             return Response(response.data, status=status.HTTP_201_CREATED)
 
         instance = serializer.save(organization=organization, created_by=request.user)
+        try:
+            journal_entry = _transaction_to_journal_entry(instance)
+            if journal_entry:
+                instance.journal_entry = journal_entry
+                instance.save(update_fields=["journal_entry"])
+        except ValidationError:
+            logger.info("Skipping journal sync for transaction=%s", instance.id)
         return Response(
             self.get_serializer(instance).data,
             status=status.HTTP_201_CREATED,
         )
 
+
+class JournalEntryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = JournalEntry.objects.select_related("organization", "created_by")
+    serializer_class = JournalEntrySerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        queryset = JournalEntry.objects.filter(organization=resolve_request_organization(self.request)).order_by(
+            "-entry_date", "-created_at"
+        )
+        params = self.request.query_params
+        status_filter = params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        date_from = _parse_date_value(params.get("date_from"))
+        if date_from:
+            queryset = queryset.filter(entry_date__gte=date_from)
+        date_to = _parse_date_value(params.get("date_to"))
+        if date_to:
+            queryset = queryset.filter(entry_date__lte=date_to)
+        source_type = params.get("source_type")
+        if source_type:
+            queryset = queryset.filter(source_type=source_type)
+        property_id = params.get("property_id")
+        if property_id:
+            queryset = queryset.filter(lines__property_id=property_id).distinct()
+        return queryset.prefetch_related("lines", "lines__account", "lines__property", "lines__unit", "lines__tenant", "lines__lease")
+
+    def create(self, request, *args, **kwargs):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = self.get_serializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+
+        lines_input = request.data.get("lines") if isinstance(request.data, dict) else []
+        if not isinstance(lines_input, list) or not lines_input:
+            return Response({"lines": "At least one line is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        entry_date = _parse_date_value(payload.validated_data.get("entry_date"))
+        if not entry_date:
+            return Response({"entry_date": "Invalid date."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if _period_is_locked(organization, entry_date):
+            return Response(
+                {"detail": "Cannot post or edit entries in a locked period."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        normalized_lines = []
+        for line in lines_input:
+            normalized_lines.append(
+                {
+                    "account_id": line.get("account") or line.get("account_id"),
+                    "debit_amount": line.get("debit_amount", "0.00"),
+                    "credit_amount": line.get("credit_amount", "0.00"),
+                    "description": line.get("description", ""),
+                    "property_id": line.get("property"),
+                    "unit_id": line.get("unit"),
+                    "tenant_id": line.get("tenant"),
+                    "lease_id": line.get("lease"),
+                    "vendor": line.get("vendor", ""),
+                    "reference": line.get("reference", ""),
+                }
+            )
+
+        try:
+            journal_entry = _create_posted_journal_entry(
+                organization=organization,
+                entry_date=entry_date,
+                memo=(request.data.get("memo") or "").strip(),
+                lines=normalized_lines,
+                user=request.user,
+                source_type=(request.data.get("source_type") or JournalEntry.STATUS_DRAFT).strip() or "manual",
+                source_id=_coerce_int(request.data.get("source_id")),
+                status=request.data.get("status", JournalEntry.STATUS_DRAFT),
+            )
+        except ValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            JournalEntrySerializer(journal_entry).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="post")
+    def post_entry(self, request, pk=None):
+        journal_entry = self.get_object()
+        if journal_entry.status == JournalEntry.STATUS_POSTED:
+            return Response(
+                {"detail": "Entry already posted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if journal_entry.status == JournalEntry.STATUS_VOIDED:
+            return Response(
+                {"detail": "Cannot post a voided entry."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if _period_is_locked(journal_entry.organization, journal_entry.entry_date):
+            return Response({"detail": "Cannot post entries in a locked period."}, status=status.HTTP_400_BAD_REQUEST)
+
+        lines = JournalEntryLine.objects.filter(journal_entry=journal_entry)
+        for line in lines:
+            _validate_account_can_post(line.account)
+        debit_total = lines.aggregate(total=Sum("debit_amount"))["total"] or Decimal("0.00")
+        credit_total = lines.aggregate(total=Sum("credit_amount"))["total"] or Decimal("0.00")
+        if debit_total != credit_total:
+            return Response(
+                {"detail": "Journal entry is not balanced."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        journal_entry.status = JournalEntry.STATUS_POSTED
+        journal_entry.posted_at = timezone.now()
+        journal_entry.save(update_fields=["status", "posted_at"])
+        return Response(JournalEntrySerializer(journal_entry).data)
+
+    @action(detail=True, methods=["post"], url_path="reverse")
+    def reverse_entry(self, request, pk=None):
+        source_entry = self.get_object()
+        if source_entry.status != JournalEntry.STATUS_POSTED:
+            return Response(
+                {"detail": "Only posted entries can be reversed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reversed_lines = []
+        for line in source_entry.lines.all():
+            reversed_lines.append(
+                {
+                    "account_id": line.account_id,
+                    "debit_amount": line.credit_amount,
+                    "credit_amount": line.debit_amount,
+                    "description": f"Reversal for line {line.id}",
+                    "property_id": line.property_id,
+                    "unit_id": line.unit_id,
+                    "tenant_id": line.tenant_id,
+                    "lease_id": line.lease_id,
+                    "vendor": line.vendor,
+                    "reference": line.reference,
+                }
+            )
+
+        reversal = _create_posted_journal_entry(
+            organization=source_entry.organization,
+            entry_date=date.today(),
+            memo=f"Reversal of entry #{source_entry.id}",
+            lines=reversed_lines,
+            user=request.user,
+            source_type="manual",
+            source_id=source_entry.id,
+            status=JournalEntry.STATUS_POSTED,
+        )
+        source_entry.status = JournalEntry.STATUS_REVERSED
+        source_entry.reversed_by = reversal
+        source_entry.save(update_fields=["status", "reversed_by"])
+        return Response(JournalEntrySerializer(reversal).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="void")
+    def void_entry(self, request, pk=None):
+        journal_entry = self.get_object()
+        if journal_entry.status != JournalEntry.STATUS_DRAFT:
+            return Response(
+                {"detail": "Only draft entries can be voided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        journal_entry.status = JournalEntry.STATUS_VOIDED
+        journal_entry.save(update_fields=["status"])
+        return Response(JournalEntrySerializer(journal_entry).data)
+
+
+class RecordIncomeView(APIView):
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = _to_decimal(request.data.get("amount"))
+        if amount <= 0:
+            return Response({"amount": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+        revenue_account_id = request.data.get("revenue_account_id")
+        deposit_to_account_id = request.data.get("deposit_to_account_id")
+        if not revenue_account_id:
+            return Response({"revenue_account_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_date = _parse_date_value(request.data.get("date")) or date.today()
+        property_id = _coerce_int(request.data.get("property_id"))
+        description = (request.data.get("description") or "").strip()
+
+        revenue_account = _resolve_chart_account(
+            organization,
+            account_id=revenue_account_id,
+        )
+        if not revenue_account or revenue_account.account_type != AccountingCategory.ACCOUNT_TYPE_REVENUE:
+            return Response({"revenue_account_id": "Invalid revenue account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not deposit_to_account_id:
+            deposit_to_account_id = "1020"
+        deposit_account = _resolve_chart_account(
+            organization,
+            account_id=deposit_to_account_id,
+            account_code=deposit_to_account_id,
+        )
+        if not deposit_account:
+            return Response({"deposit_to_account_id": "Invalid deposit account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            journal = _create_posted_journal_entry(
+                organization=organization,
+                entry_date=event_date,
+                memo=description or "Income",
+                lines=[
+                    {"account_id": deposit_account.id, "debit_amount": amount, "credit_amount": Decimal("0.00"), "property_id": property_id},
+                    {"account_id": revenue_account.id, "debit_amount": Decimal("0.00"), "credit_amount": amount, "property_id": property_id},
+                ],
+                user=request.user,
+                source_type="manual",
+                status=JournalEntry.STATUS_POSTED,
+            )
+
+            transaction_obj = Transaction.objects.create(
+                organization=organization,
+                transaction_type=Transaction.TYPE_INCOME,
+                category=revenue_account,
+                amount=amount,
+                date=event_date,
+                description=description or f"Manual income {amount}",
+                property_id=property_id,
+                created_by=request.user,
+                journal_entry=journal,
+            )
+
+        return Response(
+            {
+                "journal_entry": JournalEntrySerializer(journal).data,
+                "transaction": TransactionSerializer(transaction_obj).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class RecordExpenseView(APIView):
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = _to_decimal(request.data.get("amount"))
+        if amount <= 0:
+            return Response({"amount": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+        expense_account_id = request.data.get("expense_account_id")
+        paid_from_account_id = request.data.get("paid_from_account_id") or "1020"
+        if not expense_account_id:
+            return Response({"expense_account_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_date = _parse_date_value(request.data.get("date")) or date.today()
+        property_id = _coerce_int(request.data.get("property_id"))
+        description = (request.data.get("description") or "").strip()
+        vendor = (request.data.get("vendor") or "").strip()
+
+        expense_account = _resolve_chart_account(
+            organization,
+            account_id=expense_account_id,
+        )
+        if not expense_account or expense_account.account_type != AccountingCategory.ACCOUNT_TYPE_EXPENSE:
+            return Response({"expense_account_id": "Invalid expense account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        paid_from_account = _resolve_chart_account(
+            organization,
+            account_id=paid_from_account_id,
+            account_code=paid_from_account_id,
+        )
+        if not paid_from_account:
+            return Response({"paid_from_account_id": "Invalid paid-from account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            journal = _create_posted_journal_entry(
+                organization=organization,
+                entry_date=event_date,
+                memo=description or "Expense",
+                lines=[
+                    {"account_id": expense_account.id, "debit_amount": amount, "credit_amount": Decimal("0.00"), "property_id": property_id},
+                    {"account_id": paid_from_account.id, "debit_amount": Decimal("0.00"), "credit_amount": amount, "property_id": property_id},
+                ],
+                user=request.user,
+                source_type="manual",
+                status=JournalEntry.STATUS_POSTED,
+            )
+            transaction_obj = Transaction.objects.create(
+                organization=organization,
+                transaction_type=Transaction.TYPE_EXPENSE,
+                category=expense_account,
+                amount=amount,
+                date=event_date,
+                description=description or f"Manual expense {amount}",
+                property_id=property_id,
+                vendor=vendor,
+                created_by=request.user,
+                journal_entry=journal,
+            )
+
+        return Response(
+            {
+                "journal_entry": JournalEntrySerializer(journal).data,
+                "transaction": TransactionSerializer(transaction_obj).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class RecordTransferView(APIView):
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = _to_decimal(request.data.get("amount"))
+        if amount <= 0:
+            return Response({"amount": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from_account_id = request.data.get("from_account_id")
+        to_account_id = request.data.get("to_account_id")
+        if not from_account_id or not to_account_id:
+            return Response(
+                {"detail": "Both from_account_id and to_account_id are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if str(from_account_id) == str(to_account_id):
+            return Response({"detail": "From and to accounts must be different."}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_date = _parse_date_value(request.data.get("date")) or date.today()
+        description = (request.data.get("description") or "").strip()
+
+        from_account = _resolve_chart_account(organization, account_id=from_account_id)
+        to_account = _resolve_chart_account(organization, account_id=to_account_id)
+        if not from_account or not to_account:
+            return Response({"detail": "Invalid account(s)."}, status=status.HTTP_400_BAD_REQUEST)
+
+        journal = _create_posted_journal_entry(
+            organization=organization,
+            entry_date=event_date,
+            memo=description or "Transfer",
+            lines=[
+                {"account_id": from_account.id, "debit_amount": Decimal("0.00"), "credit_amount": amount},
+                {"account_id": to_account.id, "debit_amount": amount, "credit_amount": Decimal("0.00")},
+            ],
+            user=request.user,
+            source_type="transfer",
+            status=JournalEntry.STATUS_POSTED,
+        )
+
+        return Response(JournalEntrySerializer(journal).data, status=status.HTTP_201_CREATED)
+
+
+class ReportingTrialBalanceView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        as_of = _parse_date_value(request.query_params.get("as_of")) or timezone.now().date()
+        property_id = request.query_params.get("property_id")
+        lines = _posted_line_queryset(organization, property_id=property_id, date_to=as_of)
+        rows = lines.values(
+            "account_id",
+            "account__account_code",
+            "account__name",
+            "account__account_type",
+        ).annotate(
+            debit_total=Coalesce(Sum("debit_amount"), Value(Decimal("0.00"))),
+            credit_total=Coalesce(Sum("credit_amount"), Value(Decimal("0.00"))),
+        )
+
+        payload = []
+        total_debits = Decimal("0.00")
+        total_credits = Decimal("0.00")
+        for row in rows:
+            debit_total = row["debit_total"] or Decimal("0.00")
+            credit_total = row["credit_total"] or Decimal("0.00")
+            total_debits += debit_total
+            total_credits += credit_total
+            payload.append(
+                {
+                    "account_id": row["account_id"],
+                    "account_code": row["account__account_code"],
+                    "account_name": row["account__name"],
+                    "account_type": row["account__account_type"],
+                    "debit_total": _to_float(debit_total),
+                    "credit_total": _to_float(credit_total),
+                    "net_balance": _to_float(debit_total - credit_total),
+                }
+            )
+
+        return Response(
+            {
+                "as_of": str(as_of),
+                "property_id": property_id,
+                "rows": payload,
+                "totals": {
+                    "total_debit": _to_float(total_debits),
+                    "total_credit": _to_float(total_credits),
+                    "is_balanced": total_debits == total_credits,
+                },
+            }
+        )
+
+
+class ReportingBalanceSheetView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        as_of = _parse_date_value(request.query_params.get("as_of")) or timezone.now().date()
+        property_id = request.query_params.get("property_id")
+        lines = _posted_line_queryset(organization, property_id=property_id, date_to=as_of)
+
+        by_account_type = defaultdict(lambda: [])
+        for line in lines:
+            account = line.account
+            amount = line.debit_amount - line.credit_amount
+            if account.normal_balance == AccountingCategory.NORMAL_BALANCE_CREDIT:
+                amount = -amount
+            by_account_type[account.account_type].append(
+                {
+                    "account_id": account.id,
+                    "account_code": account.account_code,
+                    "name": account.name,
+                    "balance": _to_float(amount),
+                }
+            )
+
+        for values in by_account_type.values():
+            values.sort(key=lambda item: item["account_code"] or "")
+
+        income_lines = lines.filter(account__account_type=AccountingCategory.ACCOUNT_TYPE_REVENUE)
+        expense_lines = lines.filter(account__account_type=AccountingCategory.ACCOUNT_TYPE_EXPENSE)
+        revenue_total = income_lines.aggregate(
+            total=Coalesce(Sum("credit_amount"), Value(Decimal("0.00")))
+        )["total"]
+        expense_total = expense_lines.aggregate(
+            total=Coalesce(Sum("debit_amount"), Value(Decimal("0.00")))
+        )["total"]
+        retained_earnings = (revenue_total or Decimal("0.00")) - (expense_total or Decimal("0.00"))
+
+        assets = by_account_type.get(AccountingCategory.ACCOUNT_TYPE_ASSET, [])
+        liabilities = by_account_type.get(AccountingCategory.ACCOUNT_TYPE_LIABILITY, [])
+        equity = by_account_type.get(AccountingCategory.ACCOUNT_TYPE_EQUITY, [])
+        equity_total = sum(Decimal(str(row["balance"])) for row in equity)
+        total_assets = sum(Decimal(str(row["balance"])) for row in assets)
+        total_liabilities = sum(Decimal(str(row["balance"])) for row in liabilities)
+        total_equity = equity_total + retained_earnings
+
+        return Response(
+            {
+                "as_of": str(as_of),
+                "property_id": property_id,
+                "assets": assets,
+                "liabilities": liabilities,
+                "equity": equity + [{"account_id": "retained_earnings", "account_code": "RE", "name": "Retained Earnings", "balance": _to_float(retained_earnings)}],
+                "totals": {
+                    "total_assets": _to_float(total_assets),
+                    "total_liabilities": _to_float(total_liabilities),
+                    "total_equity": _to_float(total_equity),
+                    "retained_earnings": _to_float(retained_earnings),
+                },
+                "verification": {
+                    "is_balanced": total_assets == (total_liabilities + total_equity),
+                },
+            }
+        )
+
+
+class ReportingGeneralLedgerView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        account_id = _coerce_int(request.query_params.get("account_id"))
+        property_id = request.query_params.get("property_id")
+        date_from = _parse_date_value(request.query_params.get("date_from"))
+        date_to = _parse_date_value(request.query_params.get("date_to"))
+
+        lines = _posted_line_queryset(
+            organization,
+            property_id=property_id,
+            date_from=date_from,
+            date_to=date_to,
+        ).order_by("journal_entry__entry_date", "journal_entry_id", "id")
+
+        if account_id:
+            account = AccountingCategory.objects.filter(id=account_id, is_active=True).first()
+            if not account:
+                return Response({"detail": "Account not found."}, status=status.HTTP_404_NOT_FOUND)
+            account_lines = lines.filter(account_id=account_id)
+            rows, balance = _account_running_balance(account_lines)
+            return Response(
+                {
+                    "account": {
+                        "id": account.id,
+                        "name": account.name,
+                        "account_code": account.account_code,
+                    },
+                    "rows": rows,
+                    "ending_balance": _to_float(balance),
+                }
+            )
+
+        grouped = {}
+        for line in lines.select_related("account"):
+            grouped.setdefault(line.account_id, []).append(line)
+
+        report = []
+        for account_id, account_lines in grouped.items():
+            account = account_lines[0].account
+            rows, balance = _account_running_balance(account_lines)
+            report.append(
+                {
+                    "account": {
+                        "id": account.id,
+                        "name": account.name,
+                        "account_code": account.account_code,
+                    },
+                    "rows": rows,
+                    "ending_balance": _to_float(balance),
+                }
+            )
+
+        report.sort(key=lambda row: row["account"]["account_code"] or str(row["account"]["id"]))
+        return Response({"rows": report})
+
+
+class AccountingPeriodViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = AccountingPeriod.objects.all()
+    serializer_class = AccountingPeriodSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            return AccountingPeriod.objects.none()
+        return AccountingPeriod.objects.filter(organization=organization).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            raise PermissionDenied("No organization assigned.")
+        serializer.save(organization=organization)
+
+    @action(detail=True, methods=["post"], url_path="lock")
+    def lock(self, request, pk=None):
+        period = self.get_object()
+        period.is_locked = True
+        period.locked_by = request.user
+        period.locked_at = timezone.now()
+        period.save(update_fields=["is_locked", "locked_by", "locked_at"])
+        return Response(self.get_serializer(period).data)
+
+    @action(detail=True, methods=["post"], url_path="unlock")
+    def unlock(self, request, pk=None):
+        period = self.get_object()
+        period.is_locked = False
+        period.locked_by = None
+        period.locked_at = None
+        period.save(update_fields=["is_locked", "locked_by", "locked_at"])
+        return Response(self.get_serializer(period).data)
+
+
+class RecurringTransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = RecurringTransaction.objects.all()
+    serializer_class = RecurringTransactionSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            return RecurringTransaction.objects.none()
+        return RecurringTransaction.objects.filter(organization=organization).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            raise PermissionDenied("No organization assigned.")
+        serializer.save(organization=organization, created_by=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="run")
+    def run(self, request, pk=None):
+        recurring = self.get_object()
+        template_lines = recurring.template_data.get("lines", [])
+        if not isinstance(template_lines, list) or not template_lines:
+            return Response({"detail": "No template lines defined."}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_date = date.today()
+        try:
+            journal_entry = _create_posted_journal_entry(
+                organization=recurring.organization,
+                entry_date=event_date,
+                memo=recurring.name,
+                lines=template_lines,
+                user=request.user,
+                source_type="import",
+                source_id=recurring.id,
+                status=JournalEntry.STATUS_POSTED,
+            )
+        except ValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        recurring.next_run_date = event_date + timedelta(days=30)
+        recurring.save(update_fields=["next_run_date"])
+        return Response({"journal_entry": JournalEntrySerializer(journal_entry).data}, status=status.HTTP_201_CREATED)
 
 class AccountingDashboardView(APIView):
     permission_classes = [IsLandlord]

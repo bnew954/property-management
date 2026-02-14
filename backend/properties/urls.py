@@ -9,16 +9,26 @@ from .payment_views import (
 from .views import (
     AccountingDashboardView,
     AccountingCashflowView,
+    AccountingCategoryViewSet,
     AccountingPnLView,
+    AccountingPeriodViewSet,
+    ReportingBalanceSheetView,
     AccountingRentRollView,
     AccountingTaxReportView,
-    AccountingCategoryViewSet,
     TransactionViewSet,
     OwnerStatementViewSet,
     GenerateOwnerStatementView,
     DocumentViewSet,
     ExpenseViewSet,
     GenerateChargesView,
+    JournalEntryViewSet,
+    RecordExpenseView,
+    RecordIncomeView,
+    RecordTransferView,
+    RecurringTransactionViewSet,
+    ReportingBalanceSheetView,
+    ReportingGeneralLedgerView,
+    ReportingTrialBalanceView,
     LeaseViewSet,
     LateFeeRuleViewSet,
     MaintenanceRequestViewSet,
@@ -50,14 +60,17 @@ router.register("properties", PropertyViewSet, basename="property")
 router.register("units", UnitViewSet, basename="unit")
 router.register("tenants", TenantViewSet, basename="tenant")
 router.register("leases", LeaseViewSet, basename="lease")
+router.register("accounting/categories", AccountingCategoryViewSet, basename="accounting-category")
+router.register("accounting/journal-entries", JournalEntryViewSet, basename="journal-entry")
+router.register("accounting/transactions", TransactionViewSet, basename="transaction")
+router.register("accounting/owner-statements", OwnerStatementViewSet, basename="owner-statement")
+router.register("accounting/periods", AccountingPeriodViewSet, basename="accounting-period")
+router.register("accounting/recurring", RecurringTransactionViewSet, basename="accounting-recurring")
 router.register("payments", PaymentViewSet, basename="payment")
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("messages", MessageViewSet, basename="message")
 router.register("screenings", ScreeningRequestViewSet, basename="screening")
 router.register("documents", DocumentViewSet, basename="document")
-router.register("accounting/categories", AccountingCategoryViewSet, basename="accounting-category")
-router.register("accounting/transactions", TransactionViewSet, basename="transaction")
-router.register("accounting/owner-statements", OwnerStatementViewSet, basename="owner-statement")
 router.register("expenses", ExpenseViewSet, basename="expense")
 router.register("rent-ledger", RentLedgerEntryViewSet, basename="rent-ledger")
 router.register("accounting/late-fee-rules", LateFeeRuleViewSet, basename="late-fee-rule")
@@ -129,6 +142,36 @@ urlpatterns = [
         "accounting/pnl/",
         AccountingPnLView.as_view(),
         name="accounting-pnl",
+    ),
+    path(
+        "accounting/record-income/",
+        RecordIncomeView.as_view(),
+        name="accounting-record-income",
+    ),
+    path(
+        "accounting/record-expense/",
+        RecordExpenseView.as_view(),
+        name="accounting-record-expense",
+    ),
+    path(
+        "accounting/record-transfer/",
+        RecordTransferView.as_view(),
+        name="accounting-record-transfer",
+    ),
+    path(
+        "accounting/reports/trial-balance/",
+        ReportingTrialBalanceView.as_view(),
+        name="accounting-trial-balance",
+    ),
+    path(
+        "accounting/reports/balance-sheet/",
+        ReportingBalanceSheetView.as_view(),
+        name="accounting-balance-sheet",
+    ),
+    path(
+        "accounting/reports/general-ledger/",
+        ReportingGeneralLedgerView.as_view(),
+        name="accounting-general-ledger",
     ),
     path(
         "accounting/cashflow/",

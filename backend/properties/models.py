@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from decimal import Decimal
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -886,9 +887,48 @@ class AccountingCategory(models.Model):
         (TYPE_EXPENSE, "Expense"),
     ]
 
+    ACCOUNT_TYPE_ASSET = "asset"
+    ACCOUNT_TYPE_LIABILITY = "liability"
+    ACCOUNT_TYPE_EQUITY = "equity"
+    ACCOUNT_TYPE_REVENUE = "revenue"
+    ACCOUNT_TYPE_EXPENSE = "expense"
+    ACCOUNT_TYPE_CHOICES = [
+        (ACCOUNT_TYPE_ASSET, "Asset"),
+        (ACCOUNT_TYPE_LIABILITY, "Liability"),
+        (ACCOUNT_TYPE_EQUITY, "Equity"),
+        (ACCOUNT_TYPE_REVENUE, "Revenue"),
+        (ACCOUNT_TYPE_EXPENSE, "Expense"),
+    ]
+
+    NORMAL_BALANCE_DEBIT = "debit"
+    NORMAL_BALANCE_CREDIT = "credit"
+    NORMAL_BALANCE_CHOICES = [
+        (NORMAL_BALANCE_DEBIT, "Debit"),
+        (NORMAL_BALANCE_CREDIT, "Credit"),
+    ]
+
     name = models.CharField(max_length=100)
     category_type = models.CharField(max_length=10, choices=CATEGORY_TYPE_CHOICES)
     is_system = models.BooleanField(default=False)
+    parent_account = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sub_accounts",
+    )
+    account_code = models.CharField(max_length=20, blank=True)
+    account_type = models.CharField(
+        max_length=20,
+        choices=ACCOUNT_TYPE_CHOICES,
+        default=ACCOUNT_TYPE_EXPENSE,
+    )
+    normal_balance = models.CharField(
+        max_length=10,
+        choices=NORMAL_BALANCE_CHOICES,
+        default=NORMAL_BALANCE_DEBIT,
+    )
+    is_header = models.BooleanField(default=False)
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
@@ -896,7 +936,9 @@ class AccountingCategory(models.Model):
         null=True,
         blank=True,
     )
+    is_active = models.BooleanField(default=True)
     tax_deductible = models.BooleanField(default=True)
+    tax_category = models.CharField(max_length=120, blank=True)
     description = models.CharField(max_length=255, blank=True)
 
     class Meta:
@@ -936,6 +978,13 @@ class Transaction(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         related_name="transactions",
+    )
+    journal_entry = models.ForeignKey(
+        "JournalEntry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="linked_transactions",
     )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateField()
@@ -1012,6 +1061,177 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type.upper()} #{self.id}: {self.amount}"
+
+
+class JournalEntry(models.Model):
+    STATUS_DRAFT = "draft"
+    STATUS_POSTED = "posted"
+    STATUS_REVERSED = "reversed"
+    STATUS_VOIDED = "voided"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_POSTED, "Posted"),
+        (STATUS_REVERSED, "Reversed"),
+        (STATUS_VOIDED, "Voided"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="journal_entries",
+    )
+    entry_date = models.DateField()
+    memo = models.CharField(max_length=500)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT,
+    )
+    source_type = models.CharField(max_length=50, blank=True)
+    source_id = models.IntegerField(null=True, blank=True)
+    is_adjusting = models.BooleanField(default=False)
+    reversed_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reversal_of",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    posted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Journal Entry #{self.id} ({self.entry_date})"
+
+
+class JournalEntryLine(models.Model):
+    journal_entry = models.ForeignKey(
+        JournalEntry,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="journal_entry_lines",
+    )
+    account = models.ForeignKey(
+        AccountingCategory,
+        on_delete=models.PROTECT,
+        related_name="journal_lines",
+    )
+    debit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    credit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    description = models.CharField(max_length=300, blank=True)
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+    )
+    unit = models.ForeignKey(
+        Unit,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+    )
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+    )
+    lease = models.ForeignKey(
+        Lease,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+    )
+    vendor = models.CharField(max_length=200, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+
+    def clean(self):
+        super().clean()
+        debit_positive = self.debit_amount > 0
+        credit_positive = self.credit_amount > 0
+        if debit_positive == credit_positive:
+            raise ValidationError(
+                "Each journal line must have exactly one of debit_amount or credit_amount greater than 0."
+            )
+
+
+class AccountingPeriod(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="accounting_periods",
+    )
+    period_start = models.DateField()
+    period_end = models.DateField()
+    is_locked = models.BooleanField(default=False)
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="locked_accounting_periods",
+    )
+    locked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [
+            ("organization", "period_start", "period_end"),
+        ]
+
+    def __str__(self):
+        return f"Period {self.period_start} - {self.period_end} ({self.organization_id})"
+
+
+class RecurringTransaction(models.Model):
+    FREQUENCY_MONTHLY = "monthly"
+    FREQUENCY_QUARTERLY = "quarterly"
+    FREQUENCY_ANNUALLY = "annually"
+    FREQUENCY_CHOICES = [
+        (FREQUENCY_MONTHLY, "Monthly"),
+        (FREQUENCY_QUARTERLY, "Quarterly"),
+        (FREQUENCY_ANNUALLY, "Annually"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="recurring_transactions",
+    )
+    name = models.CharField(max_length=200)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
+    next_run_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    template_data = models.JSONField(default=dict)
+    auto_post = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_recurring_transactions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Recurring {self.name} ({self.frequency})"
 
 
 class LateFeeRule(models.Model):

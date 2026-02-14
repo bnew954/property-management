@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.db.models import Sum
 from rest_framework import serializers
 
 from .models import (
@@ -22,6 +23,10 @@ from .models import (
     LateFeeRule,
     OwnerStatement,
     AccountingCategory,
+    JournalEntry,
+    JournalEntryLine,
+    AccountingPeriod,
+    RecurringTransaction,
 )
 
 
@@ -445,10 +450,147 @@ class LateFeeRuleSerializer(serializers.ModelSerializer):
 
 
 class AccountingCategorySerializer(serializers.ModelSerializer):
+    parent_account = serializers.PrimaryKeyRelatedField(
+        queryset=AccountingCategory.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+    sub_accounts = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = AccountingCategory
+        fields = [
+            "id",
+            "name",
+            "category_type",
+            "is_system",
+            "parent_account",
+            "account_code",
+            "account_type",
+            "normal_balance",
+            "is_header",
+            "is_active",
+            "organization",
+            "tax_deductible",
+            "tax_category",
+            "description",
+            "sub_accounts",
+        ]
+        read_only_fields = ["organization"]
+
+    def get_sub_accounts(self, obj):
+        queryset = obj.sub_accounts.filter(is_active=True).order_by("account_code", "name")
+        return AccountingCategorySerializer(queryset, many=True, context=self.context).data
+
+
+class JournalEntryLineSerializer(serializers.ModelSerializer):
+    account_name = serializers.SerializerMethodField()
+    property_name = serializers.SerializerMethodField()
+    account = serializers.PrimaryKeyRelatedField(
+        queryset=AccountingCategory.objects.all()
+    )
+    property = serializers.PrimaryKeyRelatedField(
+        queryset=Property.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = JournalEntryLine
+        fields = [
+            "id",
+            "journal_entry",
+            "account",
+            "account_name",
+            "debit_amount",
+            "credit_amount",
+            "description",
+            "property",
+            "property_name",
+            "unit",
+            "tenant",
+            "lease",
+            "vendor",
+            "reference",
+        ]
+        read_only_fields = ["journal_entry", "account_name", "property_name"]
+
+    def get_account_name(self, obj):
+        if not obj.account_id:
+            return None
+        return obj.account.name
+
+    def get_property_name(self, obj):
+        if not obj.property_id:
+            return None
+        return obj.property.name if obj.property else None
+
+
+class JournalEntrySerializer(serializers.ModelSerializer):
+    lines = JournalEntryLineSerializer(many=True)
+    total_debits = serializers.SerializerMethodField()
+    total_credits = serializers.SerializerMethodField()
+    is_balanced = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JournalEntry
+        fields = [
+            "id",
+            "organization",
+            "entry_date",
+            "memo",
+            "status",
+            "source_type",
+            "source_id",
+            "is_adjusting",
+            "reversed_by",
+            "created_by",
+            "posted_at",
+            "created_at",
+            "updated_at",
+            "lines",
+            "total_debits",
+            "total_credits",
+            "is_balanced",
+        ]
+        read_only_fields = [
+            "created_at",
+            "updated_at",
+            "posted_at",
+            "reversed_by",
+            "created_by",
+            "total_debits",
+            "total_credits",
+            "is_balanced",
+        ]
+
+    def validate_lines(self, lines):
+        if not lines:
+            raise serializers.ValidationError("At least one line is required.")
+        return lines
+
+    def get_total_debits(self, obj):
+        return obj.lines.aggregate(total=Sum("debit_amount"))["total"] or 0
+
+    def get_total_credits(self, obj):
+        return obj.lines.aggregate(total=Sum("credit_amount"))["total"] or 0
+
+    def get_is_balanced(self, obj):
+        return self.get_total_debits(obj) == self.get_total_credits(obj)
+
+
+class AccountingPeriodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountingPeriod
         fields = "__all__"
         read_only_fields = ["organization"]
+
+
+class RecurringTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecurringTransaction
+        fields = "__all__"
+        read_only_fields = ["organization", "created_by"]
 
 
 class TransactionSerializer(serializers.ModelSerializer):

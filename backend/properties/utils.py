@@ -1,6 +1,8 @@
-from datetime import date
+﻿from datetime import date
 
 from django.utils import timezone
+
+from .models import AccountingCategory
 
 
 def _format_currency(value):
@@ -137,3 +139,174 @@ def generate_lease_document(lease):
     </div>
   </body>
 </html>"""
+
+
+def seed_chart_of_accounts(organization):
+    if not organization:
+        return []
+
+    def _normalize_chart_category_type(account_type):
+        return (
+            AccountingCategory.TYPE_INCOME
+            if account_type == AccountingCategory.ACCOUNT_TYPE_REVENUE
+            else AccountingCategory.TYPE_EXPENSE
+        )
+
+    chart_definition = [
+        {
+            "account_code": "1000",
+            "name": "Assets",
+            "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET,
+            "normal_balance": AccountingCategory.NORMAL_BALANCE_DEBIT,
+            "is_header": True,
+            "children": [
+                {"account_code": "1010", "name": "Cash on Hand", "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET},
+                {"account_code": "1020", "name": "Cash in Bank", "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET},
+                {"account_code": "1100", "name": "Accounts Receivable", "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET},
+                {"account_code": "1200", "name": "Security Deposits Held", "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET},
+                {
+                    "account_code": "1500",
+                    "name": "Fixed Assets",
+                    "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET,
+                    "is_header": True,
+                    "children": [
+                        {"account_code": "1510", "name": "Buildings", "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET},
+                        {"account_code": "1520", "name": "Land", "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET},
+                        {
+                            "account_code": "1530",
+                            "name": "Accumulated Depreciation",
+                            "account_type": AccountingCategory.ACCOUNT_TYPE_ASSET,
+                            "normal_balance": AccountingCategory.NORMAL_BALANCE_CREDIT,
+                        },
+                    ],
+                },
+            ],
+        },
+        {
+            "account_code": "2000",
+            "name": "Liabilities",
+            "account_type": AccountingCategory.ACCOUNT_TYPE_LIABILITY,
+            "normal_balance": AccountingCategory.NORMAL_BALANCE_CREDIT,
+            "is_header": True,
+            "children": [
+                {"account_code": "2010", "name": "Accounts Payable", "account_type": AccountingCategory.ACCOUNT_TYPE_LIABILITY},
+                {"account_code": "2100", "name": "Security Deposits Liability", "account_type": AccountingCategory.ACCOUNT_TYPE_LIABILITY},
+                {"account_code": "2200", "name": "Prepaid Rent", "account_type": AccountingCategory.ACCOUNT_TYPE_LIABILITY},
+                {"account_code": "2500", "name": "Mortgage Payable", "account_type": AccountingCategory.ACCOUNT_TYPE_LIABILITY},
+            ],
+        },
+        {
+            "account_code": "3000",
+            "name": "Equity",
+            "account_type": AccountingCategory.ACCOUNT_TYPE_EQUITY,
+            "normal_balance": AccountingCategory.NORMAL_BALANCE_CREDIT,
+            "is_header": True,
+            "children": [
+                {"account_code": "3010", "name": "Owner's Equity", "account_type": AccountingCategory.ACCOUNT_TYPE_EQUITY},
+                {"account_code": "3020", "name": "Retained Earnings", "account_type": AccountingCategory.ACCOUNT_TYPE_EQUITY},
+            ],
+        },
+        {
+            "account_code": "4000",
+            "name": "Revenue",
+            "account_type": AccountingCategory.ACCOUNT_TYPE_REVENUE,
+            "normal_balance": AccountingCategory.NORMAL_BALANCE_CREDIT,
+            "is_header": True,
+            "children": [
+                {
+                    "account_code": "4100",
+                    "name": "Rental Income",
+                    "account_type": AccountingCategory.ACCOUNT_TYPE_REVENUE,
+                    "tax_category": "rental_income",
+                },
+                {
+                    "account_code": "4200",
+                    "name": "Late Fee Income",
+                    "account_type": AccountingCategory.ACCOUNT_TYPE_REVENUE,
+                    "tax_category": "other_income",
+                },
+                {
+                    "account_code": "4300",
+                    "name": "Application Fee Income",
+                    "account_type": AccountingCategory.ACCOUNT_TYPE_REVENUE,
+                    "tax_category": "other_income",
+                },
+                {
+                    "account_code": "4900",
+                    "name": "Other Income",
+                    "account_type": AccountingCategory.ACCOUNT_TYPE_REVENUE,
+                    "tax_category": "other_income",
+                },
+            ],
+        },
+        {
+            "account_code": "5000",
+            "name": "Expenses",
+            "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE,
+            "normal_balance": AccountingCategory.NORMAL_BALANCE_DEBIT,
+            "is_header": True,
+            "children": [
+                {"account_code": "5100", "name": "Repairs & Maintenance", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "repairs"},
+                {"account_code": "5200", "name": "Insurance", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "insurance"},
+                {"account_code": "5300", "name": "Property Taxes", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "taxes"},
+                {"account_code": "5400", "name": "Utilities", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "utilities"},
+                {"account_code": "5500", "name": "Management Fees", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "management_fees"},
+                {"account_code": "5600", "name": "Legal & Professional", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "legal_professional"},
+                {"account_code": "5700", "name": "Advertising", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "advertising"},
+                {"account_code": "5800", "name": "Supplies", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "supplies"},
+                {"account_code": "5900", "name": "Depreciation", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "depreciation"},
+                {"account_code": "5950", "name": "Mortgage Interest", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "mortgage_interest"},
+                {"account_code": "5990", "name": "Other Expenses", "account_type": AccountingCategory.ACCOUNT_TYPE_EXPENSE, "tax_category": "other_expense"},
+            ],
+        },
+    ]
+
+    def _upsert_account(payload, parent=None):
+        fields = {
+            "organization": organization,
+            "name": payload["name"],
+            "account_code": payload["account_code"],
+            "account_type": payload["account_type"],
+            "normal_balance": payload.get(
+                "normal_balance", AccountingCategory.NORMAL_BALANCE_DEBIT
+            ),
+            "is_header": payload.get("is_header", False),
+            "is_system": True,
+            "is_active": True,
+            "tax_deductible": False,
+            "tax_category": payload.get("tax_category", ""),
+            "description": "Default chart account",
+            "category_type": _normalize_chart_category_type(payload["account_type"]),
+            "parent_account": parent,
+        }
+
+        account = AccountingCategory.objects.filter(
+            organization=organization,
+            account_code=payload["account_code"],
+        ).first()
+
+        if account:
+            changed = False
+            for key, value in fields.items():
+                if getattr(account, key) != value:
+                    setattr(account, key, value)
+                    changed = True
+            if changed:
+                account.save()
+        else:
+            account = AccountingCategory.objects.create(**fields)
+
+        for child in payload.get("children", []):
+            _upsert_account(child, parent=account)
+
+        return account
+
+    for entry in chart_definition:
+        _upsert_account(entry)
+
+    return list(
+        AccountingCategory.objects.filter(organization=organization).values_list(
+            "account_code",
+            flat=True,
+        )
+    )
