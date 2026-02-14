@@ -184,11 +184,19 @@ def _parse_csv_date(value):
     normalized = str(value).strip()
     if not normalized:
         return None
+    normalized = normalized.lstrip("\ufeff")
+
+    try:
+        return date.fromisoformat(normalized)
+    except ValueError:
+        pass
+
     parse_formats = [
         "%Y-%m-%d",
         "%m/%d/%Y",
         "%m/%d/%y",
         "%m-%d-%Y",
+        "%m-%d-%y",
         "%Y/%m/%d",
     ]
     for fmt in parse_formats:
@@ -210,9 +218,14 @@ def _parse_amount_value(value):
     raw = str(value).strip()
     if not raw:
         return None
+
+    raw = raw.strip()
+    if not raw:
+        return None
+
     negative = raw.startswith("(") and raw.endswith(")")
     if negative:
-        raw = raw[1:-1]
+        raw = raw[1:-1].strip()
     raw = raw.replace("$", "").replace(",", "").strip()
     if not raw:
         return None
@@ -230,10 +243,11 @@ def _parse_csv_bytes(raw_bytes):
         return ""
     for encoding in ("utf-8-sig", "utf-8", "latin-1"):
         try:
-            return raw_bytes.decode(encoding)
+            text = raw_bytes.decode(encoding)
+            return text.lstrip("\ufeff")
         except (UnicodeDecodeError, AttributeError):
             continue
-    return raw_bytes.decode("utf-8", errors="ignore")
+    return raw_bytes.decode("utf-8", errors="ignore").lstrip("\ufeff")
 
 
 def _month_labels(start_date, end_date):
@@ -685,7 +699,7 @@ class _ImportPagination(PageNumberPagination):
 
 def _normalize_mapping_row(row):
     return {
-        str(k or ""): ("" if v is None else str(v).strip())
+        str(k or "").strip().lstrip("\ufeff"): ("" if v is None else str(v).strip())
         for k, v in (row or {}).items()
     }
 
@@ -2814,7 +2828,7 @@ class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
         if not reader.fieldnames:
             return Response({"file": "CSV must contain a header row."}, status=status.HTTP_400_BAD_REQUEST)
 
-        headers = [str(h or "").strip() for h in reader.fieldnames]
+        headers = [str(h or "").strip().lstrip("\ufeff") for h in reader.fieldnames]
         imported_rows = []
         for row in reader:
             normalized = _normalize_mapping_row(row)
@@ -2873,9 +2887,46 @@ class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
 
                 parsed_date = _parse_csv_date(raw_date)
                 parsed_amount = _parse_amount_value(raw_amount)
-                if parsed_date is None or parsed_amount is None or not raw_description:
+                if not raw_description:
+                    logger.info(
+                        "Import row skipped for import_id=%s: reason=missing_description date=%r amount=%r desc=%r",
+                        instance.id,
+                        raw_date,
+                        raw_amount,
+                        raw_description,
+                    )
                     skipped_count += 1
                     continue
+
+                if parsed_date is None:
+                    logger.info(
+                        "Import row skipped for import_id=%s: reason=invalid_date date=%r amount=%r desc=%r",
+                        instance.id,
+                        raw_date,
+                        raw_amount,
+                        raw_description,
+                    )
+                    skipped_count += 1
+                    continue
+
+                if parsed_amount is None:
+                    logger.info(
+                        "Import row skipped for import_id=%s: reason=invalid_amount date=%r amount=%r desc=%r",
+                        instance.id,
+                        raw_date,
+                        raw_amount,
+                        raw_description,
+                    )
+                    skipped_count += 1
+                    continue
+
+                logger.debug(
+                    "Import row parsed for import_id=%s: date=%r amount=%r desc=%r",
+                    instance.id,
+                    raw_date,
+                    raw_amount,
+                    raw_description,
+                )
 
                 txn_hash = TransactionImport.compute_hash(
                     organization.id,
