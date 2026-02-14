@@ -3,22 +3,24 @@ import ApartmentIcon from "@mui/icons-material/Apartment";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import BuildIcon from "@mui/icons-material/Build";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import DescriptionIcon from "@mui/icons-material/Description";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FolderIcon from "@mui/icons-material/Folder";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
-import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import SettingsIcon from "@mui/icons-material/Settings";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import {
   Avatar,
   Box,
   Button,
+  Collapse,
   Divider,
   Drawer,
   IconButton,
@@ -32,6 +34,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../services/auth";
 import { useUser } from "../services/userContext";
@@ -103,21 +106,43 @@ function BrandLogo({ isDark }) {
   );
 }
 
-const navItems = [
-  { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
-  { label: "Pay Rent", path: "/pay-rent", icon: <CreditCardIcon />, tenantOnly: true, accent: "green" },
-  { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
-  { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
-  { label: "Listings", path: "/listings", icon: <HomeWorkIcon />, landlordOnly: true },
-  { label: "Applications", path: "/applications", icon: <AssignmentIcon />, landlordOnly: true },
-  { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
-  { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
-  { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
+const topNavItems = [{ label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> }];
+
+const tenantNavItems = [
   { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
-  { label: "Accounting", path: "/accounting", icon: <AccountBalanceIcon />, landlordOnly: true },
   { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
-  { label: "Documents", path: "/documents", icon: <FolderIcon /> },
-  { label: "Messages", path: "/messages", icon: <ChatBubbleOutlineIcon />, utility: true },
+];
+
+const landlordGroups = [
+  {
+    key: "leasing",
+    label: "Leasing",
+    items: [
+      { label: "Listings", path: "/listings", icon: <HomeWorkIcon /> },
+      { label: "Applications", path: "/applications", icon: <AssignmentIcon /> },
+      { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
+      { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
+      { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
+    ],
+  },
+  {
+    key: "operations",
+    label: "Operations",
+    items: [
+      { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
+      { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
+      { label: "Documents", path: "/documents", icon: <FolderIcon /> },
+      { label: "Messages", path: "/messages", icon: <ChatBubbleOutlineIcon /> },
+    ],
+  },
+  {
+    key: "finance",
+    label: "Finance",
+    items: [
+      { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
+      { label: "Accounting", path: "/accounting", icon: <AccountBalanceIcon /> },
+    ],
+  },
 ];
 
 function Layout({ children }) {
@@ -127,14 +152,18 @@ function Layout({ children }) {
   const { role, user, clearUser, isOrgAdmin, organization } = useUser();
   const isDark = mode === "dark";
   const theme = useTheme();
+  const [expandedGroups, setExpandedGroups] = useState(() => ({
+    leasing: true,
+    operations: true,
+    finance: true,
+  }));
 
-  const visibleNavItems =
-    role === "tenant"
-      ? navItems.filter((item) => ["/dashboard", "/payments", "/maintenance"].includes(item.path))
-      : navItems.filter((item) => !item.tenantOnly && item.path !== "/my-lease" && item.path !== "/pay-rent");
-
-  const primaryNavItems = visibleNavItems.filter((item) => !item.utility);
-  const utilityNavItems = visibleNavItems.filter((item) => item.utility);
+  const isActive = (path) => {
+    if (path === "/dashboard") {
+      return location.pathname.startsWith(path);
+    }
+    return location.pathname.startsWith(path);
+  };
 
   const pageTitle = (() => {
     if (location.pathname.startsWith("/dashboard")) return "Dashboard";
@@ -155,12 +184,20 @@ function Layout({ children }) {
     return "Onyx";
   })();
 
-  const isActive = (path) => {
-    if (path === "/dashboard") {
-      return location.pathname.startsWith(path);
-    }
-    return location.pathname.startsWith(path);
-  };
+  useEffect(() => {
+    setExpandedGroups((current) => {
+      let next = { ...current };
+      let changed = false;
+      landlordGroups.forEach((group) => {
+        const shouldOpen = group.items.some((item) => location.pathname.startsWith(item.path));
+        if (shouldOpen && !current[group.key]) {
+          next[group.key] = true;
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [location.pathname]);
 
   const navItemSx = (active) => ({
     borderRadius: "6px",
@@ -169,9 +206,7 @@ function Layout({ children }) {
     px: 2,
     py: 0.75,
     minHeight: 38,
-    backgroundColor: active
-      ? alpha(theme.palette.primary.main, isDark ? 0.1 : 0.08)
-      : "transparent",
+    backgroundColor: active ? alpha(theme.palette.primary.main, isDark ? 0.1 : 0.08) : "transparent",
     borderLeft: active ? "2px solid" : "2px solid transparent",
     borderColor: active ? "primary.main" : "transparent",
     "&:hover": {
@@ -182,12 +217,54 @@ function Layout({ children }) {
     transition: "color 0.15s ease, background-color 0.15s ease",
   });
 
+  const groupHeaderSx = {
+    px: 2,
+    py: 0.35,
+    minHeight: 34,
+    borderRadius: "6px",
+    "&:hover": {
+      backgroundColor: "transparent",
+    },
+  };
+
+  const groupHeaderTextSx = {
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    color: "#6b7280",
+  };
+
+  const renderNavItem = (item) => {
+    const active = isActive(item.path);
+    return (
+      <ListItem disablePadding sx={{ px: 0.6, py: 0.1 }}>
+        <ListItemButton component={Link} to={item.path} sx={navItemSx(active)}>
+          <ListItemIcon
+            sx={{
+              color: active ? "text.primary" : "text.secondary",
+              minWidth: 32,
+              "& svg": { fontSize: 18 },
+            }}
+          >
+            {item.icon}
+          </ListItemIcon>
+          <ListItemText
+            primary={item.label}
+            primaryTypographyProps={{
+              fontSize: 13,
+              fontWeight: 400,
+              color: active ? "text.primary" : "text.secondary",
+            }}
+          />
+        </ListItemButton>
+      </ListItem>
+    );
+  };
+
   const userRoleText = role === "tenant" ? "Tenant" : "Landlord";
   const firstName = (user?.first_name || "").trim();
-  const fullName = firstName
-    ? `${firstName} ${user?.last_name || ""}`.trim()
-    : user?.username || "User";
-
+  const fullName = firstName ? `${firstName} ${user?.last_name || ""}`.trim() : user?.username || "User";
   const orgName = organization?.name || "";
 
   return (
@@ -224,88 +301,90 @@ function Layout({ children }) {
               </Typography>
             ) : null}
           </Toolbar>
+
           <List sx={{ py: 1.3, minHeight: 0 }}>
-            {primaryNavItems.map((item) => {
-              const active = isActive(item.path);
-              return (
-                <ListItem key={item.path} disablePadding sx={{ px: 0.6, py: 0.1 }}>
-                  <ListItemButton
-                    component={Link}
-                    to={item.path}
-                    sx={{
-                      ...navItemSx(active),
-                      border:
-                        item.accent === "green" && role === "tenant"
-                          ? `1px solid ${alpha(theme.palette.success.main, 0.22)}`
-                          : "1px solid transparent",
-                    }}
-                  >
-                    <ListItemIcon
-                      sx={{
-                        color: active
-                          ? "text.primary"
-                          : item.accent === "green" && role === "tenant"
-                            ? "success.main"
-                            : "text.secondary",
-                        minWidth: 32,
-                        "& svg": { fontSize: 18 },
-                      }}
-                    >
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.label}
-                      primaryTypographyProps={{
-                        fontSize: 13,
-                        fontWeight: 400,
-                        color: active
-                          ? "text.primary"
-                          : item.accent === "green" && role === "tenant"
-                            ? "success.main"
-                            : "text.secondary",
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
+            {role === "tenant"
+              ? [topNavItems[0], ...tenantNavItems].map((item) => renderNavItem(item))
+              : [topNavItems[0]].map((item) => renderNavItem(item))}
           </List>
-          <Divider sx={{ borderColor: "divider" }} />
-          <List sx={{ py: 0.8 }}>
-            {utilityNavItems.map((item) => {
-              const active = isActive(item.path);
-              return (
-                <ListItem key={item.path} disablePadding sx={{ px: 0.6, py: 0.1 }}>
-                  <ListItemButton
-                    component={Link}
-                    to={item.path}
-                    sx={{
-                      ...navItemSx(active),
-                      border: "1px solid transparent",
-                    }}
-                  >
-                    <ListItemIcon
-                      sx={{
-                        color: active ? "text.primary" : "text.secondary",
-                        minWidth: 32,
-                        "& svg": { fontSize: 18 },
-                      }}
-                    >
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.label}
-                      primaryTypographyProps={{
-                        fontSize: 13,
-                        fontWeight: 400,
-                        color: active ? "text.primary" : "text.secondary",
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
+
+          {role === "tenant" ? null : (
+            <>
+                {landlordGroups.map((group, groupIndex) => {
+                const isExpanded = expandedGroups[group.key];
+                return (
+                  <Box key={group.key}>
+                    <List sx={{ py: 0.2 }}>
+                      <ListItem disablePadding sx={{ px: 0.6, py: 0.05 }}>
+                        <ListItemButton
+                          disableRipple
+                          onClick={() =>
+                            setExpandedGroups((current) => ({
+                              ...current,
+                              [group.key]: !current[group.key],
+                            }))
+                          }
+                          sx={groupHeaderSx}
+                        >
+                          <ListItemText
+                            primary={group.label}
+                            primaryTypographyProps={groupHeaderTextSx}
+                          />
+                          {isExpanded ? (
+                            <ExpandLessIcon sx={{ fontSize: 16, color: "#6b7280" }} />
+                          ) : (
+                            <ExpandMoreIcon sx={{ fontSize: 16, color: "#6b7280" }} />
+                          )}
+                        </ListItemButton>
+                      </ListItem>
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <List disablePadding>
+                          {group.items.map((item) => {
+                            const active = isActive(item.path);
+                            return (
+                              <ListItem
+                                key={item.path}
+                                disablePadding
+                                sx={{ px: 0.6, py: 0.1, pl: "22px" }}
+                              >
+                                <ListItemButton
+                                  component={Link}
+                                  to={item.path}
+                                  sx={navItemSx(active)}
+                                >
+                                  <ListItemIcon
+                                    sx={{
+                                      color: active ? "text.primary" : "text.secondary",
+                                      minWidth: 32,
+                                      "& svg": { fontSize: 18 },
+                                    }}
+                                  >
+                                    {item.icon}
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={item.label}
+                                    primaryTypographyProps={{
+                                      fontSize: 13,
+                                      fontWeight: 400,
+                                      color: active ? "text.primary" : "text.secondary",
+                                    }}
+                                  />
+                                </ListItemButton>
+                              </ListItem>
+                            );
+                          })}
+                        </List>
+                      </Collapse>
+                    </List>
+                    {groupIndex !== landlordGroups.length - 1 ? (
+                      <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
+                    ) : null}
+                  </Box>
+                );
+              })}
+            </>
+          )}
+
           <Divider sx={{ borderColor: "divider" }} />
           {isOrgAdmin ? (
             <>
@@ -314,10 +393,7 @@ function Layout({ children }) {
                   <ListItemButton
                     component={Link}
                     to="/settings"
-                    sx={{
-                      ...navItemSx(isActive("/settings")),
-                      border: "1px solid transparent",
-                    }}
+                    sx={navItemSx(isActive("/settings"))}
                   >
                     <ListItemIcon
                       sx={{
@@ -342,6 +418,7 @@ function Layout({ children }) {
               <Divider sx={{ borderColor: "divider" }} />
             </>
           ) : null}
+
           <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
             <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
               <Avatar sx={{ width: 26, height: 26, bgcolor: "divider", fontSize: "0.75rem", color: "text.secondary" }}>
@@ -423,6 +500,3 @@ function Layout({ children }) {
 }
 
 export default Layout;
-
-
-
