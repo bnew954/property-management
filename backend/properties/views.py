@@ -154,11 +154,15 @@ def _month_range_bounds(target):
 
 
 def _parse_date_value(value):
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
     if not value:
         return None
     try:
         return date.fromisoformat(value)
-    except ValueError:
+    except (TypeError, ValueError):
         return None
 
 
