@@ -22,6 +22,8 @@ from .views import (
     MessageViewSet,
     MeView,
     NotificationViewSet,
+    PublicListingDetailView,
+    PublicListingsView,
     PaymentViewSet,
     PropertyViewSet,
     RegisterView,
@@ -77,6 +79,12 @@ urlpatterns = [
         "organization/invitations/",
         OrganizationInvitationsView.as_view(),
         name="organization-invitations",
+    ),
+    path("listings/", PublicListingsView.as_view(), name="listings-public-index"),
+    path(
+        "listings/<slug:slug>/",
+        PublicListingDetailView.as_view(),
+        name="listings-public-detail",
     ),
     path(
         "screening/consent/<str:token>/",

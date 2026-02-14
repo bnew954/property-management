@@ -162,6 +162,9 @@ export const updateMaintenanceRequest = (id, data) =>
 export const deleteMaintenanceRequest = (id) =>
   api.delete(`maintenance-requests/${id}/`);
 
+export const getListings = (params = {}) => api.get("listings/", { params });
+export const getListingBySlug = (slug) => api.get(`listings/${slug}/`);
+
 export const getMe = () => api.get("me/");
 export const getOrganization = () => api.get("organization/");
 export const updateOrganization = (data) => api.patch("organization/", data);

@@ -48,6 +48,7 @@ from .serializers import (
     PropertySerializer,
     RentLedgerEntrySerializer,
     ScreeningRequestSerializer,
+    PublicUnitListingSerializer,
     TenantSerializer,
     TenantConsentSerializer,
     UnitSerializer,
@@ -242,6 +243,53 @@ class OrganizationInvitationsView(APIView):
         return Response(OrganizationInvitationSerializer(queryset, many=True).data)
 
 
+class PublicListingsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        queryset = (
+            Unit.objects.select_related("property")
+            .filter(is_listed=True)
+            .order_by("-created_at")
+        )
+
+        params = request.query_params
+        min_rent = params.get("min_rent")
+        max_rent = params.get("max_rent")
+        bedrooms = params.get("bedrooms")
+        city = params.get("city")
+
+        if min_rent:
+            queryset = queryset.filter(rent_amount__gte=min_rent)
+        if max_rent:
+            queryset = queryset.filter(rent_amount__lte=max_rent)
+        if bedrooms:
+            queryset = queryset.filter(bedrooms=bedrooms)
+        if city:
+            queryset = queryset.filter(property__city__icontains=city)
+
+        serializer = PublicUnitListingSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class PublicListingDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        unit = (
+            Unit.objects.select_related("property")
+            .filter(is_listed=True, listing_slug=slug)
+            .first()
+        )
+        if not unit:
+            return Response(
+                {"detail": "Listing not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(PublicUnitListingSerializer(unit).data)
+
+
 class PropertyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Property.objects.all()
     serializer_class = PropertySerializer
@@ -258,8 +306,15 @@ class UnitViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         property_id = self.request.query_params.get("property_id")
+        is_listed = self.request.query_params.get("is_listed")
         if property_id:
             queryset = queryset.filter(property_id=property_id)
+        if is_listed is not None:
+            normalized = str(is_listed).strip().lower()
+            if normalized in {"1", "true", "yes", "y"}:
+                queryset = queryset.filter(is_listed=True)
+            elif normalized in {"0", "false", "no", "n"}:
+                queryset = queryset.filter(is_listed=False)
         return queryset
 
     def get_permissions(self):
@@ -1431,4 +1486,5 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
 

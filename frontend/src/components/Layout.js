@@ -8,6 +8,7 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import DescriptionIcon from "@mui/icons-material/Description";
 import FolderIcon from "@mui/icons-material/Folder";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
@@ -107,6 +108,7 @@ const navItems = [
   { label: "Pay Rent", path: "/pay-rent", icon: <CreditCardIcon />, tenantOnly: true, accent: "green" },
   { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
+  { label: "Listings", path: "/listings", icon: <HomeWorkIcon />, landlordOnly: true },
   { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
   { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
@@ -144,6 +146,7 @@ function Layout({ children }) {
     if (location.pathname.startsWith("/pay-rent")) return "Pay Rent";
     if (location.pathname.startsWith("/my-lease")) return "My Lease";
     if (location.pathname.startsWith("/maintenance")) return "Maintenance";
+    if (location.pathname.startsWith("/listings")) return "Listings";
     if (location.pathname.startsWith("/documents")) return "Documents";
     if (location.pathname.startsWith("/templates")) return "Templates";
     if (location.pathname.startsWith("/messages")) return "Messages";

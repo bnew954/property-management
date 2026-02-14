@@ -40,7 +40,10 @@ import TenantList from "./pages/TenantList";
 import OrgSettings from "./pages/OrgSettings";
 import Welcome from "./pages/Welcome";
 import Templates from "./pages/Templates";
+import ListingPublic from "./pages/ListingPublic";
+import ListingsIndex from "./pages/ListingsIndex";
 import UnitForm from "./pages/UnitForm";
+import ListingApply from "./pages/ListingApply";
 import LandingPage from "./pages/LandingPage";
 import { UserProvider, useUser } from "./services/userContext";
 import { ThemeModeProvider, useThemeMode } from "./services/themeContext";
@@ -219,10 +222,13 @@ function AppContent() {
         <UserProvider>
             <BrowserRouter>
             <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/screening/consent/:token" element={<ScreeningConsent />} />
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/listing/:slug" element={<ListingPublic />} />
+                <Route path="/listing/:slug/apply" element={<ListingApply />} />
+                <Route path="/listings" element={<ListingsIndex />} />
+                <Route path="/screening/consent/:token" element={<ScreeningConsent />} />
               <Route
                 element={
                   <ProtectedRoute>

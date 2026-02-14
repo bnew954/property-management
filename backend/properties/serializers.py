@@ -96,6 +96,53 @@ class UnitSerializer(serializers.ModelSerializer):
         read_only_fields = ["organization"]
 
 
+class PublicUnitListingSerializer(serializers.ModelSerializer):
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    property_address_line1 = serializers.CharField(source="property.address_line1", read_only=True)
+    property_address_line2 = serializers.CharField(source="property.address_line2", read_only=True)
+    property_city = serializers.CharField(source="property.city", read_only=True)
+    property_state = serializers.CharField(source="property.state", read_only=True)
+    property_zip_code = serializers.CharField(source="property.zip_code", read_only=True)
+    full_address = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Unit
+        fields = [
+            "id",
+            "property",
+            "property_name",
+            "property_address_line1",
+            "property_address_line2",
+            "property_city",
+            "property_state",
+            "property_zip_code",
+            "full_address",
+            "unit_number",
+            "bedrooms",
+            "bathrooms",
+            "square_feet",
+            "rent_amount",
+            "listing_title",
+            "listing_description",
+            "listing_photos",
+            "listing_amenities",
+            "listing_available_date",
+            "listing_lease_term",
+            "listing_deposit",
+            "listing_slug",
+            "listing_contact_email",
+            "listing_contact_phone",
+        ]
+        read_only_fields = fields
+
+    def get_full_address(self, obj):
+        line2 = obj.property.address_line2.strip()
+        parts = [obj.property.address_line1, line2] if line2 else [obj.property.address_line1]
+        city_state_zip = f"{obj.property.city}, {obj.property.state} {obj.property.zip_code}".strip()
+        parts.append(city_state_zip)
+        return ", ".join([part for part in parts if part]).replace(", ,", ",")
+
+
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant

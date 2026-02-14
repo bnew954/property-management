@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.template.defaultfilters import slugify
 from django.utils.timezone import now
+import uuid
 
 
 class Organization(models.Model):
@@ -91,11 +92,45 @@ class Unit(models.Model):
     square_feet = models.IntegerField()
     rent_amount = models.DecimalField(max_digits=10, decimal_places=2)
     is_available = models.BooleanField(default=True)
+    is_listed = models.BooleanField(default=False)
+    listing_title = models.CharField(max_length=200, blank=True)
+    listing_description = models.TextField(blank=True)
+    listing_photos = models.JSONField(default=list, blank=True)
+    listing_amenities = models.JSONField(default=list, blank=True)
+    listing_available_date = models.DateField(null=True, blank=True)
+    listing_lease_term = models.CharField(max_length=50, blank=True)
+    listing_deposit = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    listing_slug = models.SlugField(max_length=255, unique=True, null=True, blank=True)
+    listing_contact_email = models.EmailField(blank=True)
+    listing_contact_phone = models.CharField(max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if self.is_listed and not self.listing_slug:
+            property_slug = slugify(self.property.name) if self.property else "unit"
+            unit_slug = slugify(self.unit_number)
+            base_slug = f"{property_slug}-{unit_slug}" if unit_slug else property_slug
+            if not base_slug:
+                base_slug = "unit-listing"
+            while True:
+                suffix = uuid.uuid4().hex[:6]
+                candidate = f"{base_slug}-{suffix}"
+                exists = Unit.objects.filter(
+                    listing_slug=candidate
+                ).exclude(pk=self.pk).exists()
+                if not exists:
+                    self.listing_slug = candidate
+                    break
+
+        if not self.is_listed:
+            self.listing_slug = self.listing_slug or None
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.property.name} - Unit {self.unit_number}"
