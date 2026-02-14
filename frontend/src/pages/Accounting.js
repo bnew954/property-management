@@ -119,25 +119,40 @@ const parseRent = (payload = {}) => {
 
 const asTree = (raw) => {
   const items = parseList(raw).map((item) => ({ ...item, children: [] }));
-  const withChildren = items.some((i) => Array.isArray(i.sub_accounts) && i.sub_accounts.length > 0);
+  const compareAccounts = (a, b) => {
+    const aCode = String(a.account_code || a.code || "").trim();
+    const bCode = String(b.account_code || b.code || "").trim();
+    const byCode = aCode.localeCompare(bCode, "en-US", { numeric: true, sensitivity: "base" });
+    if (byCode !== 0) return byCode;
+    return String(a.name || "").localeCompare(String(b.name || ""), "en-US", { sensitivity: "base" });
+  };
+  const sortedItems = [...items].sort(compareAccounts);
+  const withChildren = sortedItems.some((i) => Array.isArray(i.sub_accounts) && i.sub_accounts.length > 0);
   if (withChildren) {
     const build = (node) => ({
       ...node,
-      children: Array.isArray(node.sub_accounts) ? node.sub_accounts.map((c) => build(c)) : [],
+      children: Array.isArray(node.sub_accounts)
+        ? [...node.sub_accounts].sort(compareAccounts).map((c) => build(c))
+        : [],
     });
-    return items.map(build);
+    return [...sortedItems].map(build);
   }
   const map = {};
   const roots = [];
-  items.forEach((i) => {
+  sortedItems.forEach((i) => {
     map[i.id] = { ...i, children: [] };
   });
-  items.forEach((i) => {
+  sortedItems.forEach((i) => {
     const p = i.parent_account || i.parent_account_id;
     if (p && map[p]) map[p].children.push(map[i.id]);
     else roots.push(map[i.id]);
   });
-  return roots;
+  roots.forEach((node) => {
+    if (Array.isArray(node.children) && node.children.length > 1) {
+      node.children = node.children.sort(compareAccounts);
+    }
+  });
+  return roots.sort(compareAccounts);
 };
 
 const flattenTree = (nodes, output = []) => {
@@ -571,7 +586,8 @@ function Accounting() {
       const children = Array.isArray(account.children) ? account.children : [];
       const hasChildren = children.length > 0;
       const isExpanded = expandedNodes[account.id];
-      const rowBalance = accountBalanceById[String(account.id)] || 0;
+      const rowBalance = accountBalanceById[String(account.id)];
+      const rowStyle = account.is_header ? { fontWeight: 700 } : {};
       const row = (
         <TableRow
           key={account.id}
@@ -583,7 +599,7 @@ function Accounting() {
           }}
           onClick={() => setSelectedAccount(account.id)}
         >
-          <TableCell sx={{ pl: 1 + depth * 2 }}>
+          <TableCell sx={{ pl: 2 + depth * 3 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {hasChildren ? (
                 <IconButton
@@ -598,13 +614,13 @@ function Accounting() {
               ) : (
                 <Box sx={{ width: 32 }} />
               )}
-              <Typography>{account.account_code || "-"}</Typography>
+              <Typography sx={rowStyle}>{account.account_code || account.code || "-"}</Typography>
             </Box>
           </TableCell>
           <TableCell>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {account.is_system ? <Lock sx={{ fontSize: 14 }} color="disabled" /> : null}
-              <Typography>{account.name}</Typography>
+              <Typography sx={rowStyle}>{account.name}</Typography>
             </Box>
           </TableCell>
           <TableCell>
@@ -616,7 +632,7 @@ function Accounting() {
           </TableCell>
           <TableCell>{account.normal_balance || "debit"}</TableCell>
           <TableCell align="right" sx={{ fontFamily: "monospace" }}>
-            {money(rowBalance)}
+            {account.is_header ? "-" : money(rowBalance || 0)}
           </TableCell>
           <TableCell>
             <Chip
@@ -1499,8 +1515,8 @@ function Accounting() {
                         if (row.lease_id || row.lease) navigate(`/accounting/ledger/${row.lease_id || row.lease}`);
                       }}
                     >
-                      <TableCell>{row.property_name || row.property?.name || "-"}</TableCell>
-                      <TableCell>{row.unit_number || row.unit?.unit_number || "-"}</TableCell>
+                      <TableCell>{row.property_name || row.property || row.property?.name || "-"}</TableCell>
+                      <TableCell>{row.unit_number || row.unit || row.unit?.unit_number || "-"}</TableCell>
                       <TableCell>{row.tenant_name || "-"}</TableCell>
                       <TableCell>{money(row.monthly_rent)}</TableCell>
                       <TableCell>{last ? toDateStr(last) : "-"}</TableCell>

@@ -115,38 +115,9 @@ DEFAULT_ACCOUNTING_CATEGORIES = [
 
 
 def ensure_default_categories(organization):
-    org = organization
-    for name, category_type, is_system in DEFAULT_ACCOUNTING_CATEGORIES:
-        category = AccountingCategory.objects.filter(
-            name=name,
-            category_type=category_type,
-            organization__isnull=True,
-        ).first()
-        if not category:
-            category, created = AccountingCategory.objects.get_or_create(
-                name=name,
-                category_type=category_type,
-                organization=None,
-                defaults={
-                    "is_system": True,
-                    "description": "System accounting category",
-                    "tax_deductible": category_type == AccountingCategory.TYPE_EXPENSE,
-                },
-            )
-            if created:
-                category = category
-
-        if org:
-            AccountingCategory.objects.get_or_create(
-                name=name,
-                category_type=category_type,
-                organization=org,
-                defaults={
-                    "is_system": False,
-                    "description": "Organization accounting category" if is_system else "",
-                    "tax_deductible": category_type == AccountingCategory.TYPE_EXPENSE,
-                },
-            )
+    # Deprecated legacy helper. Kept as a no-op for compatibility while
+    # chart-of-accounts seeding is handled by seed_chart_of_accounts().
+    return
 
 
 def resolve_accounting_category(organization, name, category_type):
@@ -2367,7 +2338,6 @@ class AccountingCategoryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
 
     def get_queryset(self):
         organization = resolve_request_organization(self.request)
-        ensure_default_categories(organization)
         _ensure_chart_of_accounts(organization)
         if not organization:
             return AccountingCategory.objects.none()
@@ -3184,8 +3154,6 @@ class AccountingDashboardView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        ensure_default_categories(organization)
-
         today = timezone.now().date()
         month_start = date(today.year, today.month, 1)
         ytd_start = date(today.year, 1, 1)
@@ -3533,6 +3501,8 @@ class AccountingRentRollView(APIView):
             rows.append(
                 {
                     "tenant_name": f"{lease.tenant.first_name} {lease.tenant.last_name}".strip(),
+                    "property_name": lease.unit.property.name if lease.unit and lease.unit.property else "",
+                    "unit_number": lease.unit.unit_number if lease.unit else "",
                     "property": lease.unit.property.name if lease.unit and lease.unit.property else "",
                     "unit": lease.unit.unit_number if lease.unit else "",
                     "monthly_rent": _to_float(monthly_rent),
