@@ -4,6 +4,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import AccountingCategory, ClassificationRule, ImportedTransaction
+from .models import JournalEntryLine, ReconciliationMatch, JournalEntry
 
 
 def _format_currency(value):
@@ -413,6 +414,88 @@ def apply_classification_rules(organization, imported_transactions_queryset):
                 break
 
     return auto_classified_count, auto_classified_ids
+
+
+def auto_match_reconciliation(reconciliation):
+    if not reconciliation:
+        return 0
+
+    organization = reconciliation.organization
+    if not organization:
+        return 0
+
+    if not reconciliation.account_id:
+        return 0
+
+    bank_account = reconciliation.account
+
+    matched_import_ids = set(
+        ReconciliationMatch.objects.exclude(imported_transaction_id__isnull=True)
+        .values_list("imported_transaction_id", flat=True)
+    )
+    matched_line_ids = set(
+        ReconciliationMatch.objects.exclude(journal_entry_line_id__isnull=True)
+        .values_list("journal_entry_line_id", flat=True)
+    )
+
+    bank_transactions = list(
+        ImportedTransaction.objects.filter(
+            organization=organization,
+            status=ImportedTransaction.STATUS_BOOKED,
+            journal_entry__lines__account=bank_account,
+            date__gte=reconciliation.start_date,
+            date__lte=reconciliation.end_date,
+        )
+        .exclude(id__in=matched_import_ids)
+        .select_related("journal_entry")
+        .order_by("date", "id")
+        .distinct()
+    )
+
+    if not bank_transactions:
+        return 0
+
+    book_lines = list(
+        JournalEntryLine.objects.filter(
+            organization=organization,
+            account=bank_account,
+            journal_entry__status=JournalEntry.STATUS_POSTED,
+            journal_entry__entry_date__gte=reconciliation.start_date,
+            journal_entry__entry_date__lte=reconciliation.end_date,
+        )
+        .exclude(id__in=matched_line_ids)
+        .select_related("journal_entry", "account")
+        .order_by("journal_entry__entry_date", "id")
+    )
+
+    unmatched_lines = {}
+    for line in book_lines:
+        key = (line.journal_entry.entry_date, _bank_line_effect(line))
+        unmatched_lines.setdefault(key, []).append(line)
+    matched_count = 0
+
+    for transaction in bank_transactions:
+        key = (transaction.date, transaction.amount)
+        bucket = unmatched_lines.get(key, [])
+        matched_line = bucket.pop(0) if bucket else None
+        if not matched_line:
+            continue
+        unmatched_lines[key] = bucket
+        ReconciliationMatch.objects.create(
+            reconciliation=reconciliation,
+            imported_transaction=transaction,
+            journal_entry_line=matched_line,
+            match_type=ReconciliationMatch.MATCH_TYPE_AUTO,
+        )
+        matched_count += 1
+
+    return matched_count
+
+
+def _bank_line_effect(line):
+    if line.account.normal_balance == AccountingCategory.NORMAL_BALANCE_CREDIT:
+        return line.credit_amount - line.debit_amount
+    return line.debit_amount - line.credit_amount
 
 
 

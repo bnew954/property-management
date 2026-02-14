@@ -56,6 +56,7 @@ from .views import (
     TenantViewSet,
     UnitViewSet,
     ClassificationRuleViewSet,
+    BankReconciliationViewSet,
 )
 
 router = DefaultRouter()
@@ -75,6 +76,11 @@ router.register(
     "accounting/imported-transactions",
     ImportedTransactionViewSet,
     basename="accounting-imported-transaction",
+)
+router.register(
+    "accounting/reconciliations",
+    BankReconciliationViewSet,
+    basename="accounting-reconciliation",
 )
 router.register("payments", PaymentViewSet, basename="payment")
 router.register("notifications", NotificationViewSet, basename="notification")

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import * as MuiIcons from "@mui/icons-material";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -9,6 +10,7 @@ import {
   Box,
   Card,
   CardContent,
+  Button,
   Collapse,
   Container,
   Divider,
@@ -25,7 +27,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { FEATURE_MENU_ITEMS } from "./featureMenuConfig";
+import featureMenuConfig from "./featureMenuConfig";
 
 function BrandLogo({ textColor, onyxSize = 18, iconSize = 28, pillSize }) {
   const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
@@ -91,7 +93,9 @@ function FeatureFooter() {
           }}
         >
           <Box>
-            <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
+            <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer" }}>
+              <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
+            </Link>
             <Stack spacing={1}>
               <MuiLink href="/#features" underline="none" color="#fff" sx={{ fontSize: 13 }}>
                 Features
@@ -189,13 +193,11 @@ function FeatureNav() {
       >
         <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
           <Box sx={{ minHeight: 68, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
-            <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
+            <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer" }}>
+              <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
+            </Link>
             {isMobile ? (
-              <IconButton
-                onClick={() => setMobileMenuOpen(true)}
-                sx={{ color: "#fff" }}
-                aria-label="Open menu"
-              >
+              <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "#fff" }} aria-label="Open menu">
                 <MenuIcon />
               </IconButton>
             ) : (
@@ -217,70 +219,68 @@ function FeatureNav() {
                   >
                     Features
                   </Button>
-                  <Fade in={featuresMenuOpen} timeout={170} unmountOnExit>
+                  <Fade in={featuresMenuOpen} timeout={150} unmountOnExit>
                     <Paper
-                      elevation={24}
+                      elevation={0}
                       sx={{
                         position: "absolute",
                         left: "50%",
                         top: "100%",
-                        mt: 1,
+                        mt: "8px",
                         transform: "translateX(-50%)",
-                        width: "min(980px, calc(100vw - 64px))",
-                        maxWidth: 1020,
-                        p: 1.5,
-                        borderRadius: 2.4,
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "linear-gradient(160deg, #111111 0%, #0a0a0a 42%, #090909 100%)",
-                        boxShadow: "0 22px 48px rgba(0,0,0,0.55)",
-                        zIndex: 1301,
+                        width: "820px",
+                        maxWidth: "calc(100vw - 32px)",
+                        p: "20px",
+                        borderRadius: "12px",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        backgroundColor: "#111827",
+                        boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, 1fr)",
+                        gap: "4px",
+                        zIndex: 1000,
                       }}
                     >
-                      <Grid container spacing={1.2}>
-                        {FEATURE_MENU_ITEMS.map((item) => {
-                          const Icon = item.Icon;
-                          return (
-                            <Grid item xs={12} sm={6} md={4} key={item.title}>
-                              <Paper
-                                component={Link}
-                                to={item.path}
-                                onClick={() => setFeaturesMenuOpen(false)}
-                                elevation={0}
+                      {featureMenuConfig.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Box
+                            key={item.title}
+                            component={Link}
+                            to={item.route}
+                            onClick={() => setFeaturesMenuOpen(false)}
+                            sx={{
+                              textDecoration: "none",
+                              color: "#fff",
+                              borderRadius: "8px",
+                              p: "14px 16px",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "14px",
+                              cursor: "pointer",
+                              transition: "background 0.15s",
+                              "&:hover": { backgroundColor: "rgba(255,255,255,0.05)" },
+                            }}
+                          >
+                            <Icon sx={{ color: "#7c5cfc", fontSize: 36, mt: "2px", flexShrink: 0 }} />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body1" sx={{ fontWeight: 600, color: "#fff" }}>
+                                {item.title}
+                              </Typography>
+                              <Typography
+                                variant="body2"
                                 sx={{
-                                  p: 1.8,
-                                  borderRadius: 2,
-                                  border: "1px solid rgba(255,255,255,0.06)",
-                                  backgroundColor: "#141414",
-                                  color: "#fff",
-                                  textDecoration: "none",
-                                  minHeight: "120px",
-                                  display: "grid",
-                                  gap: 0.6,
-                                  cursor: "pointer",
-                                  transition: "transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease",
-                                  "&:hover": {
-                                    borderColor: "rgba(124,92,252,0.35)",
-                                    backgroundColor: "rgba(124,92,252,0.1)",
-                                    transform: "translateY(-2px)",
-                                  },
+                                  mt: "2px",
+                                  color: "rgba(255,255,255,0.55)",
+                                  lineHeight: 1.4,
                                 }}
                               >
-                                <Icon sx={{ color: "#7c5cfc", fontSize: 28 }} />
-                                <Typography sx={{ fontWeight: 600, color: "#fff", lineHeight: 1.2 }} noWrap>
-                                  {item.title}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ color: "#878C9E", lineHeight: 1.35 }}
-                                  noWrap
-                                >
-                                  {item.description}
-                                </Typography>
-                              </Paper>
-                            </Grid>
-                          );
-                        })}
-                      </Grid>
+                                {item.description}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        );
+                      })}
                     </Paper>
                   </Fade>
                 </Box>
@@ -342,11 +342,11 @@ function FeatureNav() {
           </ListItemButton>
           <Collapse in={mobileFeaturesOpen} timeout="auto" unmountOnExit>
             <List disablePadding>
-              {FEATURE_MENU_ITEMS.map((item) => (
+              {featureMenuConfig.map((item) => (
                 <ListItemButton
                   key={item.title}
                   component={Link}
-                  to={item.path}
+                  to={item.route}
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setMobileFeaturesOpen(false);
@@ -374,7 +374,6 @@ function FeatureNav() {
               <ListItemText primary={link.label} />
             </ListItemButton>
           ))}
-          <Divider sx={{ my: 1 }} />
           <ListItemButton component={Link} to="/login" onClick={() => setMobileMenuOpen(false)} sx={{ borderRadius: 1, color: "#fff" }}>
             <ListItemText primary="Log In" />
           </ListItemButton>
@@ -388,185 +387,179 @@ function FeatureNav() {
 }
 
 export default function FeaturePageTemplate({ feature }) {
+  if (!feature) {
+    return null;
+  }
+
   const HeaderIcon = feature.icon;
 
   return (
-    <Box
-      sx={{
-        bgcolor: "#0a0a0a",
-        color: "#e5e7eb",
-        fontFamily: "Inter, Roboto, sans-serif",
-      }}
-    >
+    <Box sx={{ bgcolor: "#0a0a0a", color: "#e5e7eb", fontFamily: "Inter, Roboto, sans-serif" }}>
       <FeatureNav />
-      <Box sx={{ pt: { xs: 12, md: 14 }, pb: { xs: 3, md: 5 } }}>
+
+      <Box sx={{ pt: { xs: 12, md: 14 }, pb: 4 }}>
         <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
-          <Box
-            sx={{
-              borderRadius: 3,
-              backgroundColor: "#0a0a0a",
-              border: "1px solid rgba(255,255,255,0.08)",
-              px: { xs: 2.5, md: 3.5 },
-              py: { xs: 5, md: 6 },
-            }}
-          >
-            <Box sx={{ color: "#7c5cfc", mb: 1.6 }}>
-              <HeaderIcon sx={{ fontSize: 56 }} />
+          <Box sx={{ mb: 8 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.8, color: "#7c5cfc", mb: 2 }}>
+              <HeaderIcon sx={{ fontSize: 48 }} />
+              <Typography variant="h3" sx={{ fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>
+                {feature.title}
+              </Typography>
             </Box>
-            <Typography
-              variant="h3"
-              sx={{ color: "#fff", fontWeight: 700, fontSize: { xs: 34, md: 44 }, lineHeight: 1.1 }}
-            >
-              {feature.title}
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary" sx={{ mt: 1.4, maxWidth: 900, lineHeight: 1.55 }}>
+            <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 900, lineHeight: 1.7 }}>
               {feature.tagline}
             </Typography>
-            <Divider sx={{ mt: 3, borderColor: "rgba(255,255,255,0.16)" }} />
           </Box>
-
-          <Box sx={{ py: 10 }}>
-            <Typography variant="h4" sx={{ color: "#fff", fontWeight: 700, textAlign: "center", mb: 6 }}>
-              Key Benefits
-            </Typography>
-            <Grid container spacing={2} sx={{ mt: 0 }} alignItems="stretch">
-              {feature.benefits.map((benefit) => {
-                const Icon = benefit.Icon;
-                return (
-                  <Grid key={benefit.title} item xs={12} md={4}>
-                    <Card
-                      sx={{
-                        height: "100%",
-                        minHeight: 190,
-                        display: "flex",
-                        background: "#141414",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: 3,
-                      }}
-                    >
-                      <CardContent sx={{ p: 2.2, display: "flex", flexDirection: "column", gap: 0.8 }}>
-                        <Icon sx={{ color: "#7c5cfc", mb: 1.2, fontSize: 28 }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", fontSize: 17 }}>
-                          {benefit.title}
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "text.secondary", lineHeight: 1.6 }}>
-                          {benefit.description}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-
-          <Box sx={{ py: 10 }}>
-            <Typography variant="h4" sx={{ color: "#fff", fontWeight: 700, textAlign: "center", mb: 6 }}>
-              How It Works
-            </Typography>
-            <Grid container spacing={2} sx={{ mt: 2 }}>
-              {feature.steps.map((step) => (
-                <Grid key={step.title} item xs={12} md={4}>
-                    <Paper
-                      sx={{
-                        minHeight: 186,
-                        height: "100%",
-                        display: "flex",
-                        flexDirection: "column",
-                        p: 2.1,
-                        borderRadius: 3,
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        background: "#141414",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "50%",
-                          color: "#7c5cfc",
-                          border: "1px solid rgba(124,92,252,0.45)",
-                          backgroundColor: "rgba(124,92,252,0.12)",
-                          display: "grid",
-                          placeItems: "center",
-                          fontSize: 16,
-                          fontWeight: 700,
-                          mb: 1,
-                        }}
-                      >
-                        {step.number}
-                    </Box>
-                      <Typography sx={{ fontWeight: 600, color: "#fff", fontSize: 16, mb: 0.6 }}>
-                        {step.title}
-                      </Typography>
-                      <Typography variant="body1" sx={{ color: "text.secondary", lineHeight: 1.55 }}>
-                        {step.description}
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-
-          <Box sx={{ py: 10 }}>
-            <Typography variant="h4" sx={{ color: "#fff", fontWeight: 700, textAlign: "center", mb: 6 }}>
-              Feature Highlights
-            </Typography>
-            <Box sx={{ mt: 2.5 }}>
-              {feature.highlights.map((highlight, index) => (
-                <Grid
-                  key={highlight.title}
-                  container
-                  spacing={2}
-                  alignItems="stretch"
-                  direction={index % 2 === 1 ? "row-reverse" : "row"}
-                  sx={{ mb: 2 }}
-                >
-                  <Grid item xs={12} md={6}>
-                      <Paper
-                        sx={{
-                          p: 2.4,
-                          borderRadius: 3,
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          background: "#141414",
-                        height: "100%",
-                      }}
-                    >
-                      <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: 22, mb: 0.8 }}>
-                        {highlight.title}
-                      </Typography>
-                        <Typography variant="body1" sx={{ color: "text.secondary", lineHeight: 1.62 }}>
-                          {highlight.description}
-                        </Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                      <Paper
-                        sx={{
-                          p: 2.4,
-                          borderRadius: 3,
-                          background: "#1a1a2e",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          minHeight: 190,
-                          display: "grid",
-                          placeItems: "center",
-                          color: "text.secondary",
-                          fontWeight: 600,
-                          fontSize: 13,
-                          textAlign: "center",
-                          letterSpacing: "0.02em",
-                        }}
-                      >
-                        Coming soon
-                      </Paper>
-                    </Grid>
-                  </Grid>
-                ))}
-              </Box>
-            </Box>
-
         </Container>
       </Box>
+
+      <Box sx={{ py: 8 }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
+          <Grid container spacing={3} alignItems="stretch">
+            {feature.benefits.map((benefit) => {
+              const BenefitIcon = MuiIcons[benefit.icon] || MuiIcons.CheckCircleOutline;
+              return (
+                <Grid key={benefit.title} item xs={12} md={4}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      height: "100%",
+                      borderRadius: "12px",
+                      backgroundColor: "#111827",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <CardContent sx={{ p: "32px 24px", display: "flex", flexDirection: "column", gap: 1.2, width: "100%", minHeight: 0 }}>
+                      <BenefitIcon sx={{ color: "#7c5cfc", fontSize: 40 }} />
+                      <Typography variant="h6" sx={{ color: "#fff", fontWeight: 700, mt: 2 }}>
+                        {benefit.title}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "text.secondary", lineHeight: 1.65 }}>
+                        {benefit.description}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Container>
+      </Box>
+
+      <Box sx={{ py: 8 }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
+          <Typography variant="h4" sx={{ color: "#fff", fontWeight: 700, textAlign: "center", mb: 6 }}>
+            How It Works
+          </Typography>
+          <Grid container spacing={3}>
+            {feature.steps.map((step, index) => (
+              <Grid key={step.title} item xs={12} sm={6} md={3}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    position: "relative",
+                    height: "100%",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    backgroundColor: "#141414",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    p: 3,
+                  }}
+                >
+                  {index !== feature.steps.length - 1 ? (
+                    <Box
+                      sx={{
+                        display: { xs: "none", md: "block" },
+                        position: "absolute",
+                        top: 33,
+                        left: "calc(50% + 22px)",
+                        width: "calc(100% - 22px)",
+                        borderTop: "1px solid rgba(255,255,255,0.1)",
+                        zIndex: 0,
+                      }}
+                    />
+                  ) : null}
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "50%",
+                      display: "grid",
+                      placeItems: "center",
+                      color: "#fff",
+                      backgroundColor: "#7c5cfc",
+                      mb: 2,
+                      fontSize: 16,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {index + 1}
+                  </Box>
+                  <Typography variant="subtitle1" sx={{ color: "#fff", fontWeight: 700 }}>
+                    {step.title}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1, color: "text.secondary", lineHeight: 1.65 }}>
+                    {step.description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      <Box sx={{ py: 8 }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
+          <Typography variant="h4" sx={{ color: "#fff", fontWeight: 700, textAlign: "center", mb: 6 }}>
+            Feature Highlights
+          </Typography>
+          <Box sx={{ mt: 0 }}>
+            {feature.highlights.map((highlight, index) => (
+              <Grid
+                key={highlight.title}
+                container
+                spacing={3}
+                alignItems="stretch"
+                sx={{
+                  mb: 4,
+                  flexDirection: { xs: "column", md: index % 2 === 0 ? "row" : "row-reverse" },
+                }}
+              >
+                <Grid item xs={12} md={7}>
+                  <Box sx={{ height: "100%", display: "grid", alignItems: "center" }}>
+                    <Typography variant="h5" sx={{ color: "#fff", fontWeight: 700 }}>
+                      {highlight.title}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mt: 2, color: "text.secondary", lineHeight: 1.65 }}>
+                      {highlight.description}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={5}>
+                  <Box
+                    sx={{
+                      borderRadius: "12px",
+                      backgroundColor: "#1a1a2e",
+                      height: 300,
+                      display: "grid",
+                      alignItems: "center",
+                      justifyItems: "center",
+                      color: "rgba(255,255,255,0.4)",
+                      fontSize: "0.875rem",
+                    }}
+                  >
+                    Screenshot coming soon
+                  </Box>
+                </Grid>
+              </Grid>
+            ))}
+          </Box>
+        </Container>
+      </Box>
+
       <FeatureFooter />
     </Box>
   );

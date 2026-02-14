@@ -1441,4 +1441,79 @@ class OwnerStatement(models.Model):
         return f"Statement #{self.id} for {self.property.name} ({self.period_start} to {self.period_end})"
 
 
+class BankReconciliation(models.Model):
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_COMPLETED = "completed"
+    STATUS_CHOICES = [
+        (STATUS_IN_PROGRESS, "In Progress"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="bank_reconciliations",
+    )
+    account = models.ForeignKey(
+        AccountingCategory,
+        on_delete=models.CASCADE,
+        related_name="bank_reconciliations",
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    statement_ending_balance = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="created_bank_reconciliations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(default="", blank=True)
+
+    def __str__(self):
+        return (
+            f"Reconciliation #{self.id} ({self.account_id}) "
+            f"{self.start_date} to {self.end_date}"
+        )
+
+
+class ReconciliationMatch(models.Model):
+    MATCH_TYPE_AUTO = "auto"
+    MATCH_TYPE_MANUAL = "manual"
+    MATCH_TYPE_ADJUSTMENT = "adjustment"
+    MATCH_TYPE_EXCLUDED = "excluded"
+    MATCH_TYPE_CHOICES = [
+        (MATCH_TYPE_AUTO, "Auto-Matched"),
+        (MATCH_TYPE_MANUAL, "Manually Matched"),
+        (MATCH_TYPE_ADJUSTMENT, "Adjustment"),
+        (MATCH_TYPE_EXCLUDED, "Excluded"),
+    ]
+
+    reconciliation = models.ForeignKey(
+        BankReconciliation,
+        on_delete=models.CASCADE,
+        related_name="matches",
+    )
+    imported_transaction = models.ForeignKey(
+        "ImportedTransaction",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    journal_entry_line = models.ForeignKey(
+        "JournalEntryLine",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    match_type = models.CharField(max_length=20, choices=MATCH_TYPE_CHOICES, default=MATCH_TYPE_MANUAL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return (
+            f"ReconciliationMatch #{self.id} (recon={self.reconciliation_id}, "
+            f"type={self.match_type})"
+        )
 

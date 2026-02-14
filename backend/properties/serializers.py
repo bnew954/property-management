@@ -29,6 +29,8 @@ from .models import (
     AccountingCategory,
     JournalEntry,
     JournalEntryLine,
+    BankReconciliation,
+    ReconciliationMatch,
     AccountingPeriod,
     RecurringTransaction,
 )
@@ -622,6 +624,187 @@ class RecurringTransactionSerializer(serializers.ModelSerializer):
         model = RecurringTransaction
         fields = "__all__"
         read_only_fields = ["organization", "created_by"]
+
+
+class BankReconciliationSerializer(serializers.ModelSerializer):
+    account_name = serializers.SerializerMethodField(read_only=True)
+    matched_count = serializers.SerializerMethodField(read_only=True)
+    unmatched_bank_count = serializers.SerializerMethodField(read_only=True)
+    unmatched_book_count = serializers.SerializerMethodField(read_only=True)
+    book_balance = serializers.SerializerMethodField(read_only=True)
+    difference = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = BankReconciliation
+        fields = [
+            "id",
+            "account",
+            "account_name",
+            "start_date",
+            "end_date",
+            "statement_ending_balance",
+            "status",
+            "created_at",
+            "completed_at",
+            "notes",
+            "created_by",
+            "matched_count",
+            "unmatched_bank_count",
+            "unmatched_book_count",
+            "book_balance",
+            "difference",
+        ]
+        read_only_fields = [
+            "id",
+            "organization",
+            "created_by",
+            "account_name",
+            "matched_count",
+            "unmatched_bank_count",
+            "unmatched_book_count",
+            "created_at",
+            "completed_at",
+            "book_balance",
+            "difference",
+        ]
+
+    def get_account_name(self, obj):
+        if not obj.account_id:
+            return None
+        return obj.account.name
+
+    def get_matched_count(self, obj):
+        return obj.matches.count()
+
+    def get_matched_import_queryset(self, obj):
+        return obj.matches.exclude(imported_transaction_id__isnull=True)
+
+    def get_matched_book_queryset(self, obj):
+        return obj.matches.exclude(journal_entry_line_id__isnull=True)
+
+    def get_unmatched_bank_count(self, obj):
+        return self._unmatched_bank_transactions(obj).count()
+
+    def get_unmatched_book_count(self, obj):
+        return self._unmatched_book_lines(obj).count()
+
+    def get_book_balance(self, obj):
+        lines = JournalEntryLine.objects.filter(
+            organization=obj.organization,
+            account=obj.account,
+            journal_entry__status=JournalEntry.STATUS_POSTED,
+            journal_entry__entry_date__lte=obj.end_date,
+        )
+        totals = lines.aggregate(
+            total_debits=Sum("debit_amount"),
+            total_credits=Sum("credit_amount"),
+        )
+        debits = Decimal(totals["total_debits"] or 0)
+        credits = Decimal(totals["total_credits"] or 0)
+        if obj.account and obj.account.normal_balance == AccountingCategory.NORMAL_BALANCE_CREDIT:
+            return float(credits - debits)
+        return float(debits - credits)
+
+    def get_difference(self, obj):
+        return float(Decimal(obj.statement_ending_balance or 0) - Decimal(self.get_book_balance(obj)))
+
+    def _unmatched_bank_transactions(self, obj):
+        if not obj.account_id:
+            return ImportedTransaction.objects.none()
+        matched_import_ids = set(
+            self.get_matched_import_queryset(obj).values_list("imported_transaction_id", flat=True)
+        )
+        return (
+            ImportedTransaction.objects.filter(
+                organization=obj.organization,
+                status=ImportedTransaction.STATUS_BOOKED,
+                date__gte=obj.start_date,
+                date__lte=obj.end_date,
+                journal_entry__lines__account=obj.account,
+            )
+            .exclude(id__in=matched_import_ids)
+            .distinct()
+        )
+
+    def _unmatched_book_lines(self, obj):
+        if not obj.account_id:
+            return JournalEntryLine.objects.none()
+        matched_line_ids = set(
+            self.get_matched_book_queryset(obj).values_list("journal_entry_line_id", flat=True)
+        )
+        return JournalEntryLine.objects.filter(
+            organization=obj.organization,
+            account=obj.account,
+            journal_entry__status=JournalEntry.STATUS_POSTED,
+            journal_entry__entry_date__gte=obj.start_date,
+            journal_entry__entry_date__lte=obj.end_date,
+        ).exclude(id__in=matched_line_ids)
+
+
+class ReconciliationMatchSerializer(serializers.ModelSerializer):
+    imported_transaction_detail = serializers.SerializerMethodField(read_only=True)
+    journal_entry_line_detail = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ReconciliationMatch
+        fields = [
+            "id",
+            "imported_transaction",
+            "journal_entry_line",
+            "match_type",
+            "created_at",
+            "imported_transaction_detail",
+            "journal_entry_line_detail",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "imported_transaction_detail",
+            "journal_entry_line_detail",
+        ]
+
+    def get_imported_transaction_detail(self, obj):
+        if not obj.imported_transaction_id:
+            return None
+        txn = obj.imported_transaction
+        return {
+            "id": txn.id,
+            "date": txn.date,
+            "description": txn.description,
+            "amount": float(txn.amount),
+        }
+
+    def get_journal_entry_line_detail(self, obj):
+        if not obj.journal_entry_line_id:
+            return None
+        line = obj.journal_entry_line
+        return {
+            "id": line.id,
+            "date": line.journal_entry.entry_date,
+            "memo": line.journal_entry.memo,
+            "debit_amount": float(line.debit_amount),
+            "credit_amount": float(line.credit_amount),
+        }
+
+
+class ReconciliationDetailSerializer(BankReconciliationSerializer):
+    matches = ReconciliationMatchSerializer(many=True, read_only=True)
+    unmatched_bank_transactions = serializers.SerializerMethodField(read_only=True)
+    unmatched_book_entries = serializers.SerializerMethodField(read_only=True)
+
+    class Meta(BankReconciliationSerializer.Meta):
+        fields = BankReconciliationSerializer.Meta.fields + [
+            "matches",
+            "unmatched_bank_transactions",
+            "unmatched_book_entries",
+        ]
+
+    def get_unmatched_bank_transactions(self, obj):
+        return ImportedTransactionSerializer(self._unmatched_bank_transactions(obj), many=True).data
+
+    def get_unmatched_book_entries(self, obj):
+        serializer = JournalEntryLineSerializer(self._unmatched_book_lines(obj), many=True)
+        return serializer.data
 
 
 class TransactionImportSerializer(serializers.ModelSerializer):

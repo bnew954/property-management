@@ -49,9 +49,9 @@ import UnitForm from "./pages/UnitForm";
 import ListingApply from "./pages/ListingApply";
 import LeaseSigning from "./pages/LeaseSigning";
 import LandingPage from "./pages/LandingPage";
+import ListingsFeature from "./pages/features/ListingsFeature";
 import LeasingFeature from "./pages/features/LeasingFeature";
 import AccountingFeature from "./pages/features/AccountingFeature";
-import TenantsFeature from "./pages/features/TenantsFeature";
 import PaymentsFeature from "./pages/features/PaymentsFeature";
 import ScreeningFeature from "./pages/features/ScreeningFeature";
 import MaintenanceFeature from "./pages/features/MaintenanceFeature";
@@ -238,9 +238,9 @@ function AppContent() {
                 <Route path="/listing/:slug" element={<ListingPublic />} />
                 <Route path="/listing/:slug/apply" element={<ListingApply />} />
                 <Route path="/browse-listings" element={<ListingsIndex />} />
+                <Route path="/features/listings" element={<ListingsFeature />} />
                 <Route path="/features/leasing" element={<LeasingFeature />} />
                 <Route path="/features/accounting" element={<AccountingFeature />} />
-                <Route path="/features/tenants" element={<TenantsFeature />} />
                 <Route path="/features/payments" element={<PaymentsFeature />} />
                 <Route path="/features/screening" element={<ScreeningFeature />} />
                 <Route path="/features/maintenance" element={<MaintenanceFeature />} />

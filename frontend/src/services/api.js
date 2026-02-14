@@ -161,6 +161,19 @@ export const updateAccountingCategory = (id, data) =>
   api.patch(`accounting/categories/${id}/`, data);
 export const deleteAccountingCategory = (id) =>
   api.delete(`accounting/categories/${id}/`);
+export const getReconciliations = () => api.get("accounting/reconciliations/");
+export const createReconciliation = (data) =>
+  api.post("accounting/reconciliations/", data);
+export const getReconciliation = (id) =>
+  api.get(`accounting/reconciliations/${id}/`);
+export const completeReconciliation = (id) =>
+  api.post(`accounting/reconciliations/${id}/complete/`);
+export const addReconciliationMatch = (id, payload) =>
+  api.post(`accounting/reconciliations/${id}/add-match/`, payload);
+export const removeReconciliationMatch = (id, payload) =>
+  api.post(`accounting/reconciliations/${id}/remove-match/`, payload);
+export const excludeReconciliationItem = (id, payload) =>
+  api.post(`accounting/reconciliations/${id}/exclude/`, payload);
 export const getTransactions = (params = {}) =>
   api.get("accounting/transactions/", { params });
 export const createTransaction = (data) => api.post("accounting/transactions/", data);

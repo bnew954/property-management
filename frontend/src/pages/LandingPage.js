@@ -37,7 +37,7 @@ import ApartmentIcon from "@mui/icons-material/Apartment";
 import BuildIcon from "@mui/icons-material/Build";
 import DescriptionIcon from "@mui/icons-material/Description";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
-import { FEATURE_MENU_ITEMS } from "./features/featureMenuConfig";
+import featureMenuConfig from "./features/featureMenuConfig";
 
 function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
   const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
@@ -382,7 +382,9 @@ function LandingPage() {
       >
         <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
           <Box sx={{ minHeight: 68, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
-            <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
+            <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer" }}>
+              <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
+            </Link>
             {isMobile ? (
               <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "#fff" }} aria-label="Open menu">
                 <MenuIcon />
@@ -406,74 +408,86 @@ function LandingPage() {
                   >
                     Features
                   </Button>
-                  <Fade in={featuresMenuOpen} timeout={170} unmountOnExit>
+                  <Fade in={featuresMenuOpen} timeout={150} unmountOnExit>
                     <Paper
-                      elevation={24}
+                      elevation={0}
                       sx={{
-                        position: "absolute",
-                        left: "50%",
-                        top: "100%",
-                        mt: 1,
-                        transform: "translateX(-50%)",
-                        width: "min(980px, calc(100vw - 64px))",
-                        maxWidth: 1020,
-                        p: 1.2,
-                        borderRadius: 2.4,
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "linear-gradient(160deg, #111111 0%, #0a0a0a 42%, #090909 100%)",
-                        boxShadow: "0 22px 48px rgba(0,0,0,0.55)",
-                        zIndex: 1301,
+                          position: "fixed",
+                          left: "50%",
+                          top: "68px",
+                          mt: 0,
+                          transform: "translateX(-50%)",
+                          width: "880px",
+                          maxWidth: "calc(100vw - 32px)",
+                          p: "20px",
+                          borderRadius: "0 0 12px 12px",
+                           border: "1px solid rgba(255,255,255,0.08)",
+                           borderTop: "none",
+                           backgroundColor: "rgba(10,10,10,0.9)",
+                           backdropFilter: "blur(12px)",
+                          boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+                          display: "grid",
+                          gridTemplateColumns: "repeat(2, 1fr)",
+                          gap: "4px",
+                          zIndex: 1000,
                       }}
                     >
-                      <Grid container spacing={1.2} alignItems="stretch">
-                        {FEATURE_MENU_ITEMS.map((item) => {
-                          const Icon = item.Icon;
-                          return (
-                            <Grid item xs={12} md={4} key={item.title}>
-                              <Paper
-                                component={Link}
-                                to={item.path}
-                                onClick={() => setFeaturesMenuOpen(false)}
-                                elevation={0}
+                      {featureMenuConfig.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Box
+                            key={item.title}
+                            component={Link}
+                            to={item.route}
+                            onClick={() => setFeaturesMenuOpen(false)}
+                            sx={{
+                              textDecoration: "none",
+                              color: "#fff",
+                              borderRadius: "8px",
+                              p: "14px 16px",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "14px",
+                              cursor: "pointer",
+                              transition: "background 0.15s",
+                              "&:hover": {
+                                backgroundColor: "rgba(124, 92, 252, 0.08)",
+                                boxShadow: "0 0 0 1px rgba(124, 92, 252, 0.15)",
+                              },
+                              "&:hover .feature-dropdown-icon": {
+                                filter:
+                                  "drop-shadow(0 0 12px rgba(124, 92, 252, 0.8)) drop-shadow(0 0 24px rgba(124, 92, 252, 0.4))",
+                              },
+                            }}
+                          >
+                            <Icon
+                              className="feature-dropdown-icon"
+                              sx={{
+                                color: "#7c5cfc",
+                                fontSize: 36,
+                                mt: "2px",
+                                flexShrink: 0,
+                                filter: "drop-shadow(0 0 8px rgba(124, 92, 252, 0.6))",
+                              }}
+                            />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography sx={{ fontWeight: 600, color: "#fff", lineHeight: 1.3 }}>
+                                {item.title}
+                              </Typography>
+                              <Typography
+                                variant="body2"
                                 sx={{
-                                  p: 1.2,
-                                  borderRadius: 2,
-                                  border: "1px solid rgba(255,255,255,0.06)",
-                                  backgroundColor: "#141414",
-                                  color: "#fff",
-                                  textDecoration: "none",
-                                  minHeight: "112px",
-                                  height: "100%",
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  justifyContent: "space-between",
-                                  gap: 0.6,
-                                  cursor: "pointer",
-                                  textAlign: "left",
-                                  transition: "transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease",
-                                  "&:hover": {
-                                    borderColor: "rgba(124,92,252,0.35)",
-                                    backgroundColor: "rgba(124,92,252,0.1)",
-                                    transform: "translateY(-2px)",
-                                  },
+                                  mt: "2px",
+                                  color: "text.secondary",
+                                  lineHeight: 1.4,
                                 }}
                               >
-                                <Icon sx={{ color: "#7c5cfc", fontSize: 28 }} />
-                                <Typography sx={{ fontWeight: 600, color: "#fff", lineHeight: 1.2 }} noWrap>
-                                  {item.title}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ color: "#878C9E", lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                                  noWrap
-                                >
-                                  {item.description}
-                                </Typography>
-                              </Paper>
-                            </Grid>
-                          );
-                        })}
-                      </Grid>
+                                {item.description}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        );
+                      })}
                     </Paper>
                   </Fade>
                 </Box>
@@ -532,11 +546,11 @@ function LandingPage() {
           </ListItemButton>
           <Collapse in={mobileFeaturesOpen} timeout="auto" unmountOnExit>
             <List disablePadding>
-              {FEATURE_MENU_ITEMS.map((item) => (
+              {featureMenuConfig.map((item) => (
                 <ListItemButton
                   key={item.title}
                   component={Link}
-                  to={item.path}
+                  to={item.route}
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setMobileFeaturesOpen(false);
@@ -1020,9 +1034,11 @@ function LandingPage() {
               gap: 2.5,
             }}
           >
-            <Box>
+          <Box>
+            <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer" }}>
               <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
-              <Stack spacing={1}>
+            </Link>
+            <Stack spacing={1}>
                 <MuiLink href="#features" underline="none" color="#fff" sx={{ fontSize: 13 }}>
                   Features
                 </MuiLink>

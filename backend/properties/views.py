@@ -30,6 +30,8 @@ from .models import (
     AccountingCategory,
     ImportedTransaction,
     ClassificationRule,
+    BankReconciliation,
+    ReconciliationMatch,
     TransactionImport,
     Document,
     Expense,
@@ -82,6 +84,9 @@ from .serializers import (
     UnitSerializer,
     JournalEntrySerializer,
     JournalEntryLineSerializer,
+    BankReconciliationSerializer,
+    ReconciliationDetailSerializer,
+    ReconciliationMatchSerializer,
     AccountingPeriodSerializer,
     RecurringTransactionSerializer,
     TransactionImportSerializer,
@@ -90,7 +95,12 @@ from .serializers import (
     ClassificationRuleSerializer,
 )
 from .signals import recalculate_lease_balances
-from .utils import generate_lease_document, seed_chart_of_accounts, apply_classification_rules
+from .utils import (
+    generate_lease_document,
+    seed_chart_of_accounts,
+    apply_classification_rules,
+    auto_match_reconciliation,
+)
 from .emails import (
     send_application_received,
     send_application_status_update,
@@ -3167,6 +3177,259 @@ class ImportedTransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSe
                 approved_count += 1
 
         return Response({"approved": approved_count})
+
+
+class BankReconciliationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = BankReconciliation.objects.all()
+    serializer_class = BankReconciliationSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            return BankReconciliation.objects.none()
+        return BankReconciliation.objects.filter(organization=organization).order_by("-created_at")
+
+    def _bank_account_for_reconciliation(self, reconciliation):
+        if not reconciliation.account_id:
+            return None
+        return reconciliation.account
+
+    def _unmatched_bank_transactions(self, reconciliation):
+        account = self._bank_account_for_reconciliation(reconciliation)
+        if not account:
+            return ImportedTransaction.objects.none()
+        matched_ids = set(
+            reconciliation.matches.exclude(imported_transaction_id__isnull=True).values_list(
+                "imported_transaction_id", flat=True
+            )
+        )
+        return (
+            ImportedTransaction.objects.filter(
+                organization=reconciliation.organization,
+                status=ImportedTransaction.STATUS_BOOKED,
+                date__gte=reconciliation.start_date,
+                date__lte=reconciliation.end_date,
+                journal_entry__lines__account=account,
+            )
+            .exclude(id__in=matched_ids)
+            .distinct()
+            .order_by("date", "id")
+        )
+
+    def _unmatched_book_entries(self, reconciliation):
+        account = self._bank_account_for_reconciliation(reconciliation)
+        if not account:
+            return JournalEntryLine.objects.none()
+        matched_ids = set(
+            reconciliation.matches.exclude(journal_entry_line_id__isnull=True).values_list(
+                "journal_entry_line_id", flat=True
+            )
+        )
+        return (
+            JournalEntryLine.objects.filter(
+                organization=reconciliation.organization,
+                account=account,
+                journal_entry__status=JournalEntry.STATUS_POSTED,
+                journal_entry__entry_date__gte=reconciliation.start_date,
+                journal_entry__entry_date__lte=reconciliation.end_date,
+            )
+            .exclude(id__in=matched_ids)
+            .order_by("journal_entry__entry_date", "id")
+        )
+
+    def _book_balance(self, reconciliation):
+        lines = (
+            JournalEntryLine.objects.filter(
+                organization=reconciliation.organization,
+                account=reconciliation.account,
+                journal_entry__status=JournalEntry.STATUS_POSTED,
+                journal_entry__entry_date__lte=reconciliation.end_date,
+            )
+            .aggregate(total_debits=Sum("debit_amount"), total_credits=Sum("credit_amount"))
+        )
+        debits = Decimal(lines["total_debits"] or 0)
+        credits = Decimal(lines["total_credits"] or 0)
+        if reconciliation.account.normal_balance == AccountingCategory.NORMAL_BALANCE_CREDIT:
+            return credits - debits
+        return debits - credits
+
+    def _difference(self, reconciliation):
+        return Decimal(reconciliation.statement_ending_balance) - self._book_balance(reconciliation)
+
+    def perform_create(self, serializer):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            raise PermissionDenied("No organization assigned.")
+        serializer.save(organization=organization, created_by=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with db_transaction.atomic():
+            reconciliation = serializer.save(
+                organization=organization,
+                created_by=request.user,
+            )
+            auto_matched = auto_match_reconciliation(reconciliation)
+
+        data = BankReconciliationSerializer(reconciliation, context={"request": request}).data
+        data["auto_matched"] = auto_matched
+        return Response(data, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = ReconciliationDetailSerializer(
+            instance,
+            context={
+                "request": request,
+                "unmatched_bank_qs": self._unmatched_bank_transactions(instance),
+                "unmatched_book_qs": self._unmatched_book_entries(instance),
+            },
+        )
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="complete")
+    def complete(self, request, pk=None):
+        reconciliation = self.get_object()
+        if reconciliation.status == BankReconciliation.STATUS_COMPLETED:
+            return Response({"detail": "Reconciliation is already completed."}, status=status.HTTP_400_BAD_REQUEST)
+        difference = self._difference(reconciliation)
+        if difference != 0:
+            return Response(
+                {
+                    "detail": "Reconciliation cannot be completed because the account is out of balance.",
+                    "difference": float(difference),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reconciliation.status = BankReconciliation.STATUS_COMPLETED
+        reconciliation.completed_at = timezone.now()
+        reconciliation.save(update_fields=["status", "completed_at"])
+        return Response(BankReconciliationSerializer(reconciliation).data)
+
+    @action(detail=True, methods=["post"], url_path="add-match")
+    def add_match(self, request, pk=None):
+        reconciliation = self.get_object()
+        organization = reconciliation.organization
+        account = reconciliation.account
+        imported_transaction_id = request.data.get("imported_transaction_id")
+        journal_entry_line_id = request.data.get("journal_entry_line_id")
+        if not imported_transaction_id or not journal_entry_line_id:
+            return Response(
+                {"detail": "Both imported_transaction_id and journal_entry_line_id are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        imported_tx = ImportedTransaction.objects.filter(
+            id=imported_transaction_id,
+            organization=organization,
+            status=ImportedTransaction.STATUS_BOOKED,
+            journal_entry__lines__account=account,
+            date__gte=reconciliation.start_date,
+            date__lte=reconciliation.end_date,
+        ).distinct().first()
+        if not imported_tx:
+            return Response({"detail": "Imported transaction not found for this reconciliation."}, status=status.HTTP_404_NOT_FOUND)
+
+        book_line = JournalEntryLine.objects.filter(
+            id=journal_entry_line_id,
+            organization=organization,
+            account=account,
+            journal_entry__status=JournalEntry.STATUS_POSTED,
+            journal_entry__entry_date__gte=reconciliation.start_date,
+            journal_entry__entry_date__lte=reconciliation.end_date,
+        ).first()
+        if not book_line:
+            return Response({"detail": "Journal entry line not found for this reconciliation."}, status=status.HTTP_404_NOT_FOUND)
+
+        if ReconciliationMatch.objects.filter(imported_transaction=imported_tx).exclude(
+            reconciliation_id=reconciliation.id
+        ).exists():
+            return Response({"detail": "Imported transaction already matched in another reconciliation."}, status=status.HTTP_400_BAD_REQUEST)
+        if ReconciliationMatch.objects.filter(
+            reconciliation=reconciliation,
+            imported_transaction=imported_tx,
+        ).exists():
+            return Response({"detail": "Imported transaction already matched in this reconciliation."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if ReconciliationMatch.objects.filter(journal_entry_line=book_line).exclude(
+            reconciliation_id=reconciliation.id
+        ).exists():
+            return Response({"detail": "Journal entry line already matched in another reconciliation."}, status=status.HTTP_400_BAD_REQUEST)
+        if ReconciliationMatch.objects.filter(
+            reconciliation=reconciliation,
+            journal_entry_line=book_line,
+        ).exists():
+            return Response({"detail": "Journal entry line already matched in this reconciliation."}, status=status.HTTP_400_BAD_REQUEST)
+
+        match, _ = ReconciliationMatch.objects.get_or_create(
+            reconciliation=reconciliation,
+            imported_transaction=imported_tx,
+            journal_entry_line=book_line,
+            defaults={"match_type": ReconciliationMatch.MATCH_TYPE_MANUAL},
+        )
+        if match.match_type != ReconciliationMatch.MATCH_TYPE_MANUAL:
+            match.match_type = ReconciliationMatch.MATCH_TYPE_MANUAL
+            match.journal_entry_line = book_line
+            match.save(update_fields=["match_type", "journal_entry_line"])
+
+        return Response(ReconciliationMatchSerializer(match).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="remove-match")
+    def remove_match(self, request, pk=None):
+        reconciliation = self.get_object()
+        match_id = request.data.get("match_id")
+        if not match_id:
+            return Response({"match_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        match = ReconciliationMatch.objects.filter(id=match_id, reconciliation=reconciliation).first()
+        if not match:
+            return Response({"detail": "Match not found."}, status=status.HTTP_404_NOT_FOUND)
+        match.delete()
+        return Response({"removed": match_id})
+
+    @action(detail=True, methods=["post"], url_path="exclude")
+    def exclude(self, request, pk=None):
+        reconciliation = self.get_object()
+        organization = reconciliation.organization
+        account = reconciliation.account
+        imported_transaction_id = request.data.get("imported_transaction_id")
+        if not imported_transaction_id:
+            return Response(
+                {"imported_transaction_id": "Required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        imported_tx = ImportedTransaction.objects.filter(
+            id=imported_transaction_id,
+            organization=organization,
+            status=ImportedTransaction.STATUS_BOOKED,
+            journal_entry__lines__account=account,
+            date__gte=reconciliation.start_date,
+            date__lte=reconciliation.end_date,
+        ).distinct().first()
+        if not imported_tx:
+            return Response(
+                {"detail": "Imported transaction not found for this reconciliation."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        match, created = ReconciliationMatch.objects.get_or_create(
+            reconciliation=reconciliation,
+            imported_transaction=imported_tx,
+            defaults={"match_type": ReconciliationMatch.MATCH_TYPE_EXCLUDED},
+        )
+        if not created:
+            match.journal_entry_line = None
+            match.match_type = ReconciliationMatch.MATCH_TYPE_EXCLUDED
+            match.save(update_fields=["journal_entry_line", "match_type"])
+
+        return Response(ReconciliationMatchSerializer(match).data, status=status.HTTP_201_CREATED)
 
 
 class ClassificationRuleViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):

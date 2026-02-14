@@ -1,8 +1,8 @@
 import FeaturePageTemplate from "./FeaturePageTemplate";
 import featureMenuConfig from "./featureMenuConfig";
 
-const feature = featureMenuConfig.find((item) => item.route === "/features/accounting");
+const feature = featureMenuConfig.find((item) => item.route === "/features/listings");
 
-export default function AccountingFeature() {
+export default function ListingsFeature() {
   return <FeaturePageTemplate feature={feature} />;
 }

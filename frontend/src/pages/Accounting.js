@@ -380,6 +380,7 @@ function Accounting() {
   const [ruleLoading, setRuleLoading] = useState(false);
   const [ruleError, setRuleError] = useState("");
   const [ruleManagementLoading, setRuleManagementLoading] = useState(false);
+  const [rulePrefillMode, setRulePrefillMode] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState("");
   const [coaMenuAnchor, setCoaMenuAnchor] = useState(null);
   const [coaMenuAccount, setCoaMenuAccount] = useState(null);
