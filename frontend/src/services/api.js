@@ -164,6 +164,15 @@ export const deleteMaintenanceRequest = (id) =>
 
 export const getListings = (params = {}) => api.get("listings/", { params });
 export const getListingBySlug = (slug) => api.get(`listings/${slug}/`);
+export const submitListingApplication = (slug, data) =>
+  api.post(`listings/${slug}/apply/`, data);
+
+export const getApplications = (params = {}) => api.get("applications/", { params });
+export const getApplication = (id) => api.get(`applications/${id}/`);
+export const updateApplication = (id, data) => api.patch(`applications/${id}/`, data);
+export const approveApplication = (id, data = {}) => api.post(`applications/${id}/approve/`, data);
+export const denyApplication = (id, data = {}) => api.post(`applications/${id}/deny/`, data);
+export const runApplicationScreening = (id) => api.post(`applications/${id}/run-screening/`);
 
 export const getMe = () => api.get("me/");
 export const getOrganization = () => api.get("organization/");

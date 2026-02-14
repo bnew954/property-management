@@ -109,6 +109,7 @@ const navItems = [
   { label: "My Lease", path: "/my-lease", icon: <AssignmentIcon /> },
   { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
   { label: "Listings", path: "/listings", icon: <HomeWorkIcon />, landlordOnly: true },
+  { label: "Applications", path: "/applications", icon: <AssignmentIcon />, landlordOnly: true },
   { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
   { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
   { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
@@ -147,6 +148,7 @@ function Layout({ children }) {
     if (location.pathname.startsWith("/my-lease")) return "My Lease";
     if (location.pathname.startsWith("/maintenance")) return "Maintenance";
     if (location.pathname.startsWith("/listings")) return "Listings";
+    if (location.pathname.startsWith("/applications")) return "Applications";
     if (location.pathname.startsWith("/documents")) return "Documents";
     if (location.pathname.startsWith("/templates")) return "Templates";
     if (location.pathname.startsWith("/messages")) return "Messages";

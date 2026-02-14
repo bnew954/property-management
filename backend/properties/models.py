@@ -573,6 +573,84 @@ class ScreeningRequest(models.Model):
         return f"Screening #{self.id} for {self.tenant}"
 
 
+class RentalApplication(models.Model):
+    STATUS_SUBMITTED = "submitted"
+    STATUS_UNDER_REVIEW = "under_review"
+    STATUS_APPROVED = "approved"
+    STATUS_DENIED = "denied"
+    STATUS_WITHDRAWN = "withdrawn"
+    STATUS_CHOICES = [
+        (STATUS_SUBMITTED, "Submitted"),
+        (STATUS_UNDER_REVIEW, "Under Review"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_DENIED, "Denied"),
+        (STATUS_WITHDRAWN, "Withdrawn"),
+    ]
+
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="rental_applications")
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="rental_applications",
+        null=True,
+        blank=True,
+    )
+    listing_slug = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SUBMITTED)
+
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=30)
+    date_of_birth = models.DateField()
+    ssn_last4 = models.CharField(max_length=4, blank=True)
+
+    current_address = models.CharField(max_length=255)
+    current_city = models.CharField(max_length=120)
+    current_state = models.CharField(max_length=120)
+    current_zip = models.CharField(max_length=20)
+    current_landlord_name = models.CharField(max_length=255, blank=True)
+    current_landlord_phone = models.CharField(max_length=30, blank=True)
+    current_rent = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    reason_for_moving = models.TextField(blank=True)
+
+    employer_name = models.CharField(max_length=255, blank=True)
+    employer_phone = models.CharField(max_length=30, blank=True)
+    job_title = models.CharField(max_length=255, blank=True)
+    monthly_income = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    employment_length = models.CharField(max_length=100, blank=True)
+
+    num_occupants = models.IntegerField(default=1)
+    has_pets = models.BooleanField(default=False)
+    pet_description = models.CharField(max_length=255, blank=True)
+    has_been_evicted = models.BooleanField(default=False)
+    has_criminal_history = models.BooleanField(default=False)
+    additional_notes = models.TextField(blank=True)
+    references = models.JSONField(default=list)
+
+    consent_background_check = models.BooleanField(default=False)
+    consent_credit_check = models.BooleanField(default=False)
+    electronic_signature = models.CharField(max_length=255, blank=True)
+    signature_date = models.DateTimeField(null=True, blank=True)
+
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_rental_applications",
+    )
+    review_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"RentalApplication #{self.id} - {self.first_name} {self.last_name}"
+
+
 class Document(models.Model):
     TYPE_LEASE_AGREEMENT = "lease_agreement"
     TYPE_INSPECTION_REPORT = "inspection_report"

@@ -24,10 +24,12 @@ from .views import (
     NotificationViewSet,
     PublicListingDetailView,
     PublicListingsView,
+    PublicListingApplicationView,
     PaymentViewSet,
     PropertyViewSet,
     RegisterView,
     RentLedgerEntryViewSet,
+    RentalApplicationViewSet,
     ScreeningRequestViewSet,
     ScreeningConsentPublicView,
     TenantViewSet,
@@ -82,6 +84,11 @@ urlpatterns = [
     ),
     path("listings/", PublicListingsView.as_view(), name="listings-public-index"),
     path(
+        "listings/<slug:slug>/apply/",
+        PublicListingApplicationView.as_view(),
+        name="listing-application-submit",
+    ),
+    path(
         "listings/<slug:slug>/",
         PublicListingDetailView.as_view(),
         name="listings-public-detail",
@@ -102,4 +109,5 @@ urlpatterns = [
         name="accounting-reports",
     ),
 ]
+router.register("applications", RentalApplicationViewSet, basename="rental-application")
 urlpatterns += router.urls

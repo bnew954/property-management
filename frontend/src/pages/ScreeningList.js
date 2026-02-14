@@ -1,4 +1,4 @@
-﻿import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import {
   Alert,

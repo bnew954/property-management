@@ -29,6 +29,7 @@ from .models import (
     LateFeeRule,
     Payment,
     Property,
+    RentalApplication,
     RentLedgerEntry,
     ScreeningRequest,
     Tenant,
@@ -49,6 +50,8 @@ from .serializers import (
     RentLedgerEntrySerializer,
     ScreeningRequestSerializer,
     PublicUnitListingSerializer,
+    RentalApplicationSerializer,
+    RentalApplicationPublicSerializer,
     TenantSerializer,
     TenantConsentSerializer,
     UnitSerializer,
@@ -288,6 +291,250 @@ class PublicListingDetailView(APIView):
             )
 
         return Response(PublicUnitListingSerializer(unit).data)
+
+
+class PublicListingApplicationView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, slug):
+        unit = (
+            Unit.objects.select_related("property")
+            .filter(is_listed=True, listing_slug=slug)
+            .first()
+        )
+        if not unit:
+            return Response(
+                {"detail": "Listing not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = request.data.copy()
+        payload["listing_slug"] = slug
+        serializer = RentalApplicationPublicSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+
+        references = serializer.validated_data.get("references", [])
+        if not isinstance(references, list):
+            return Response(
+                {"references": "References must be a list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(references) > 3:
+            return Response(
+                {"references": "A maximum of 3 references is allowed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for index, entry in enumerate(references):
+            if not isinstance(entry, dict):
+                return Response(
+                    {
+                        "references": f"Reference #{index + 1} must be an object with name, phone, and relationship.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not entry.get("name") or not entry.get("phone") or not entry.get("relationship"):
+                return Response(
+                    {
+                        "references": f"Reference #{index + 1} requires name, phone, and relationship.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        application = RentalApplication.objects.create(
+            unit=unit,
+            organization=unit.organization,
+            listing_slug=slug,
+            status=RentalApplication.STATUS_SUBMITTED,
+            first_name=serializer.validated_data["first_name"],
+            last_name=serializer.validated_data["last_name"],
+            email=serializer.validated_data["email"],
+            phone=serializer.validated_data["phone"],
+            date_of_birth=serializer.validated_data["date_of_birth"],
+            ssn_last4=(serializer.validated_data.get("ssn_last4") or "").strip(),
+            current_address=serializer.validated_data["current_address"],
+            current_city=serializer.validated_data["current_city"],
+            current_state=serializer.validated_data["current_state"],
+            current_zip=serializer.validated_data["current_zip"],
+            current_landlord_name=serializer.validated_data.get("current_landlord_name") or "",
+            current_landlord_phone=serializer.validated_data.get("current_landlord_phone") or "",
+            current_rent=serializer.validated_data.get("current_rent"),
+            reason_for_moving=serializer.validated_data.get("reason_for_moving") or "",
+            employer_name=serializer.validated_data.get("employer_name") or "",
+            employer_phone=serializer.validated_data.get("employer_phone") or "",
+            job_title=serializer.validated_data.get("job_title") or "",
+            monthly_income=serializer.validated_data.get("monthly_income"),
+            employment_length=serializer.validated_data.get("employment_length") or "",
+            num_occupants=serializer.validated_data.get("num_occupants") or 1,
+            has_pets=bool(serializer.validated_data.get("has_pets")),
+            pet_description=serializer.validated_data.get("pet_description") or "",
+            has_been_evicted=bool(serializer.validated_data.get("has_been_evicted")),
+            has_criminal_history=bool(serializer.validated_data.get("has_criminal_history")),
+            additional_notes=serializer.validated_data.get("additional_notes") or "",
+            references=references,
+            consent_background_check=bool(serializer.validated_data["consent_background_check"]),
+            consent_credit_check=bool(serializer.validated_data["consent_credit_check"]),
+            electronic_signature=serializer.validated_data["electronic_signature"],
+            signature_date=timezone.now(),
+        )
+        return Response(
+            {
+                "application_id": application.id,
+                "reference_number": f"RA-{application.id:06d}",
+                "status": application.status,
+                "message": "Application submitted successfully.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = RentalApplication.objects.select_related("unit", "reviewed_by")
+    serializer_class = RentalApplicationSerializer
+    permission_classes = [IsLandlord]
+    http_method_names = ["get", "patch", "head", "options", "post"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_filter = self.request.query_params.get("status")
+        unit_id = self.request.query_params.get("unit")
+        ordering = self.request.query_params.get("ordering")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if unit_id:
+            queryset = queryset.filter(unit_id=unit_id)
+        if ordering in {"created_at", "-created_at", "unit_id", "-unit_id"}:
+            queryset = queryset.order_by(ordering)
+        return queryset
+
+    def partial_update(self, request, *args, **kwargs):
+        application = self.get_object()
+        status_value = request.data.get("status")
+        if status_value and status_value not in {
+            RentalApplication.STATUS_SUBMITTED,
+            RentalApplication.STATUS_UNDER_REVIEW,
+            RentalApplication.STATUS_APPROVED,
+            RentalApplication.STATUS_DENIED,
+            RentalApplication.STATUS_WITHDRAWN,
+        }:
+            return Response(
+                {"status": "Invalid status value."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        update_fields = []
+        if status_value is not None:
+            application.status = status_value
+            update_fields.append("status")
+        if "review_notes" in request.data:
+            application.review_notes = (request.data.get("review_notes") or "").strip()
+            update_fields.append("review_notes")
+        if update_fields:
+            application.reviewed_by = request.user
+            update_fields.append("reviewed_by")
+            application.updated_at = timezone.now()
+            update_fields.append("updated_at")
+            application.save(update_fields=update_fields)
+        serializer = self.get_serializer(application)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        application = self.get_object()
+        tenant = Tenant.objects.filter(
+            email__iexact=application.email,
+            organization=application.organization,
+        ).first()
+        if not tenant:
+            tenant = Tenant.objects.create(
+                organization=application.organization,
+                first_name=application.first_name,
+                last_name=application.last_name,
+                email=application.email,
+                phone=application.phone,
+                date_of_birth=application.date_of_birth,
+            )
+
+        application.status = RentalApplication.STATUS_APPROVED
+        application.reviewed_by = request.user
+        application.review_notes = (request.data.get("review_notes") or application.review_notes or "").strip()
+        application.save(update_fields=["status", "reviewed_by", "review_notes", "updated_at"])
+
+        screening = ScreeningRequest.objects.create(
+            tenant=tenant,
+            requested_by=request.user,
+            organization=application.organization,
+            status=ScreeningRequest.STATUS_PENDING,
+            consent_status=ScreeningRequest.CONSENT_PENDING,
+            tenant_email=application.email,
+        )
+
+        return Response(
+            {
+                "detail": "Application approved.",
+                "application": RentalApplicationSerializer(application).data,
+                "tenant_id": tenant.id,
+                "screening_id": screening.id,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="run-screening")
+    def run_screening(self, request, pk=None):
+        application = self.get_object()
+        if application.status not in {
+            RentalApplication.STATUS_APPROVED,
+            RentalApplication.STATUS_SUBMITTED,
+            RentalApplication.STATUS_UNDER_REVIEW,
+        }:
+            return Response(
+                {"detail": "Only submitted, under review, or approved applications can run screening."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tenant = Tenant.objects.filter(
+            email__iexact=application.email,
+            organization=application.organization,
+        ).first()
+        if not tenant:
+            tenant = Tenant.objects.create(
+                organization=application.organization,
+                first_name=application.first_name,
+                last_name=application.last_name,
+                email=application.email,
+                phone=application.phone,
+                date_of_birth=application.date_of_birth,
+            )
+
+        screening = ScreeningRequest.objects.create(
+            tenant=tenant,
+            requested_by=request.user,
+            organization=application.organization,
+            status=ScreeningRequest.STATUS_PENDING,
+            consent_status=ScreeningRequest.CONSENT_PENDING,
+            tenant_email=application.email,
+        )
+        return Response(
+            {
+                "detail": "Screening created.",
+                "screening_id": screening.id,
+                "application": RentalApplicationSerializer(application).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="deny")
+    def deny(self, request, pk=None):
+        application = self.get_object()
+        application.status = RentalApplication.STATUS_DENIED
+        application.reviewed_by = request.user
+        application.review_notes = (request.data.get("review_notes") or application.review_notes or "").strip()
+        application.save(update_fields=["status", "reviewed_by", "review_notes", "updated_at"])
+        return Response(
+            {
+                "detail": "Application denied.",
+                "application": RentalApplicationSerializer(application).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PropertyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):

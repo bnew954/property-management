@@ -1,4 +1,4 @@
-﻿import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import { Alert, Box, Button, Checkbox, Paper, TextField, Typography, useTheme } from "@mui/material";
 import { useEffect, useState } from "react";

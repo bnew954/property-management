@@ -26,6 +26,8 @@ import MyLease from "./pages/MyLease";
 import PaymentForm from "./pages/PaymentForm";
 import PaymentsList from "./pages/PaymentsList";
 import PayRent from "./pages/PayRent";
+import ApplicationDetail from "./pages/ApplicationDetail";
+import Applications from "./pages/Applications";
 import PropertyDetail from "./pages/PropertyDetail";
 import PropertyForm from "./pages/PropertyForm";
 import PropertyList from "./pages/PropertyList";
@@ -252,6 +254,22 @@ function AppContent() {
                 <Route path="/screenings" element={<ScreeningList />} />
                 <Route path="/screenings/new" element={<ScreeningRequest />} />
                 <Route path="/screenings/:id" element={<ScreeningDetail />} />
+                <Route
+                  path="/applications"
+                  element={
+                    <OrgAdminRoute>
+                      <Applications />
+                    </OrgAdminRoute>
+                  }
+                />
+                <Route
+                  path="/applications/:id"
+                  element={
+                    <OrgAdminRoute>
+                      <ApplicationDetail />
+                    </OrgAdminRoute>
+                  }
+                />
                 <Route path="/leases" element={<LeaseList />} />
                 <Route path="/leases/new" element={<LeaseForm />} />
                 <Route path="/leases/:id/edit" element={<LeaseForm />} />

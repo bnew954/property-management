@@ -11,6 +11,7 @@ from .models import (
     Payment,
     Property,
     ScreeningRequest,
+    RentalApplication,
     Tenant,
     Unit,
     UserProfile,
@@ -317,6 +318,100 @@ class DocumentSerializer(serializers.ModelSerializer):
         if request and request.user and request.user.is_authenticated:
             validated_data["uploaded_by"] = request.user
         return super().create(validated_data)
+
+
+class RentalApplicationSerializer(serializers.ModelSerializer):
+    unit_detail = UnitSerializer(source="unit", read_only=True)
+    reviewed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RentalApplication
+        fields = "__all__"
+        read_only_fields = ["organization", "created_at", "updated_at"]
+
+    def get_reviewed_by_name(self, obj):
+        if not obj.reviewed_by:
+            return None
+        return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+
+
+class RentalApplicationPublicSerializer(serializers.ModelSerializer):
+    unit_detail = UnitSerializer(source="unit", read_only=True)
+    references = serializers.ListField(
+        child=serializers.DictField(), required=False, default=list
+    )
+
+    class Meta:
+        model = RentalApplication
+        fields = [
+            "id",
+            "unit",
+            "unit_detail",
+            "listing_slug",
+            "status",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "date_of_birth",
+            "ssn_last4",
+            "current_address",
+            "current_city",
+            "current_state",
+            "current_zip",
+            "current_landlord_name",
+            "current_landlord_phone",
+            "current_rent",
+            "reason_for_moving",
+            "employer_name",
+            "employer_phone",
+            "job_title",
+            "monthly_income",
+            "employment_length",
+            "num_occupants",
+            "has_pets",
+            "pet_description",
+            "has_been_evicted",
+            "has_criminal_history",
+            "additional_notes",
+            "references",
+            "consent_background_check",
+            "consent_credit_check",
+            "electronic_signature",
+            "signature_date",
+            "created_at",
+        ]
+        read_only_fields = ["status", "signature_date", "created_at"]
+
+    def validate(self, attrs):
+        errors = {}
+        if not attrs.get("first_name"):
+            errors["first_name"] = "First name is required."
+        if not attrs.get("last_name"):
+            errors["last_name"] = "Last name is required."
+        if not attrs.get("email"):
+            errors["email"] = "Email is required."
+        if not attrs.get("phone"):
+            errors["phone"] = "Phone is required."
+        if not attrs.get("date_of_birth"):
+            errors["date_of_birth"] = "Date of birth is required."
+        if not attrs.get("current_address"):
+            errors["current_address"] = "Current address is required."
+        if not attrs.get("current_city"):
+            errors["current_city"] = "Current city is required."
+        if not attrs.get("current_state"):
+            errors["current_state"] = "Current state is required."
+        if not attrs.get("current_zip"):
+            errors["current_zip"] = "Current zip is required."
+        if attrs.get("consent_background_check") is not True:
+            errors["consent_background_check"] = "Background check consent is required."
+        if attrs.get("consent_credit_check") is not True:
+            errors["consent_credit_check"] = "Credit check consent is required."
+        if not attrs.get("electronic_signature"):
+            errors["electronic_signature"] = "Electronic signature is required."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
