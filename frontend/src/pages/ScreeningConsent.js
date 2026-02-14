@@ -256,13 +256,19 @@ function ScreeningConsent() {
           sx={{ display: "grid", gap: 1.3, mt: 0.8 }}
         >
           <TextField
-            label="Full legal name"
+            label="Full Legal Name"
             value={`${screening?.tenant_name || ""}`}
             fullWidth
             size="small"
             InputProps={{ readOnly: true }}
             sx={{
-              "& .MuiInputBase-root.Mui-disabled": { backgroundColor: "rgba(17,24,39,0.04)" },
+              "& .MuiInputBase-root.Mui-disabled": {
+                backgroundColor: "#f5f5f5",
+                cursor: "default",
+              },
+              "& .MuiInputBase-input.Mui-disabled": {
+                color: "#1a1a1a",
+              },
             }}
             disabled
           />
