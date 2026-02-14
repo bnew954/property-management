@@ -5,6 +5,7 @@ import random
 import uuid
 
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from django.db.models import Q, Sum
 from django.http import FileResponse
@@ -60,6 +61,7 @@ from .serializers import (
     OrganizationInvitationSerializer,
 )
 from .signals import recalculate_lease_balances
+from .utils import generate_lease_document
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +311,12 @@ class PublicListingApplicationView(APIView):
             )
 
         payload = request.data.copy()
+        if hasattr(payload, "dict"):
+            payload = payload.dict()
+
+        payload.pop("unit", None)
+        payload.pop("unit_id", None)
+        payload.pop("tenant", None)
         payload["listing_slug"] = slug
         serializer = RentalApplicationPublicSerializer(data=payload)
         serializer.is_valid(raise_exception=True)
@@ -536,6 +544,72 @@ class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=["post"], url_path="create-lease")
+    def create_lease(self, request, pk=None):
+        application = self.get_object()
+        if application.status != RentalApplication.STATUS_APPROVED:
+            return Response(
+                {"detail": "Only approved applications can create a lease."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tenant = Tenant.objects.filter(
+            email__iexact=application.email,
+            organization=application.organization,
+        ).first()
+        if not tenant:
+            tenant = Tenant.objects.create(
+                organization=application.organization,
+                first_name=application.first_name,
+                last_name=application.last_name,
+                email=application.email,
+                phone=application.phone,
+                date_of_birth=application.date_of_birth,
+            )
+
+        existing_lease = Lease.objects.filter(application=application).first()
+        if existing_lease:
+            return Response(
+                {
+                    "detail": "A lease already exists for this application.",
+                    "lease": LeaseSerializer(existing_lease).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        today = date.today()
+        start_month = today.month + 1
+        start_year = today.year
+        if start_month == 13:
+            start_month = 1
+            start_year += 1
+        start_date = date(start_year, start_month, 1)
+        end_date = date(start_year + 1, start_month, 1)
+
+        deposit = (
+            application.unit.rent_amount
+            if application.unit and application.unit.rent_amount is not None
+            else None
+        )
+
+        lease = Lease.objects.create(
+            unit=application.unit,
+            tenant=tenant,
+            organization=application.organization,
+            application=application,
+            start_date=start_date,
+            end_date=end_date,
+            monthly_rent=application.unit.rent_amount,
+            security_deposit=deposit,
+            is_active=True,
+            signature_status=Lease.SIGNATURE_DRAFT,
+        )
+
+        return Response(
+            {"detail": "Lease created.", "lease": LeaseSerializer(lease).data},
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class PropertyViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Property.objects.all()
@@ -608,6 +682,241 @@ class LeaseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             else:
                 queryset = queryset.none()
         return queryset
+
+    def _resolve_lease(self):
+        return self.get_object()
+
+    @staticmethod
+    def _build_lease_summary(lease):
+        content = ""
+        if lease.lease_document and lease.lease_document.file:
+            try:
+                lease.lease_document.file.seek(0)
+                content = lease.lease_document.file.read().decode("utf-8", errors="ignore")
+            except Exception:
+                content = ""
+        if not content:
+            content = generate_lease_document(lease)
+        return content
+
+    @action(detail=True, methods=["post"], url_path="generate-document")
+    def generate_document(self, request, pk=None):
+        lease = self._resolve_lease()
+        content = generate_lease_document(lease)
+
+        if lease.lease_document_id:
+            document = lease.lease_document
+            document.file.save(
+                f"lease_{lease.id}.html",
+                ContentFile(content.encode("utf-8")),
+                save=True,
+            )
+            document.name = f"Lease Agreement - Lease {lease.id}"
+            document.file_size = len(content.encode("utf-8"))
+            document.file_type = "html"
+            document.save(update_fields=["name", "file_size", "file_type", "updated_at"])
+        else:
+            document = Document.objects.create(
+                name=f"Lease Agreement - Lease {lease.id}",
+                file=ContentFile(content.encode("utf-8"), name=f"lease_{lease.id}.html"),
+                organization=lease.organization,
+                document_type=Document.TYPE_LEASE_AGREEMENT,
+                uploaded_by=request.user,
+                property=lease.unit.property,
+                unit=lease.unit,
+                tenant=lease.tenant,
+                lease=lease,
+                description=f"Generated lease agreement for tenant {lease.tenant}",
+                file_size=len(content.encode("utf-8")),
+                file_type="html",
+            )
+            lease.lease_document = document
+
+        lease.signature_status = Lease.SIGNATURE_DRAFT
+        lease.save(update_fields=["lease_document", "signature_status", "updated_at"])
+        return Response(
+            {
+                "detail": "Lease document generated.",
+                "lease": LeaseSerializer(lease).data,
+                "content": content,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="send-for-signing")
+    def send_for_signing(self, request, pk=None):
+        lease = self._resolve_lease()
+
+        if not lease.lease_document_id:
+            return Response(
+                {"detail": "Generate a lease document before sending for signing."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        signing_token = lease.signing_token
+        if not signing_token:
+            signing_token = uuid.uuid4().hex
+            while Lease.objects.filter(signing_token=signing_token).exclude(pk=lease.pk).exists():
+                signing_token = uuid.uuid4().hex
+            lease.signing_token = signing_token
+
+        lease.signature_status = Lease.SIGNATURE_SENT
+        lease.save(update_fields=["signing_token", "signature_status", "updated_at"])
+
+        return Response(
+            {
+                "detail": "Lease sent for signing.",
+                "signing_token": lease.signing_token,
+                "signing_link": f"/lease/sign/{lease.signing_token}",
+                "lease": LeaseSerializer(lease).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="landlord-sign")
+    def landlord_sign(self, request, pk=None):
+        lease = self._resolve_lease()
+        signature = (request.data.get("signature") or "").strip()
+        if not signature:
+            return Response(
+                {"signature": "Signature is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lease.landlord_signature = signature
+        lease.landlord_signed_date = timezone.now()
+        if lease.tenant_signature and lease.signature_status != Lease.SIGNATURE_DECLINED:
+            lease.signature_status = Lease.SIGNATURE_SIGNED
+        else:
+            lease.signature_status = Lease.SIGNATURE_SENT
+        lease.save(
+            update_fields=[
+                "landlord_signature",
+                "landlord_signed_date",
+                "signature_status",
+                "updated_at",
+            ]
+        )
+        return Response(
+            {
+                "detail": "Landlord signature saved.",
+                "lease": LeaseSerializer(lease).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class LeaseSigningPublicView(APIView):
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def _lease_content(lease):
+        if lease.lease_document and lease.lease_document.file:
+            try:
+                lease.lease_document.file.seek(0)
+                return lease.lease_document.file.read().decode("utf-8", errors="ignore")
+            except Exception:
+                return generate_lease_document(lease)
+        return generate_lease_document(lease)
+
+    @staticmethod
+    def _build_payload(lease, content):
+        property_obj = lease.unit.property if lease.unit else None
+        address_parts = []
+        if property_obj:
+            if property_obj.address_line1:
+                address_parts.append(property_obj.address_line1)
+            if property_obj.address_line2:
+                address_parts.append(property_obj.address_line2)
+            if property_obj.city or property_obj.state or property_obj.zip_code:
+                address_parts.append(
+                    f"{property_obj.city}, {property_obj.state} {property_obj.zip_code}".strip()
+                )
+
+        return {
+            "id": lease.id,
+            "signature_status": lease.signature_status,
+            "start_date": lease.start_date,
+            "end_date": lease.end_date,
+            "monthly_rent": str(lease.monthly_rent),
+            "security_deposit": str(lease.security_deposit),
+            "tenant_signature": lease.tenant_signature,
+            "tenant_signed_date": lease.tenant_signed_date,
+            "landlord_signature": lease.landlord_signature,
+            "landlord_signed_date": lease.landlord_signed_date,
+            "property_name": property_obj.name if property_obj else "",
+            "property_address": ", ".join([part.strip() for part in address_parts if part and part.strip()]),
+            "unit_number": lease.unit.unit_number if lease.unit else "",
+            "landlord_name": lease.organization.name if lease.organization else "Property Management",
+            "tenant_name": f"{lease.tenant.first_name} {lease.tenant.last_name}".strip() if lease.tenant else "",
+            "content": content,
+            "signing_token": lease.signing_token,
+            "updated_at": lease.updated_at,
+        }
+
+    def get(self, request, token):
+        lease = (
+            Lease.objects.select_related("tenant", "unit__property", "application")
+            .filter(signing_token=token)
+            .first()
+        )
+        if not lease:
+            return Response({"detail": "Lease signing link not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = self._build_payload(lease, self._lease_content(lease))
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def post(self, request, token):
+        lease = (
+            Lease.objects.select_related("tenant", "unit")
+            .filter(signing_token=token)
+            .first()
+        )
+        if not lease:
+            return Response({"detail": "Lease signing link not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = request.data or {}
+        agreed = payload.get("agreed")
+        if isinstance(agreed, str):
+            agreed = agreed.lower() in {"true", "1", "yes", "y"}
+        if agreed is None:
+            return Response({"agreed": "agreed is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(agreed, bool):
+            return Response({"agreed": "agreed must be a boolean."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if lease.signature_status == Lease.SIGNATURE_SIGNED:
+            return Response(
+                {
+                    "detail": "This lease has already been signed.",
+                    "lease": LeaseSerializer(lease).data,
+                    "content": self._lease_content(lease),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        signature = (payload.get("signature") or "").strip()
+        if agreed and not signature:
+            return Response({"signature": "Signature is required when agreeing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if agreed:
+            lease.tenant_signature = signature
+            lease.tenant_signed_date = timezone.now()
+            lease.signature_status = Lease.SIGNATURE_SIGNED if lease.landlord_signature else Lease.SIGNATURE_VIEWED
+        else:
+            lease.signature_status = Lease.SIGNATURE_DECLINED
+            lease.tenant_signature = signature
+            lease.tenant_signed_date = timezone.now()
+
+        lease.save(update_fields=["tenant_signature", "tenant_signed_date", "signature_status", "updated_at"])
+        return Response(
+            {
+                "detail": "Tenant signature recorded.",
+                "lease": LeaseSerializer(lease).data,
+                "content": self._lease_content(lease),
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 
 class PaymentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):

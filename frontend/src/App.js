@@ -46,6 +46,7 @@ import ListingPublic from "./pages/ListingPublic";
 import ListingsIndex from "./pages/ListingsIndex";
 import UnitForm from "./pages/UnitForm";
 import ListingApply from "./pages/ListingApply";
+import LeaseSigning from "./pages/LeaseSigning";
 import LandingPage from "./pages/LandingPage";
 import { UserProvider, useUser } from "./services/userContext";
 import { ThemeModeProvider, useThemeMode } from "./services/themeContext";
@@ -231,9 +232,10 @@ function AppContent() {
                 <Route path="/listing/:slug/apply" element={<ListingApply />} />
                 <Route path="/listings" element={<ListingsIndex />} />
                 <Route path="/screening/consent/:token" element={<ScreeningConsent />} />
-              <Route
-                element={
-                  <ProtectedRoute>
+                <Route path="/lease/sign/:token" element={<LeaseSigning />} />
+                <Route
+                  element={
+                    <ProtectedRoute>
                     <Layout>
                       <Outlet />
                     </Layout>

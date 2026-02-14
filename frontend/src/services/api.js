@@ -153,6 +153,15 @@ export const confirmStripePayment = (data) =>
   api.post("payments/confirm/", data);
 export const getPaymentHistory = () => api.get("payments/history/");
 
+export const generateLeaseDocument = (id) => api.post(`leases/${id}/generate-document/`);
+export const sendLeaseForSigning = (id) => api.post(`leases/${id}/send-for-signing/`);
+export const landlordSignLease = (id, payload) =>
+  api.post(`leases/${id}/landlord-sign/`, payload);
+export const createLeaseFromApplication = (id) =>
+  api.post(`applications/${id}/create-lease/`);
+export const getLeaseSigningDetails = (token) => api.get(`lease/sign/${token}/`);
+export const submitLeaseSigning = (token, payload) => api.post(`lease/sign/${token}/`, payload);
+
 export const getMaintenanceRequests = () => api.get("maintenance-requests/");
 export const getMaintenanceRequest = (id) => api.get(`maintenance-requests/${id}/`);
 export const createMaintenanceRequest = (data) =>

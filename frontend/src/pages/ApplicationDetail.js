@@ -22,6 +22,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   approveApplication,
   denyApplication,
+  createLeaseFromApplication,
   createTenant,
   getApplication,
   runApplicationScreening,
@@ -224,6 +225,24 @@ function ApplicationDetail() {
     }
   };
 
+  const handleCreateLease = async () => {
+    try {
+      setLoadingAction("lease");
+      const response = await createLeaseFromApplication(id);
+      const lease = response?.data?.lease;
+      showToast("success", "Lease created from application.");
+      if (lease?.id) {
+        navigate(`/leases/${lease.id}/edit`);
+        return;
+      }
+      await refreshAfterUpdate();
+    } catch {
+      setMessage({ type: "error", text: "Unable to create lease from this application." });
+    } finally {
+      setLoadingAction("");
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: "grid", placeItems: "center", minHeight: 240 }}>
@@ -398,6 +417,16 @@ function ApplicationDetail() {
           <Button size="small" variant="outlined" color="error" onClick={handleDeny} disabled={loadingAction === "deny"}>
             Deny
           </Button>
+          {application.status === "approved" ? (
+            <Button
+              size="small"
+              variant="contained"
+              onClick={handleCreateLease}
+              disabled={loadingAction === "lease"}
+            >
+              Create Lease
+            </Button>
+          ) : null}
           <Button size="small" variant="text" component={Link} to="/applications">
             Back
           </Button>

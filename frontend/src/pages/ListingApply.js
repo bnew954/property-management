@@ -214,11 +214,18 @@ function ListingApply() {
       return;
     }
 
+    if (!slug) {
+      setErrorMessage("Invalid listing. Please open this page from a valid listing URL.");
+      return;
+    }
+
     try {
       setSubmitting(true);
       setErrorMessage("");
       const requestPayload = { ...payload };
       delete requestPayload.unit;
+      delete requestPayload.unit_id;
+      delete requestPayload.tenant;
       delete requestPayload.listing_slug;
 
       const response = await submitListingApplication(slug, requestPayload);

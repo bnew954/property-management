@@ -5,9 +5,12 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
+  Divider,
   FormControl,
   FormHelperText,
   FormControlLabel,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Paper,
@@ -16,10 +19,14 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import {
   createLease,
+  generateLeaseDocument,
   getLease,
+  landlordSignLease,
   getProperties,
+  sendLeaseForSigning,
   getTenants,
   getUnits,
   updateLease,
@@ -35,10 +42,22 @@ const initialValues = {
   is_active: true,
 };
 
+const signatureChipStyle = (status, theme) => {
+  const map = {
+    draft: { color: theme.palette.text.secondary, background: "rgba(148,163,184,0.2)" },
+    sent: { color: theme.palette.primary.main, background: `${theme.palette.primary.main}22` },
+    viewed: { color: theme.palette.warning.main, background: `${theme.palette.warning.main}22` },
+    signed: { color: theme.palette.success.main, background: `${theme.palette.success.main}22` },
+    declined: { color: theme.palette.error.main, background: `${theme.palette.error.main}22` },
+  };
+  return map[status] || map.draft;
+};
+
 function LeaseForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
+  const theme = useTheme();
   const [values, setValues] = useState(initialValues);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
@@ -51,6 +70,10 @@ function LeaseForm() {
     message: "",
     severity: "success",
   });
+  const [leaseSnapshot, setLeaseSnapshot] = useState(null);
+  const [landlordSignature, setLandlordSignature] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const parseApiErrors = (error) => {
     const detail = error?.response?.data;
@@ -85,6 +108,8 @@ function LeaseForm() {
         if (isEditMode) {
           const leaseRes = await getLease(id);
           const lease = leaseRes.data;
+          setLeaseSnapshot(lease);
+          setLandlordSignature(lease?.landlord_signature || "");
           setValues({
             unit: lease.unit ?? "",
             tenant: lease.tenant ?? "",
@@ -160,7 +185,7 @@ function LeaseForm() {
       } else {
         await createLease(payload);
       }
-      navigate("/tenants", {
+      navigate("/leases", {
         state: {
           snackbar: {
             message: isEditMode ? "Lease updated successfully." : "Lease created successfully.",
@@ -181,6 +206,77 @@ function LeaseForm() {
     }
   };
 
+  const refreshLease = async () => {
+    if (!id) {
+      return;
+    }
+    try {
+      const leaseRes = await getLease(id);
+      const lease = leaseRes.data;
+      setLeaseSnapshot(lease);
+      setLandlordSignature(lease?.landlord_signature || "");
+    } catch {
+      // Ignore refresh failures to avoid blocking manual actions.
+    }
+  };
+
+  const handleGenerateDocument = async () => {
+    try {
+      setActionLoading(true);
+      const response = await generateLeaseDocument(id);
+      setLeaseSnapshot(response.data?.lease || leaseSnapshot);
+      setSnackbar({ open: true, message: "Lease document generated.", severity: "success" });
+      await refreshLease();
+    } catch {
+      setSnackbar({ open: true, message: "Unable to generate lease document.", severity: "error" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSendForSigning = async () => {
+    try {
+      setActionLoading(true);
+      const response = await sendLeaseForSigning(id);
+      setLeaseSnapshot(response.data?.lease || response.data || leaseSnapshot);
+      setSnackbar({ open: true, message: "Lease sent for signing.", severity: "success" });
+      await refreshLease();
+    } catch {
+      setSnackbar({ open: true, message: "Unable to send lease for signing.", severity: "error" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleLandlordSign = async () => {
+    try {
+      if (!landlordSignature.trim()) {
+        setSnackbar({ open: true, message: "Landlord signature is required.", severity: "error" });
+        return;
+      }
+      setActionLoading(true);
+      await landlordSignLease(id, { signature: landlordSignature.trim() });
+      await refreshLease();
+      setSnackbar({ open: true, message: "Lease signed by landlord.", severity: "success" });
+    } catch {
+      setSnackbar({ open: true, message: "Unable to save landlord signature.", severity: "error" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCopySigningLink = async () => {
+    const link = leaseSnapshot?.signing_token ? `${window.location.origin}/lease/sign/${leaseSnapshot.signing_token}` : "";
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopySuccess(true);
+      setSnackbar({ open: true, message: "Signing link copied.", severity: "success" });
+    } catch {
+      setSnackbar({ open: true, message: "Could not copy signing link.", severity: "error" });
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
@@ -189,6 +285,77 @@ function LeaseForm() {
       <Typography variant="body2" sx={{ color: "text.secondary", mb: 2.2 }}>
         Leases &gt; {isEditMode ? "Edit" : "Add New"}
       </Typography>
+      {isEditMode && leaseSnapshot ? (
+        <Paper sx={{ mb: 2, p: 2, borderRadius: 1.5, border: "1px solid", borderColor: "divider" }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
+            <Box>
+              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Signature Status</Typography>
+              <Chip
+                size="small"
+                label={leaseSnapshot.signature_status || "draft"}
+                sx={{
+                  mt: 0.5,
+                  color: signatureChipStyle(leaseSnapshot.signature_status || "draft", theme).color,
+                  backgroundColor: signatureChipStyle(leaseSnapshot.signature_status || "draft", theme).background,
+                  textTransform: "capitalize",
+                }}
+              />
+            </Box>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleGenerateDocument}
+                disabled={actionLoading}
+              >
+                {leaseSnapshot.lease_document ? "Regenerate Lease Document" : "Generate Lease Document"}
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="secondary"
+                onClick={handleSendForSigning}
+                disabled={actionLoading || !leaseSnapshot.lease_document || ["signed", "declined"].includes(leaseSnapshot.signature_status)}
+              >
+                Send for Signing
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                onClick={handleCopySigningLink}
+                disabled={!leaseSnapshot.signing_token}
+              >
+                {copySuccess ? "Copied!" : "Copy Signing Link"}
+              </Button>
+            </Box>
+          </Box>
+          <Divider sx={{ my: 1.6 }} />
+          <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" } }}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Landlord Signature"
+              value={landlordSignature}
+              onChange={(event) => setLandlordSignature(event.target.value)}
+              helperText="Type your full legal name to sign as landlord"
+            />
+            <Button
+              size="small"
+              variant="contained"
+              onClick={handleLandlordSign}
+              disabled={actionLoading || !landlordSignature.trim()}
+            >
+              Sign as Landlord
+            </Button>
+          </Box>
+          <Typography sx={{ mt: 1.2, fontSize: 12, color: "text.secondary" }}>
+            Tenant signature: {leaseSnapshot.tenant_signature || "Pending"}
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+            Landlord signature: {leaseSnapshot.landlord_signature || "Pending"}
+          </Typography>
+        </Paper>
+      ) : null}
       {loading ? (
         <Typography>Loading...</Typography>
       ) : (

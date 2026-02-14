@@ -32,6 +32,7 @@ from .views import (
     RentalApplicationViewSet,
     ScreeningRequestViewSet,
     ScreeningConsentPublicView,
+    LeaseSigningPublicView,
     TenantViewSet,
     UnitViewSet,
 )
@@ -97,6 +98,11 @@ urlpatterns = [
         "screening/consent/<str:token>/",
         ScreeningConsentPublicView.as_view(),
         name="screening-consent",
+    ),
+    path(
+        "lease/sign/<str:token>/",
+        LeaseSigningPublicView.as_view(),
+        name="lease-sign",
     ),
     path(
         "accounting/generate-charges/",

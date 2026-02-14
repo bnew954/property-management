@@ -161,6 +161,19 @@ class Tenant(models.Model):
 
 
 class Lease(models.Model):
+    SIGNATURE_DRAFT = "draft"
+    SIGNATURE_SENT = "sent"
+    SIGNATURE_VIEWED = "viewed"
+    SIGNATURE_SIGNED = "signed"
+    SIGNATURE_DECLINED = "declined"
+    SIGNATURE_STATUS_CHOICES = [
+        (SIGNATURE_DRAFT, "Draft"),
+        (SIGNATURE_SENT, "Sent"),
+        (SIGNATURE_VIEWED, "Viewed"),
+        (SIGNATURE_SIGNED, "Signed"),
+        (SIGNATURE_DECLINED, "Declined"),
+    ]
+
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="leases")
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="leases")
     organization = models.ForeignKey(
@@ -170,10 +183,34 @@ class Lease(models.Model):
         null=True,
         blank=True,
     )
+    application = models.ForeignKey(
+        "RentalApplication",
+        on_delete=models.SET_NULL,
+        related_name="leases",
+        null=True,
+        blank=True,
+    )
+    lease_document = models.ForeignKey(
+        "Document",
+        on_delete=models.SET_NULL,
+        related_name="leases",
+        null=True,
+        blank=True,
+    )
     start_date = models.DateField()
     end_date = models.DateField()
     monthly_rent = models.DecimalField(max_digits=10, decimal_places=2)
     security_deposit = models.DecimalField(max_digits=10, decimal_places=2)
+    signature_status = models.CharField(
+        max_length=20,
+        choices=SIGNATURE_STATUS_CHOICES,
+        default=SIGNATURE_DRAFT,
+    )
+    tenant_signature = models.CharField(max_length=255, blank=True)
+    tenant_signed_date = models.DateTimeField(null=True, blank=True)
+    landlord_signature = models.CharField(max_length=255, blank=True)
+    landlord_signed_date = models.DateTimeField(null=True, blank=True)
+    signing_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
