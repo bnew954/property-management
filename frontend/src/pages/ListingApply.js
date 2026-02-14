@@ -217,7 +217,11 @@ function ListingApply() {
     try {
       setSubmitting(true);
       setErrorMessage("");
-      const response = await submitListingApplication(slug, payload);
+      const requestPayload = { ...payload };
+      delete requestPayload.unit;
+      delete requestPayload.listing_slug;
+
+      const response = await submitListingApplication(slug, requestPayload);
       setSuccess(response?.data || {});
     } catch (error) {
       if (error?.response?.data && typeof error.response.data === "object") {

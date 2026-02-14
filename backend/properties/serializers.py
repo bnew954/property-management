@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.models import User
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import (
@@ -345,7 +345,6 @@ class RentalApplicationPublicSerializer(serializers.ModelSerializer):
         model = RentalApplication
         fields = [
             "id",
-            "unit",
             "unit_detail",
             "listing_slug",
             "status",
@@ -381,7 +380,7 @@ class RentalApplicationPublicSerializer(serializers.ModelSerializer):
             "signature_date",
             "created_at",
         ]
-        read_only_fields = ["status", "signature_date", "created_at"]
+        read_only_fields = ["status", "signature_date", "created_at", "listing_slug"]
 
     def validate(self, attrs):
         errors = {}
@@ -413,7 +412,6 @@ class RentalApplicationPublicSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
         return attrs
 
-
 class ExpenseSerializer(serializers.ModelSerializer):
     created_by_detail = UserSummarySerializer(source="created_by", read_only=True)
     property_detail = PropertySerializer(source="property", read_only=True)
@@ -443,3 +441,4 @@ class LateFeeRuleSerializer(serializers.ModelSerializer):
         model = LateFeeRule
         fields = "__all__"
         read_only_fields = ["organization"]
+
