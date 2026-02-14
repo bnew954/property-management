@@ -18,10 +18,14 @@ import {
   Container,
   Divider,
   Drawer,
+  Fade,
+  Grid,
   IconButton,
   List,
   ListItemButton,
   ListItemText,
+  Paper,
+  Collapse,
   Link as MuiLink,
   Stack,
   Typography,
@@ -33,6 +37,7 @@ import ApartmentIcon from "@mui/icons-material/Apartment";
 import BuildIcon from "@mui/icons-material/Build";
 import DescriptionIcon from "@mui/icons-material/Description";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import { FEATURE_MENU_ITEMS } from "./features/featureMenuConfig";
 
 function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
   const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
@@ -256,6 +261,8 @@ function OccupancyDonut({ occupied = 88, total = 100 }) {
 
 function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [featuresMenuOpen, setFeaturesMenuOpen] = useState(false);
+  const [mobileFeaturesOpen, setMobileFeaturesOpen] = useState(false);
   const [visibleSections, setVisibleSections] = useState({});
   const sectionRefs = useRef({});
   const materialTheme = useMuiTheme();
@@ -328,7 +335,6 @@ function LandingPage() {
 
   const navLinks = useMemo(
     () => [
-      { label: "Features", href: "#features" },
       { label: "Pricing", href: "#pricing" },
       { label: "FAQ", href: "#faq" },
     ],
@@ -383,6 +389,94 @@ function LandingPage() {
               </IconButton>
             ) : (
               <Stack direction="row" spacing={1.6} alignItems="center">
+                <Box
+                  onMouseEnter={() => setFeaturesMenuOpen(true)}
+                  onMouseLeave={() => setFeaturesMenuOpen(false)}
+                  sx={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+                >
+                  <Button
+                    size="small"
+                    sx={{
+                      color: "#878C9E",
+                      minWidth: "auto",
+                      textTransform: "none",
+                      fontSize: 13,
+                      "&:hover": { color: "#fff" },
+                    }}
+                  >
+                    Features
+                  </Button>
+                  <Fade in={featuresMenuOpen} timeout={170} unmountOnExit>
+                    <Paper
+                      elevation={24}
+                      sx={{
+                        position: "absolute",
+                        left: "50%",
+                        top: "100%",
+                        mt: 1,
+                        transform: "translateX(-50%)",
+                        width: "min(980px, calc(100vw - 64px))",
+                        maxWidth: 1020,
+                        p: 1.2,
+                        borderRadius: 2.4,
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "linear-gradient(160deg, #111111 0%, #0a0a0a 42%, #090909 100%)",
+                        boxShadow: "0 22px 48px rgba(0,0,0,0.55)",
+                        zIndex: 1301,
+                      }}
+                    >
+                      <Grid container spacing={1.2} alignItems="stretch">
+                        {FEATURE_MENU_ITEMS.map((item) => {
+                          const Icon = item.Icon;
+                          return (
+                            <Grid item xs={12} md={4} key={item.title}>
+                              <Paper
+                                component={Link}
+                                to={item.path}
+                                onClick={() => setFeaturesMenuOpen(false)}
+                                elevation={0}
+                                sx={{
+                                  p: 1.2,
+                                  borderRadius: 2,
+                                  border: "1px solid rgba(255,255,255,0.06)",
+                                  backgroundColor: "#141414",
+                                  color: "#fff",
+                                  textDecoration: "none",
+                                  minHeight: "112px",
+                                  height: "100%",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  justifyContent: "space-between",
+                                  gap: 0.6,
+                                  cursor: "pointer",
+                                  textAlign: "left",
+                                  transition: "transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease",
+                                  "&:hover": {
+                                    borderColor: "rgba(124,92,252,0.35)",
+                                    backgroundColor: "rgba(124,92,252,0.1)",
+                                    transform: "translateY(-2px)",
+                                  },
+                                }}
+                              >
+                                <Icon sx={{ color: "#7c5cfc", fontSize: 28 }} />
+                                <Typography sx={{ fontWeight: 600, color: "#fff", lineHeight: 1.2 }} noWrap>
+                                  {item.title}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ color: "#878C9E", lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                                  noWrap
+                                >
+                                  {item.description}
+                                </Typography>
+                              </Paper>
+                            </Grid>
+                          );
+                        })}
+                      </Grid>
+                    </Paper>
+                  </Fade>
+                </Box>
                 {navLinks.map((link) => (
                   <MuiLink
                     key={link.label}
@@ -423,6 +517,42 @@ function LandingPage() {
           </IconButton>
         </Box>
         <List>
+          <ListItemButton
+            onClick={() => setMobileFeaturesOpen((open) => !open)}
+            sx={{ borderRadius: 1, color: "#fff", "&:hover": { color: "#fff", backgroundColor: "rgba(255,255,255,0.04)" } }}
+          >
+            <ListItemText primary="Features" primaryTypographyProps={{ fontSize: 14, color: "#fff" }} />
+            <ExpandMoreIcon
+              sx={{
+                color: "#878C9E",
+                transition: "transform 0.2s ease",
+                transform: mobileFeaturesOpen ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            />
+          </ListItemButton>
+          <Collapse in={mobileFeaturesOpen} timeout="auto" unmountOnExit>
+            <List disablePadding>
+              {FEATURE_MENU_ITEMS.map((item) => (
+                <ListItemButton
+                  key={item.title}
+                  component={Link}
+                  to={item.path}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setMobileFeaturesOpen(false);
+                  }}
+                  sx={{ borderRadius: 1, ml: 2, mt: 0.4, color: "#878C9E", "&:hover": { color: "#fff" } }}
+                >
+                  <ListItemText
+                    primary={item.title}
+                    secondary={item.description}
+                    primaryTypographyProps={{ fontSize: 14, color: "#e5e7eb" }}
+                    secondaryTypographyProps={{ fontSize: 11, color: "#6b7280" }}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </Collapse>
           {navLinks.map((link) => (
             <ListItemButton
               key={link.label}

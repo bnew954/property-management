@@ -200,6 +200,17 @@ export const updateImportedTransaction = (id, payload) =>
   api.patch(`accounting/imported-transactions/${id}/`, payload);
 export const bulkApproveTransactions = (payload) =>
   api.post("accounting/imported-transactions/bulk-approve/", payload);
+export const getClassificationRules = () => api.get("accounting/classification-rules/");
+export const createClassificationRule = (payload) =>
+  api.post("accounting/classification-rules/", payload);
+export const updateClassificationRule = (id, payload) =>
+  api.patch(`accounting/classification-rules/${id}/`, payload);
+export const deleteClassificationRule = (id) =>
+  api.delete(`accounting/classification-rules/${id}/`);
+export const createRuleFromTransaction = (payload) =>
+  api.post("accounting/classification-rules/create-from-transaction/", payload);
+export const testClassificationRule = (payload) =>
+  api.post("accounting/classification-rules/test/", payload);
 export const getTrialBalanceReport = (params = {}) =>
   api.get("accounting/reports/trial-balance/", { params });
 export const getBalanceSheetReport = (params = {}) =>

@@ -25,6 +25,7 @@ from .models import (
     ImportedTransaction,
     LateFeeRule,
     OwnerStatement,
+    ClassificationRule,
     AccountingCategory,
     JournalEntry,
     JournalEntryLine,
@@ -684,6 +685,34 @@ class ImportedTransactionSerializer(serializers.ModelSerializer):
         if not obj.journal_entry_id:
             return None
         return obj.journal_entry_id
+
+
+class ClassificationRuleSerializer(serializers.ModelSerializer):
+    category_name = serializers.SerializerMethodField(read_only=True)
+    property_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ClassificationRule
+        fields = [
+            "id",
+            "match_field",
+            "match_type",
+            "match_value",
+            "category",
+            "category_name",
+            "property_link",
+            "property_name",
+            "priority",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at", "category_name", "property_name"]
+
+    def get_category_name(self, obj):
+        return obj.category.name if obj.category else None
+
+    def get_property_name(self, obj):
+        return obj.property_link.name if obj.property_link else None
 
 
 class TransactionSerializer(serializers.ModelSerializer):

@@ -1157,6 +1157,54 @@ class ImportedTransaction(models.Model):
 
     def __str__(self):
         return f"Imported tx {self.id} ({self.amount})"
+
+
+class ClassificationRule(models.Model):
+    MATCH_FIELD_DESCRIPTION = "description"
+    MATCH_FIELD_REFERENCE = "reference"
+    MATCH_FIELD_CHOICES = [
+        (MATCH_FIELD_DESCRIPTION, "Description"),
+        (MATCH_FIELD_REFERENCE, "Reference"),
+    ]
+
+    MATCH_TYPE_CONTAINS = "contains"
+    MATCH_TYPE_STARTS_WITH = "starts_with"
+    MATCH_TYPE_EXACT = "exact"
+    MATCH_TYPE_CHOICES = [
+        (MATCH_TYPE_CONTAINS, "Contains"),
+        (MATCH_TYPE_STARTS_WITH, "Starts With"),
+        (MATCH_TYPE_EXACT, "Exact Match"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="classification_rules",
+    )
+    match_field = models.CharField(max_length=20, choices=MATCH_FIELD_CHOICES, default=MATCH_FIELD_DESCRIPTION)
+    match_type = models.CharField(max_length=20, choices=MATCH_TYPE_CHOICES, default=MATCH_TYPE_CONTAINS)
+    match_value = models.CharField(max_length=255)
+    category = models.ForeignKey(
+        "AccountingCategory",
+        on_delete=models.CASCADE,
+        related_name="classification_rules",
+    )
+    property_link = models.ForeignKey(
+        "Property",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="classification_rules",
+    )
+    priority = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-priority", "match_value"]
+
+    def __str__(self):
+        return f"{self.organization_id} rule: {self.match_type} {self.match_field} '{self.match_value}'"
 class JournalEntry(models.Model):
     STATUS_DRAFT = "draft"
     STATUS_POSTED = "posted"

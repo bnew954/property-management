@@ -29,6 +29,7 @@ from .mixins import OrganizationQuerySetMixin, resolve_request_organization
 from .models import (
     AccountingCategory,
     ImportedTransaction,
+    ClassificationRule,
     TransactionImport,
     Document,
     Expense,
@@ -86,9 +87,10 @@ from .serializers import (
     TransactionImportSerializer,
     ImportedTransactionSerializer,
     CSVColumnMappingSerializer,
+    ClassificationRuleSerializer,
 )
 from .signals import recalculate_lease_balances
-from .utils import generate_lease_document, seed_chart_of_accounts
+from .utils import generate_lease_document, seed_chart_of_accounts, apply_classification_rules
 from .emails import (
     send_application_received,
     send_application_status_update,
@@ -2873,6 +2875,8 @@ class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
         created_count = 0
         duplicate_count = 0
         skipped_count = 0
+        auto_classified_count = 0
+        auto_classified_ids = []
 
         with db_transaction.atomic():
             ImportedTransaction.objects.filter(transaction_import=instance).delete()
@@ -2954,6 +2958,10 @@ class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
                 )
                 created_count += 1
 
+            auto_classified_count, auto_classified_ids = apply_classification_rules(
+                organization,
+                ImportedTransaction.objects.filter(transaction_import=instance),
+            )
             instance.status = TransactionImport.STATUS_MAPPED
             instance.column_mapping = {
                 **(instance.column_mapping if isinstance(instance.column_mapping, dict) else {}),
@@ -2963,6 +2971,7 @@ class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
                     "amount_column": amount_col,
                     "reference_column": reference_col,
                 },
+                "auto_classified_ids": auto_classified_ids,
             }
             instance.row_count = created_count
             instance.save(update_fields=["status", "column_mapping", "row_count"])
@@ -2970,9 +2979,12 @@ class TransactionImportViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
         return Response(
             {
                 "import": TransactionImportSerializer(instance).data,
+                "parsed": created_count,
                 "created": created_count,
                 "skipped": skipped_count,
                 "duplicates": duplicate_count,
+                "auto_classified": auto_classified_count,
+                "auto_classified_ids": auto_classified_ids,
                 "status": instance.status,
             },
             status=status.HTTP_201_CREATED,
@@ -3155,6 +3167,91 @@ class ImportedTransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSe
                 approved_count += 1
 
         return Response({"approved": approved_count})
+
+
+class ClassificationRuleViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = ClassificationRule.objects.all()
+    serializer_class = ClassificationRuleSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            return ClassificationRule.objects.none()
+        return ClassificationRule.objects.filter(organization=organization).order_by("-priority", "match_value")
+
+    def perform_create(self, serializer):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            raise PermissionDenied("No organization assigned.")
+        serializer.save(organization=organization)
+
+    @action(detail=False, methods=["post"], url_path="create-from-transaction")
+    def create_from_transaction(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        imported_transaction_id = request.data.get("imported_transaction_id")
+        if not imported_transaction_id:
+            return Response({"imported_transaction_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        imported_transaction = ImportedTransaction.objects.filter(
+            id=imported_transaction_id,
+            organization=organization,
+        ).first()
+        if not imported_transaction:
+            return Response({"detail": "Imported transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not imported_transaction.category_id:
+            return Response(
+                {"detail": "Imported transaction must have a category to create a rule."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = {
+            "match_field": ClassificationRule.MATCH_FIELD_DESCRIPTION,
+            "match_type": ClassificationRule.MATCH_TYPE_CONTAINS,
+            "match_value": (imported_transaction.description or "").strip(),
+            "category": imported_transaction.category_id,
+            "property_link": imported_transaction.property_link_id or None,
+            "priority": _coerce_int(request.data.get("priority"), 0),
+            "is_active": request.data.get("is_active", True),
+        }
+        serializer = self.get_serializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(organization=organization)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="test")
+    def test_rules(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response({"detail": "No organization assigned."}, status=status.HTTP_404_NOT_FOUND)
+
+        description = (request.data.get("description") or "").strip()
+        reference = (request.data.get("reference") or "").strip()
+        if not description and not reference:
+            return Response({"detail": "Either description or reference is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rules = self.get_queryset().filter(is_active=True)
+        for rule in rules:
+            target = reference if rule.match_field == ClassificationRule.MATCH_FIELD_REFERENCE else description
+            target = (target or "").strip().lower()
+            pattern = (rule.match_value or "").strip().lower()
+            if not pattern:
+                continue
+
+            if rule.match_type == ClassificationRule.MATCH_TYPE_STARTS_WITH:
+                matched = target.startswith(pattern)
+            elif rule.match_type == ClassificationRule.MATCH_TYPE_EXACT:
+                matched = target == pattern
+            else:
+                matched = pattern in target
+
+            if matched:
+                return Response({"matched": True, "rule": self.get_serializer(rule).data})
+
+        return Response({"matched": False, "rule": None}, status=status.HTTP_200_OK)
 
 
 class RecordIncomeView(APIView):

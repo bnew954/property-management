@@ -55,6 +55,7 @@ from .views import (
     LeaseSigningPublicView,
     TenantViewSet,
     UnitViewSet,
+    ClassificationRuleViewSet,
 )
 
 router = DefaultRouter()
@@ -68,6 +69,7 @@ router.register("accounting/transactions", TransactionViewSet, basename="transac
 router.register("accounting/owner-statements", OwnerStatementViewSet, basename="owner-statement")
 router.register("accounting/periods", AccountingPeriodViewSet, basename="accounting-period")
 router.register("accounting/recurring", RecurringTransactionViewSet, basename="accounting-recurring")
+router.register("accounting/classification-rules", ClassificationRuleViewSet, basename="accounting-classification-rules")
 router.register("accounting/imports", TransactionImportViewSet, basename="accounting-import")
 router.register(
     "accounting/imported-transactions",

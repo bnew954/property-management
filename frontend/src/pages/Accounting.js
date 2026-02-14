@@ -35,15 +35,39 @@
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Tabs,
   Tab,
   TextField,
   Typography,
 } from "@mui/material";
-import { Add, ChevronRight, ExpandLess, ExpandMore, MoreVert, Refresh } from "@mui/icons-material";
+import {
+  Add,
+  ChevronRight,
+  ExpandLess,
+  ExpandMore,
+  Edit,
+  Delete,
+  MoreVert,
+  Refresh,
+  Rule,
+} from "@mui/icons-material";
 import { useTheme } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Bar, BarChart, Pie, PieChart, Cell } from "recharts";
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Bar,
+  BarChart,
+  Pie,
+  PieChart,
+  Cell,
+} from "recharts";
 import { Link as RouteLink, useNavigate } from "react-router-dom";
 import {
   createAccountingCategory,
@@ -56,6 +80,10 @@ import {
   getAccountingCategoryLedger,
   getTransactionImport,
   createTransactionImport,
+  getClassificationRules,
+  createClassificationRule,
+  updateClassificationRule,
+  deleteClassificationRule,
   updateImportedTransaction,
   confirmImportMapping,
   getAccountingPeriods,
@@ -238,12 +266,30 @@ const journalLineInitial = { account_id: "", debit_amount: "", credit_amount: ""
 const journalFormInitial = { memo: "", entry_date: toDateStr(new Date()), source_type: "manual", lines: [journalLineInitial, journalLineInitial] };
 const addAccountInitial = { account_code: "", name: "", account_type: "expense", normal_balance: "debit", parent_account: "", is_header: false, description: "" };
 const accountTypeOrder = ["asset", "liability", "equity", "revenue", "expense"];
+const classificationRuleInitial = {
+  match_field: "description",
+  match_type: "contains",
+  match_value: "",
+  category: "",
+  property_link: "",
+  priority: 0,
+  is_active: true,
+};
 const accountTypeLabel = {
   asset: "Assets",
   liability: "Liabilities",
   equity: "Equity",
   revenue: "Revenue",
   expense: "Expenses",
+};
+const ruleMatchFieldLabel = {
+  description: "Description",
+  reference: "Reference",
+};
+const ruleMatchTypeLabel = {
+  contains: "Contains",
+  starts_with: "Starts With",
+  exact: "Exact Match",
 };
 const importSteps = ["Upload CSV", "Map Columns", "Review & Classify"];
 const normalizeHeader = (value) => String(value || "").trim().toLowerCase();
@@ -326,6 +372,14 @@ function Accounting() {
   const [showJournal, setShowJournal] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showRuleManager, setShowRuleManager] = useState(false);
+  const [showRuleForm, setShowRuleForm] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState("");
+  const [classificationRules, setClassificationRules] = useState([]);
+  const [ruleForm, setRuleForm] = useState(classificationRuleInitial);
+  const [ruleLoading, setRuleLoading] = useState(false);
+  const [ruleError, setRuleError] = useState("");
+  const [ruleManagementLoading, setRuleManagementLoading] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState("");
   const [coaMenuAnchor, setCoaMenuAnchor] = useState(null);
   const [coaMenuAccount, setCoaMenuAccount] = useState(null);
@@ -347,7 +401,7 @@ function Accounting() {
     amount_column: "",
     reference_column: "",
   });
-  const [importSummary, setImportSummary] = useState({ created: 0, skipped: 0, duplicates: 0 });
+  const [importSummary, setImportSummary] = useState({ created: 0, skipped: 0, duplicates: 0, auto_classified: 0, auto_classified_ids: [] });
   const [importSelectedRows, setImportSelectedRows] = useState([]);
   const [importBulkCategory, setImportBulkCategory] = useState("");
   const [importBookingSummary, setImportBookingSummary] = useState(null);
@@ -358,6 +412,10 @@ function Accounting() {
   const [recurringTemplates, setRecurringTemplates] = useState([]);
 
   const accountById = useMemo(() => Object.fromEntries(categoryFlat.map((a) => [String(a.id), a])), [categoryFlat]);
+  const autoClassifiedIds = useMemo(
+    () => new Set((activeImport?.column_mapping?.auto_classified_ids || importSummary.auto_classified_ids || []).map((id) => String(id))),
+    [activeImport?.column_mapping?.auto_classified_ids, importSummary.auto_classified_ids]
+  );
 
   const visibleCategoryTree = useMemo(() => {
     if (showInactiveAccounts) return categoryTree;
@@ -441,6 +499,11 @@ function Accounting() {
     setAccountBalances(parseList(trialRes.data));
   };
 
+  const loadClassificationRules = async () => {
+    const rulesRes = await getClassificationRules();
+    setClassificationRules(parseList(rulesRes.data));
+  };
+
   const loadTransactions = async () => {
     const response = await getJournalEntries(clean(txFilters));
     setJournalEntries(parseList(response.data));
@@ -458,6 +521,7 @@ function Accounting() {
       await loadReports("pnl");
       const pRes = await getAccountingPeriods();
       const rRes = await getRecurringTransactions();
+      await loadClassificationRules();
       setPeriods(parseList(pRes.data));
       setRecurringTemplates(parseList(rRes.data));
     } catch (err) {
@@ -650,7 +714,7 @@ function Accounting() {
       amount_column: "",
       reference_column: "",
     });
-    setImportSummary({ created: 0, skipped: 0, duplicates: 0 });
+    setImportSummary({ created: 0, skipped: 0, duplicates: 0, auto_classified: 0, auto_classified_ids: [] });
     setImportSelectedRows([]);
     setImportBulkCategory("");
     setImportBookingSummary(null);
@@ -684,6 +748,128 @@ function Accounting() {
     return rows;
   };
 
+  const openRuleManager = async () => {
+    setRuleError("");
+    setShowRuleManager(true);
+    setRuleManagementLoading(true);
+    try {
+      await loadClassificationRules();
+    } catch {
+      setRuleError("Unable to load classification rules.");
+    } finally {
+      setRuleManagementLoading(false);
+    }
+  };
+
+  const closeRuleManager = () => {
+    setShowRuleManager(false);
+  };
+
+  const resetRuleForm = () => {
+    setEditingRuleId("");
+    setRuleForm(classificationRuleInitial);
+    setRulePrefillMode("");
+    setRuleError("");
+  };
+
+  const openRuleFormForCreate = (prefill = {}) => {
+    setRuleError("");
+    setShowRuleForm(true);
+    setEditingRuleId("");
+    setRuleForm({
+      ...classificationRuleInitial,
+      ...prefill,
+      property_link: prefill.property_link || "",
+      category: prefill.category || "",
+      priority: prefill.priority ?? 0,
+      is_active: prefill.is_active ?? true,
+    });
+  };
+
+  const openRuleFormForEdit = (rule) => {
+    if (!rule) return;
+    setRuleError("");
+    setEditingRuleId(String(rule.id));
+    setRuleForm({
+      match_field: rule.match_field || "description",
+      match_type: rule.match_type || "contains",
+      match_value: rule.match_value || "",
+      category: String(rule.category?.id || rule.category || ""),
+      property_link: String(rule.property_link?.id || rule.property_link || ""),
+      priority: rule.priority ?? 0,
+      is_active: rule.is_active !== false,
+    });
+    setShowRuleForm(true);
+  };
+
+  const closeRuleForm = () => {
+    setShowRuleForm(false);
+    resetRuleForm();
+  };
+
+  const createRuleFromRow = (row) => {
+    openRuleFormForCreate({
+      match_field: "description",
+      match_type: "contains",
+      match_value: String(row?.description || "").trim(),
+      category: String(row?.category || ""),
+      property_link: String(row?.property_link || ""),
+      priority: 0,
+    });
+  };
+
+  const saveRule = async () => {
+    setRuleLoading(true);
+    setRuleError("");
+    try {
+      const payload = {
+        match_field: ruleForm.match_field,
+        match_type: ruleForm.match_type,
+        match_value: (ruleForm.match_value || "").trim(),
+        category: ruleForm.category || null,
+        property_link: ruleForm.property_link || null,
+        priority: Number(ruleForm.priority || 0),
+        is_active: Boolean(ruleForm.is_active),
+      };
+      if (!payload.match_value) {
+        setRuleError("Match value is required.");
+        setRuleLoading(false);
+        return;
+      }
+      if (!payload.category) {
+        setRuleError("Category is required.");
+        setRuleLoading(false);
+        return;
+      }
+
+      if (editingRuleId) {
+        await updateClassificationRule(editingRuleId, payload);
+      } else {
+        await createClassificationRule(payload);
+      }
+      await loadClassificationRules();
+      setShowRuleForm(false);
+      resetRuleForm();
+    } catch {
+      setRuleError("Unable to save rule.");
+    } finally {
+      setRuleLoading(false);
+    }
+  };
+
+  const removeRule = async (id) => {
+    setRuleManagementLoading(true);
+    setRuleError("");
+    try {
+      await deleteClassificationRule(id);
+      await loadClassificationRules();
+    } catch {
+      setRuleError("Unable to delete rule.");
+    } finally {
+      setRuleManagementLoading(false);
+    }
+  };
+
   const handleUploadImport = async () => {
     if (!importUploadFile) return;
     setImportLoading(true);
@@ -697,7 +883,7 @@ function Accounting() {
       setActiveImport(createdImport);
       setImportDetectedHeaders(headers);
       setDefaultImportMapping(headers);
-      setImportSummary({ created: 0, skipped: 0, duplicates: 0 });
+      setImportSummary({ created: 0, skipped: 0, duplicates: 0, auto_classified: 0, auto_classified_ids: [] });
       setImportRows([]);
       setImportSelectedRows([]);
       setImportStep(1);
@@ -729,10 +915,15 @@ function Accounting() {
       }
       const rows = await loadCurrentImportRows(response.data?.import || activeImport);
       setImportRows(rows);
+      const parsedCount = parseNumber(
+        response.data?.parsed !== undefined ? response.data.parsed : response.data?.created
+      );
       setImportSummary({
-        created: parseNumber(response.data?.created),
+        created: parsedCount,
         skipped: parseNumber(response.data?.skipped),
         duplicates: parseNumber(response.data?.duplicates),
+        auto_classified: parseNumber(response.data?.auto_classified),
+        auto_classified_ids: parseList(response.data?.auto_classified_ids).map((id) => String(id)),
       });
       setImportStep(2);
     } catch {
@@ -1112,7 +1303,7 @@ function Accounting() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                  <Tooltip contentStyle={{ backgroundColor: theme.palette.background.paper }} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: theme.palette.background.paper }} />
                   <Bar dataKey="income" fill={debitColor} />
                   <Bar dataKey="expenses" fill={creditColor} />
                 </BarChart>
@@ -1201,12 +1392,15 @@ function Accounting() {
             >
               Journal Entry
             </Button>
-            <Button size="small" variant="outlined" onClick={startImportDialog}>
-              Import
-            </Button>
-            <Button size="small" sx={{ ml: "auto" }} onClick={loadTransactions} startIcon={<Refresh />}>
-              Refresh
-            </Button>
+              <Button size="small" variant="outlined" onClick={startImportDialog}>
+                Import
+              </Button>
+              <Button size="small" variant="outlined" color="info" onClick={openRuleManager}>
+                Manage Rules
+              </Button>
+              <Button size="small" sx={{ ml: "auto" }} onClick={loadTransactions} startIcon={<Refresh />}>
+                Refresh
+              </Button>
             <TextField
               size="small"
               type="date"
@@ -1737,7 +1931,7 @@ function Accounting() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Line dataKey="income" stroke={debitColor} />
                       <Line dataKey="expenses" stroke={creditColor} />
                     </LineChart>
@@ -2162,9 +2356,10 @@ function Accounting() {
 
           {importStep === 2 ? (
             <Box sx={{ display: "grid", gap: 1 }}>
-              <Alert severity="info">
-                Parsed {importSummary.created} rows, skipped {importSummary.skipped}, duplicates {importSummary.duplicates}
-              </Alert>
+                <Alert severity="info">
+                  Parsed {importSummary.created} rows, skipped {importSummary.skipped}, duplicates {importSummary.duplicates}
+                  {importSummary.auto_classified ? `, auto-classified ${importSummary.auto_classified}` : ", auto-classified 0"}
+                </Alert>
               {importBookingSummary ? (
                 <Alert severity="success">
                   Booked {importBookingSummary.booked} rows for {formatSignedMoney(importBookingSummary.total || 0)}
@@ -2237,10 +2432,10 @@ function Accounting() {
                         <TableCell sx={headerCellStyle} align="right">
                           Amount
                         </TableCell>
-                        <TableCell sx={headerCellStyle}>Category</TableCell>
-                        <TableCell sx={headerCellStyle}>Property</TableCell>
-                        <TableCell sx={headerCellStyle}>Status</TableCell>
-                        <TableCell sx={headerCellStyle}>Actions</TableCell>
+                           <TableCell sx={headerCellStyle}>Category</TableCell>
+                            <TableCell sx={headerCellStyle}>Property</TableCell>
+                            <TableCell sx={headerCellStyle}>Status</TableCell>
+                            <TableCell sx={headerCellStyle}>Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -2279,6 +2474,9 @@ function Accounting() {
                                 ))}
                               </Select>
                             </FormControl>
+                            {autoClassifiedIds.has(String(row.id)) ? (
+                              <Chip size="small" label="Auto" color="primary" variant="outlined" sx={{ mt: 0.5, fontSize: 11 }} />
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             <FormControl size="small" fullWidth>
@@ -2319,18 +2517,23 @@ function Accounting() {
                               />
                             ) : null}
                           </TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              onClick={() => setImportRowStatus(row.id, "approved")}
+                            <TableCell>
+                              <Tooltip title="Create Rule">
+                                <IconButton size="small" onClick={() => createRuleFromRow(row)}>
+                                  <Rule fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Button
+                                size="small"
+                                onClick={() => setImportRowStatus(row.id, "approved")}
                               disabled={row.status === "approved" || row.status === "booked"}
                             >
                               Approve
                             </Button>
-                            <Button
-                              size="small"
-                              color="warning"
-                              onClick={() => setImportRowStatus(row.id, "skipped")}
+                              <Button
+                                size="small"
+                                color="warning"
+                                onClick={() => setImportRowStatus(row.id, "skipped")}
                               disabled={row.status === "booked"}
                             >
                               Skip
@@ -2352,6 +2555,164 @@ function Accounting() {
               Back
             </Button>
           ) : null}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={showRuleManager} onClose={closeRuleManager} fullWidth maxWidth="lg">
+        <DialogTitle>Classification Rules</DialogTitle>
+        <DialogContent dividers sx={{ display: "grid", gap: 1.2 }}>
+          {ruleError ? <Alert severity="error">{ruleError}</Alert> : null}
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="body2" color="text.secondary">
+              Create, update, and test classification rules for imported transactions.
+            </Typography>
+            <Button size="small" variant="contained" onClick={() => openRuleFormForCreate()} sx={{ bgcolor: accent }}>
+              Add Rule
+            </Button>
+          </Box>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={headerCellStyle}>Match Field</TableCell>
+                  <TableCell sx={headerCellStyle}>Match Type</TableCell>
+                  <TableCell sx={headerCellStyle}>Pattern</TableCell>
+                  <TableCell sx={headerCellStyle}>Category</TableCell>
+                  <TableCell sx={headerCellStyle}>Property</TableCell>
+                  <TableCell sx={headerCellStyle} align="right">
+                    Priority
+                  </TableCell>
+                  <TableCell sx={headerCellStyle}>Active</TableCell>
+                  <TableCell sx={headerCellStyle} align="right">
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {parseList(classificationRules).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} sx={{ color: "text.secondary", textAlign: "center" }}>
+                      No rules yet.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  parseList(classificationRules).map((rule) => (
+                    <TableRow key={rule.id} hover>
+                      <TableCell>{ruleMatchFieldLabel[rule.match_field] || rule.match_field}</TableCell>
+                      <TableCell>{ruleMatchTypeLabel[rule.match_type] || rule.match_type}</TableCell>
+                      <TableCell>{rule.match_value}</TableCell>
+                      <TableCell>{rule.category_name || rule.category || "-"}</TableCell>
+                      <TableCell>{rule.property_name || "-"}</TableCell>
+                      <TableCell align="right">{rule.priority}</TableCell>
+                      <TableCell>{rule.is_active ? "Active" : "Inactive"}</TableCell>
+                      <TableCell align="right">
+                        <IconButton size="small" onClick={() => openRuleFormForEdit(rule)}>
+                          <Edit fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={() => removeRule(rule.id)} disabled={ruleManagementLoading}>
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRuleManager}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={showRuleForm} onClose={closeRuleForm} fullWidth maxWidth="sm">
+        <DialogTitle>{editingRuleId ? "Edit Rule" : "Create Rule"}</DialogTitle>
+        <DialogContent sx={{ display: "grid", gap: 1.2, mt: 0.5 }}>
+          {ruleError ? <Alert severity="error">{ruleError}</Alert> : null}
+          <FormControl size="small">
+            <InputLabel>Match Field</InputLabel>
+            <Select
+              value={ruleForm.match_field}
+              label="Match Field"
+              onChange={(e) => setRuleForm((prev) => ({ ...prev, match_field: e.target.value }))}
+            >
+              <MenuItem value="description">Description</MenuItem>
+              <MenuItem value="reference">Reference</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small">
+            <InputLabel>Match Type</InputLabel>
+            <Select
+              value={ruleForm.match_type}
+              label="Match Type"
+              onChange={(e) => setRuleForm((prev) => ({ ...prev, match_type: e.target.value }))}
+            >
+              <MenuItem value="contains">Contains</MenuItem>
+              <MenuItem value="starts_with">Starts With</MenuItem>
+              <MenuItem value="exact">Exact Match</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            label="Pattern"
+            size="small"
+            value={ruleForm.match_value}
+            onChange={(e) => setRuleForm((prev) => ({ ...prev, match_value: e.target.value }))}
+          />
+          <FormControl size="small">
+            <InputLabel>Category</InputLabel>
+            <Select
+              value={ruleForm.category}
+              label="Category"
+              onChange={(e) => setRuleForm((prev) => ({ ...prev, category: e.target.value }))}
+            >
+              <MenuItem value="">Select category</MenuItem>
+              {allPostingAccounts
+                .filter((account) => account.account_type && !account.is_header)
+                .map((account) => (
+                  <MenuItem key={account.id} value={String(account.id)}>
+                    {account.account_code ? `${account.account_code} ` : ""}
+                    {account.name}
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small">
+            <InputLabel>Property</InputLabel>
+            <Select
+              value={ruleForm.property_link}
+              label="Property"
+              onChange={(e) => setRuleForm((prev) => ({ ...prev, property_link: e.target.value }))}
+            >
+              <MenuItem value="">No property</MenuItem>
+              {properties.map((property) => (
+                <MenuItem key={property.id} value={String(property.id)}>
+                  {property.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Priority"
+            type="number"
+            size="small"
+            value={ruleForm.priority}
+            onChange={(e) =>
+              setRuleForm((prev) => ({ ...prev, priority: Number(e.target.value === "" ? 0 : e.target.value) }))
+            }
+          />
+          <FormControlLabel
+            control={
+              <Switch checked={Boolean(ruleForm.is_active)} onChange={(e) => setRuleForm((prev) => ({ ...prev, is_active: e.target.checked }))} />
+            }
+            label="Active"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRuleForm}>Cancel</Button>
+          <Button variant="contained" sx={{ bgcolor: accent }} onClick={saveRule} disabled={ruleLoading}>
+            {ruleLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -1,9 +1,9 @@
-from datetime import date
+﻿from datetime import date
 
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import AccountingCategory
+from .models import AccountingCategory, ClassificationRule, ImportedTransaction
 
 
 def _format_currency(value):
@@ -353,5 +353,67 @@ def seed_chart_of_accounts(organization):
             flat=True,
         )
     )
+
+
+def apply_classification_rules(organization, imported_transactions_queryset):
+    if not organization:
+        return 0, []
+
+    rules = ClassificationRule.objects.filter(
+        organization=organization,
+        is_active=True,
+    ).order_by("-priority", "match_value")
+    if not rules.exists():
+        return 0, []
+
+    queryset = imported_transactions_queryset.filter(
+        organization=organization,
+        status=ImportedTransaction.STATUS_PENDING,
+        category__isnull=True,
+    )
+    if not queryset.exists():
+        return 0, []
+
+    auto_classified_count = 0
+    auto_classified_ids = []
+
+    for transaction in queryset:
+        description = (transaction.description or "").strip().lower()
+        reference = (transaction.reference or "").strip().lower()
+        if not description and not reference:
+            continue
+
+        for rule in rules:
+            if rule.match_field == ClassificationRule.MATCH_FIELD_REFERENCE:
+                target = reference
+            else:
+                target = description
+
+            if not target:
+                continue
+
+            needle = (rule.match_value or "").strip().lower()
+            if not needle:
+                continue
+
+            if rule.match_type == ClassificationRule.MATCH_TYPE_STARTS_WITH:
+                matched = target.startswith(needle)
+            elif rule.match_type == ClassificationRule.MATCH_TYPE_EXACT:
+                matched = target == needle
+            else:
+                matched = needle in target
+
+            if matched:
+                transaction.category = rule.category
+                if rule.property_link_id:
+                    transaction.property_link = rule.property_link
+                transaction.save(update_fields=["category", "property_link"])
+                auto_classified_ids.append(transaction.id)
+                auto_classified_count += 1
+                break
+
+    return auto_classified_count, auto_classified_ids
+
+
 
 
