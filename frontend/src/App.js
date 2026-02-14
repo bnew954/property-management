@@ -44,6 +44,7 @@ import Welcome from "./pages/Welcome";
 import Templates from "./pages/Templates";
 import ListingPublic from "./pages/ListingPublic";
 import ListingsIndex from "./pages/ListingsIndex";
+import MyListings from "./pages/MyListings";
 import UnitForm from "./pages/UnitForm";
 import ListingApply from "./pages/ListingApply";
 import LeaseSigning from "./pages/LeaseSigning";
@@ -230,7 +231,7 @@ function AppContent() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/listing/:slug" element={<ListingPublic />} />
                 <Route path="/listing/:slug/apply" element={<ListingApply />} />
-                <Route path="/listings" element={<ListingsIndex />} />
+                <Route path="/browse-listings" element={<ListingsIndex />} />
                 <Route path="/screening/consent/:token" element={<ScreeningConsent />} />
                 <Route path="/lease/sign/:token" element={<LeaseSigning />} />
                 <Route
@@ -253,6 +254,7 @@ function AppContent() {
                 <Route path="/tenants" element={<TenantList />} />
                 <Route path="/tenants/new" element={<TenantForm />} />
                 <Route path="/tenants/:id/edit" element={<TenantForm />} />
+                <Route path="/listings" element={<MyListings />} />
                 <Route path="/screenings" element={<ScreeningList />} />
                 <Route path="/screenings/new" element={<ScreeningRequest />} />
                 <Route path="/screenings/:id" element={<ScreeningDetail />} />

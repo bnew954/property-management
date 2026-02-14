@@ -189,7 +189,7 @@ function ListingPublic() {
               <Link to="/" style={{ color: "#9ca3af", textDecoration: "none", fontSize: 12 }}>
                 Onyx PM
               </Link>
-              <Link to="/listings" style={{ color: "#9ca3af", textDecoration: "none", fontSize: 12 }}>
+              <Link to="/browse-listings" style={{ color: "#9ca3af", textDecoration: "none", fontSize: 12 }}>
                 Listings
               </Link>
               <Typography sx={{ color: "#9ca3af", fontSize: 12 }} component="span">
