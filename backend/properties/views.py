@@ -9,7 +9,7 @@ import uuid
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction as db_transaction
-from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, Count, Max
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, Count, Max, IntegerField, When
 from django.db.models.functions import Coalesce, TruncMonth
 from django.http import FileResponse
 from django.utils import timezone
@@ -2347,15 +2347,15 @@ class AccountingCategoryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-        if (request.query_params.get("tree") or "").lower() in {"true", "1", "yes"}:
-            queryset = queryset.filter(parent_account__isnull=True).order_by(
-                "account_code",
-                "name",
+        queryset = queryset.annotate(
+            _account_code_is_missing=Case(
+                When(Q(account_code__isnull=True) | Q(account_code=""), then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
             )
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-
-        return super().list(request, *args, **kwargs)
+        ).order_by("_account_code_is_missing", "account_code", "name")
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         organization = resolve_request_organization(self.request)
@@ -3501,8 +3501,11 @@ class AccountingRentRollView(APIView):
             rows.append(
                 {
                     "tenant_name": f"{lease.tenant.first_name} {lease.tenant.last_name}".strip(),
+                    "property_id": lease.unit.property.id if lease.unit and lease.unit.property else None,
+                    "unit_id": lease.unit.id if lease.unit else None,
                     "property_name": lease.unit.property.name if lease.unit and lease.unit.property else "",
                     "unit_number": lease.unit.unit_number if lease.unit else "",
+                    "unit_name": lease.unit.unit_number if lease.unit else "",
                     "property": lease.unit.property.name if lease.unit and lease.unit.property else "",
                     "unit": lease.unit.unit_number if lease.unit else "",
                     "monthly_rent": _to_float(monthly_rent),

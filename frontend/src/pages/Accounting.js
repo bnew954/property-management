@@ -1,5 +1,6 @@
-import {
+﻿import {
   Alert,
+  Menu,
   Box,
   Button,
   Card,
@@ -29,10 +30,12 @@ import {
   TableRow,
   Tabs,
   Tab,
+  FormControlLabel,
   TextField,
+  Switch,
   Typography,
 } from "@mui/material";
-import { Add, ExpandLess, ExpandMore, Lock, Refresh } from "@mui/icons-material";
+import { Add, ChevronRight, ExpandLess, ExpandMore, MoreVert, Refresh } from "@mui/icons-material";
 import { useTheme } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Bar, BarChart, Pie, PieChart, Cell } from "recharts";
@@ -44,9 +47,9 @@ import {
   getAccountingCashflow,
   getAccountingCategories,
   getAccountingCategoryLedger,
-  getAccountingCategoryTree,
   getAccountingPeriods,
   getAccountingRentRoll,
+  deleteAccountingCategory,
   getAccountingTaxReport,
   getBalanceSheetReport,
   getGeneralLedgerReport,
@@ -117,25 +120,51 @@ const parseRent = (payload = {}) => {
   return { rows, summary: payload.summary || {} };
 };
 
+const resolveParentId = (account = {}) => {
+  const rawParent = account.parent !== undefined ? account.parent : account.parent_account;
+  if (!rawParent) return null;
+  if (typeof rawParent === "object") return rawParent.id || rawParent.account_id || null;
+  return rawParent;
+};
+
+const compareAccountCodes = (a, b) => {
+  const aCode = String(a.account_code || a.code || "").trim();
+  const bCode = String(b.account_code || b.code || "").trim();
+  const aMissing = aCode ? 0 : 1;
+  const bMissing = bCode ? 0 : 1;
+  if (aMissing !== bMissing) return aMissing - bMissing;
+  const byCode = aCode.localeCompare(bCode, "en-US", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  if (byCode !== 0) return byCode;
+  return String(a.name || "").localeCompare(String(b.name || ""), "en-US", {
+    sensitivity: "base",
+  });
+};
+
 const asTree = (raw) => {
-  const items = parseList(raw).map((item) => ({ ...item, children: [] }));
-  const compareAccounts = (a, b) => {
-    const aCode = String(a.account_code || a.code || "").trim();
-    const bCode = String(b.account_code || b.code || "").trim();
-    const byCode = aCode.localeCompare(bCode, "en-US", { numeric: true, sensitivity: "base" });
-    if (byCode !== 0) return byCode;
-    return String(a.name || "").localeCompare(String(b.name || ""), "en-US", { sensitivity: "base" });
-  };
-  const sortedItems = [...items].sort(compareAccounts);
-  const withChildren = sortedItems.some((i) => Array.isArray(i.sub_accounts) && i.sub_accounts.length > 0);
-  if (withChildren) {
-    const build = (node) => ({
-      ...node,
-      children: Array.isArray(node.sub_accounts)
-        ? [...node.sub_accounts].sort(compareAccounts).map((c) => build(c))
-        : [],
-    });
-    return [...sortedItems].map(build);
+  const items = parseList(raw).map((item) => ({
+    ...item,
+    parent_account: resolveParentId(item),
+    children: [],
+  }));
+  const sortedItems = [...items].sort(compareAccountCodes);
+  const hasParentReferences = sortedItems.some(
+    (item) =>
+      item.parent_account || item.parent_account_id || item.parent || item.parent_id
+  );
+  if (!hasParentReferences) {
+    const withChildren = sortedItems.some((i) => Array.isArray(i.sub_accounts) && i.sub_accounts.length > 0);
+    if (withChildren) {
+      const build = (node) => ({
+        ...node,
+        children: Array.isArray(node.sub_accounts)
+          ? [...node.sub_accounts].sort(compareAccountCodes).map((c) => build(c))
+          : [],
+      });
+      return [...sortedItems].map(build);
+    }
   }
   const map = {};
   const roots = [];
@@ -149,10 +178,10 @@ const asTree = (raw) => {
   });
   roots.forEach((node) => {
     if (Array.isArray(node.children) && node.children.length > 1) {
-      node.children = node.children.sort(compareAccounts);
+      node.children = node.children.sort(compareAccountCodes);
     }
   });
-  return roots.sort(compareAccounts);
+  return roots.sort(compareAccountCodes);
 };
 
 const flattenTree = (nodes, output = []) => {
@@ -191,6 +220,14 @@ const transferFormInitial = { amount: "", from_account_id: "", to_account_id: ""
 const journalLineInitial = { account_id: "", debit_amount: "", credit_amount: "", description: "" };
 const journalFormInitial = { memo: "", entry_date: toDateStr(new Date()), source_type: "manual", lines: [journalLineInitial, journalLineInitial] };
 const addAccountInitial = { account_code: "", name: "", account_type: "expense", normal_balance: "debit", parent_account: "", is_header: false, description: "" };
+const accountTypeOrder = ["asset", "liability", "equity", "revenue", "expense"];
+const accountTypeLabel = {
+  asset: "Assets",
+  liability: "Liabilities",
+  equity: "Equity",
+  revenue: "Revenue",
+  expense: "Expenses",
+};
 
 function Accounting() {
   const { role } = useUser();
@@ -209,6 +246,7 @@ function Accounting() {
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [selectedAccountLedger, setSelectedAccountLedger] = useState([]);
   const [selectedAccountFilters, setSelectedAccountFilters] = useState({ date_from: "", date_to: "", property_id: "" });
+  const [showInactiveAccounts, setShowInactiveAccounts] = useState(false);
 
   const [dashboardPnL, setDashboardPnL] = useState(null);
   const [dashboardCashflow, setDashboardCashflow] = useState([]);
@@ -247,6 +285,9 @@ function Accounting() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState("");
+  const [coaMenuAnchor, setCoaMenuAnchor] = useState(null);
+  const [coaMenuAccount, setCoaMenuAccount] = useState(null);
 
   const [incomeForm, setIncomeForm] = useState(incomeFormInitial);
   const [expenseForm, setExpenseForm] = useState(expenseFormInitial);
@@ -259,6 +300,39 @@ function Accounting() {
   const [recurringTemplates, setRecurringTemplates] = useState([]);
 
   const accountById = useMemo(() => Object.fromEntries(categoryFlat.map((a) => [String(a.id), a])), [categoryFlat]);
+
+  const visibleCategoryTree = useMemo(() => {
+    if (showInactiveAccounts) return categoryTree;
+    const pruneInactive = (nodes = []) =>
+      nodes
+        .map((node) => ({
+          ...node,
+          children: pruneInactive(node.children || []),
+        }))
+        .filter((node) => node.is_active !== false);
+    return pruneInactive(categoryTree);
+  }, [categoryTree, showInactiveAccounts]);
+
+  const orderedVisibleAccountTypeSections = useMemo(() => {
+    const sortByHeaderThenCode = (left, right) => {
+      const leftIsHeader = left.is_header === true;
+      const rightIsHeader = right.is_header === true;
+      if (leftIsHeader !== rightIsHeader) {
+        return leftIsHeader ? -1 : 1;
+      }
+      return compareAccountCodes(left, right);
+    };
+
+    const sections = [];
+    accountTypeOrder.forEach((accountType) => {
+      const rows = visibleCategoryTree
+        .filter((account) => String(account.account_type || "expense") === accountType)
+        .slice()
+        .sort(sortByHeaderThenCode);
+      sections.push({ type: accountType, label: accountTypeLabel[accountType], rows });
+    });
+    return sections;
+  }, [visibleCategoryTree]);
 
   const accountBalanceById = useMemo(() => {
     const map = {};
@@ -289,7 +363,7 @@ function Accounting() {
   );
 
   const loadAccounts = async () => {
-    const response = await getAccountingCategoryTree();
+    const response = await getAccountingCategories();
     const tree = asTree(response.data);
     setCategoryTree(tree);
     setCategoryFlat(flattenTree(tree, []));
@@ -338,7 +412,11 @@ function Accounting() {
   const loadLedger = async (accountId, filters = selectedAccountFilters) => {
     if (!accountId) return;
     const response = await getAccountingCategoryLedger(accountId, clean(filters));
-    setSelectedAccountLedger(parseList(response.data));
+    if (response?.data?.entries) {
+      setSelectedAccountLedger(parseList(response.data.entries));
+    } else {
+      setSelectedAccountLedger(parseList(response.data));
+    }
   };
 
   const loadReports = async (type) => {
@@ -502,8 +580,19 @@ function Accounting() {
     await resetAndReload();
   };
 
-  const addAccount = async () => {
-    await createAccountingCategory({
+  const closeCoaMenu = () => {
+    setCoaMenuAnchor(null);
+    setCoaMenuAccount(null);
+  };
+
+  const openCoaMenu = (event, account) => {
+    event.stopPropagation();
+    setCoaMenuAnchor(event.currentTarget);
+    setCoaMenuAccount(account);
+  };
+
+  const saveAccount = async () => {
+    const payload = {
       account_code: addAccountForm.account_code,
       name: addAccountForm.name,
       account_type: addAccountForm.account_type,
@@ -511,17 +600,50 @@ function Accounting() {
       parent_account: addAccountForm.parent_account || null,
       category_type: addAccountForm.account_type === "revenue" ? "income" : "expense",
       is_header: addAccountForm.is_header,
-      is_active: true,
       description: addAccountForm.description || "",
-    });
+    };
+    if (editingAccountId) {
+      await updateAccountingCategory(editingAccountId, payload);
+    } else {
+      await createAccountingCategory({
+        ...payload,
+        is_active: true,
+      });
+    }
+    closeAccountDialog();
+    await loadAccounts();
+  };
+
+  const closeAccountDialog = () => {
     setShowAccount(false);
     setAddAccountForm(addAccountInitial);
-    await loadAccounts();
+    setEditingAccountId("");
+  };
+
+  const startEditAccount = (account) => {
+    setEditingAccountId(account ? String(account.id) : "");
+    setAddAccountForm({
+      account_code: account.account_code || "",
+      name: account.name || "",
+      account_type: account.account_type || "expense",
+      normal_balance: account.normal_balance || "debit",
+      parent_account: account.parent || account.parent_account || "",
+      is_header: !!account.is_header,
+      description: account.description || "",
+    });
+    setShowAccount(true);
   };
 
   const toggleAccountActive = async (account) => {
     if (!account) return;
     await updateAccountingCategory(account.id, { is_active: account.is_active === false });
+    await loadAccounts();
+  };
+
+  const deleteSelectedAccount = async () => {
+    if (!coaMenuAccount) return;
+    await deleteAccountingCategory(coaMenuAccount.id);
+    closeCoaMenu();
     await loadAccounts();
   };
 
@@ -572,34 +694,45 @@ function Accounting() {
     }
   }, [txFilters]);
 
-  if (role !== "landlord") {
-    return (
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          Accounting is available to landlord accounts only.
-        </Typography>
-      </Paper>
-    );
-  }
   const renderAccountRows = (nodes, depth = 0) => {
     return nodes.flatMap((account) => {
       const children = Array.isArray(account.children) ? account.children : [];
       const hasChildren = children.length > 0;
-      const isExpanded = expandedNodes[account.id];
-      const rowBalance = accountBalanceById[String(account.id)];
-      const rowStyle = account.is_header ? { fontWeight: 700 } : {};
-      const row = (
-        <TableRow
+      const isExpanded = expandedNodes[account.id] ?? hasChildren;
+      const rowBalance = parseNumber(account.balance ?? accountBalanceById[String(account.id)]);
+      const accountCode = account.account_code || account.code || "";
+      const isHeader = account.is_header === true;
+    const rowStyle = isHeader
+      ? { fontWeight: 700, fontSize: "0.95rem" }
+      : {};
+    const isInactive = account.is_active === false;
+    const balanceIsZero = rowBalance === 0;
+    const balanceColor = rowBalance < 0 ? "error.main" : "text.primary";
+    const row = (
+      <TableRow
           key={account.id}
           hover
-          sx={{
-            "& td": { fontSize: 12, fontFamily: "monospace" },
-            bgcolor: account.is_header ? "rgba(124,92,252,0.08)" : "transparent",
-            cursor: "pointer",
-          }}
-          onClick={() => setSelectedAccount(account.id)}
-        >
-          <TableCell sx={{ pl: 2 + depth * 3 }}>
+        sx={{
+          "& td": { fontSize: 12, fontFamily: "monospace" },
+          "& .coa-row-menu": { opacity: 0, visibility: "hidden" },
+          "&:hover .coa-row-menu": { opacity: 1, visibility: "visible" },
+          bgcolor: isHeader ? "rgba(124,92,252,0.08)" : "transparent",
+          cursor: isHeader && hasChildren ? "pointer" : "pointer",
+          fontStyle: isInactive ? "italic" : "normal",
+          opacity: isInactive && !showInactiveAccounts ? 0.5 : 1,
+          color: isInactive && showInactiveAccounts ? "text.secondary" : undefined,
+        }}
+        onClick={() => {
+          if (isHeader) {
+            if (hasChildren) {
+              toggleNode(account.id);
+            }
+            return;
+          }
+          if (!isHeader) setSelectedAccount(account.id);
+        }}
+      >
+          <TableCell sx={{ pl: 2 + depth * 3, display: { xs: "none", md: "table-cell" } }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {hasChildren ? (
                 <IconButton
@@ -608,19 +741,29 @@ function Accounting() {
                     e.stopPropagation();
                     toggleNode(account.id);
                   }}
+                  className="coa-row-menu"
                 >
-                  {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                  {isExpanded ? <ExpandMore /> : <ChevronRight />}
                 </IconButton>
               ) : (
                 <Box sx={{ width: 32 }} />
               )}
-              <Typography sx={rowStyle}>{account.account_code || account.code || "-"}</Typography>
+              <Typography sx={rowStyle}>{accountCode || ""}</Typography>
             </Box>
           </TableCell>
-          <TableCell>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {account.is_system ? <Lock sx={{ fontSize: 14 }} color="disabled" /> : null}
-              <Typography sx={rowStyle}>{account.name}</Typography>
+          <TableCell sx={{ pl: `${16 + depth * 24}px` }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+              <Typography sx={rowStyle}>
+                {`${accountCode ? `${accountCode} · ` : ""}${account.name || ""}`}
+              </Typography>
+              <IconButton
+                size="small"
+                className="coa-row-menu"
+                onClick={(e) => openCoaMenu(e, account)}
+                sx={{ ml: 1 }}
+              >
+                <MoreVert fontSize="small" />
+              </IconButton>
             </Box>
           </TableCell>
           <TableCell>
@@ -630,29 +773,18 @@ function Accounting() {
               sx={{ textTransform: "uppercase", fontSize: 11 }}
             />
           </TableCell>
-          <TableCell>{account.normal_balance || "debit"}</TableCell>
           <TableCell align="right" sx={{ fontFamily: "monospace" }}>
-            {account.is_header ? "-" : money(rowBalance || 0)}
-          </TableCell>
-          <TableCell>
-            <Chip
-              label={account.is_active === false ? "inactive" : "active"}
-              color={account.is_active === false ? "error" : "success"}
-              size="small"
-              sx={{ fontSize: 11, textTransform: "uppercase" }}
-            />
-          </TableCell>
-          <TableCell>
-            <Button
-              size="small"
-              disabled={account.is_system}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleAccountActive(account);
-              }}
-            >
-              {account.is_active === false ? "Activate" : "Deactivate"}
-            </Button>
+            {isHeader ? "" : (
+              <Typography
+                sx={{
+                  color: balanceIsZero ? "text.secondary" : balanceColor,
+                  fontStyle: isInactive ? "italic" : "normal",
+                  fontFamily: "monospace",
+                }}
+              >
+                {balanceIsZero ? "$0.00" : money(rowBalance)}
+              </Typography>
+            )}
           </TableCell>
         </TableRow>
       );
@@ -800,7 +932,7 @@ function Accounting() {
                   sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}
                 >
                   <ListItemText
-                    primary={`${entry.entry_date || entry.date} � ${entry.memo || "-"}`}
+                    primary={`${entry.entry_date || entry.date} - ${entry.memo || "-"}`}
                     secondary={entry.source_type || "manual"}
                     primaryTypographyProps={{ fontSize: 13 }}
                     secondaryTypographyProps={{ fontSize: 12 }}
@@ -1024,18 +1156,43 @@ function Accounting() {
 
       {!loading && tab === 2 ? (
         <Box>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-            <Button variant="contained" sx={{ bgcolor: accent }} onClick={() => setShowAccount(true)} startIcon={<Add />}>
-              Add Account
-            </Button>
-            {selectedAccountId ? (
-              <Button variant="outlined" onClick={() => {
-                setSelectedAccountId("");
-                setSelectedAccountLedger([]);
-              }}>
-                Back to Tree
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1, alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            <Typography sx={{ fontWeight: 700 }}>Chart of Accounts</Typography>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={showInactiveAccounts}
+                    onChange={(e) => setShowInactiveAccounts(e.target.checked)}
+                  />
+                }
+                label="Show inactive accounts"
+              />
+              <Button
+                variant="contained"
+                sx={{ bgcolor: accent }}
+                onClick={() => {
+                  setEditingAccountId("");
+                  setAddAccountForm(addAccountInitial);
+                  setShowAccount(true);
+                }}
+                startIcon={<Add />}
+              >
+                Add Account
               </Button>
-            ) : null}
+              {selectedAccountId ? (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setSelectedAccountId("");
+                    setSelectedAccountLedger([]);
+                  }}
+                >
+                  Back to Tree
+                </Button>
+              ) : null}
+            </Box>
           </Box>
 
           {selectedAccountId ? (
@@ -1122,19 +1279,81 @@ function Accounting() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={headerCellStyle}>Code</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, display: { xs: "none", md: "table-cell" } }}>Code</TableCell>
                     <TableCell sx={headerCellStyle}>Account</TableCell>
                     <TableCell sx={headerCellStyle}>Type</TableCell>
-                    <TableCell sx={headerCellStyle}>Normal</TableCell>
                     <TableCell sx={headerCellStyle} align="right">Balance</TableCell>
-                    <TableCell sx={headerCellStyle}>Status</TableCell>
-                    <TableCell sx={headerCellStyle}></TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody>{renderAccountRows(categoryTree)}</TableBody>
+                <TableBody>
+                  {orderedVisibleAccountTypeSections.every((section) => section.rows.length === 0) ? (
+                    <TableRow>
+                      <TableCell colSpan={4} sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
+                        No accounts yet. Click &quot;Add Account&quot; to get started, or accounts will be seeded automatically.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {orderedVisibleAccountTypeSections.flatMap((section, sectionIndex) => {
+                    if (!section.rows.length) return [];
+                    const rows = renderAccountRows(section.rows);
+                    if (!rows.length) return [];
+                    const sectionHeader = (
+                      <TableRow key={`${section.type}-header`}>
+                        <TableCell
+                          colSpan={4}
+                          sx={{
+                            borderBottom: "2px solid rgba(255,255,255,0.12)",
+                            py: 0.5,
+                            px: 0.8,
+                            fontWeight: 700,
+                            color: "text.secondary",
+                            fontSize: 12,
+                            backgroundColor: sectionIndex > 0 ? "rgba(124,92,252,0.05)" : "transparent",
+                          }}
+                        >
+                          {accountTypeLabel[section.type]}
+                        </TableCell>
+                      </TableRow>
+                    );
+                    return [sectionHeader, ...rows];
+                  })}
+                </TableBody>
               </Table>
             </TableContainer>
           </Paper>
+          <Menu anchorEl={coaMenuAnchor} open={Boolean(coaMenuAnchor)} onClose={closeCoaMenu}>
+            <MenuItem
+              onClick={() => {
+                if (coaMenuAccount) {
+                  startEditAccount(coaMenuAccount);
+                }
+                closeCoaMenu();
+              }}
+            >
+              Edit
+            </MenuItem>
+            <MenuItem
+              onClick={async () => {
+                if (!coaMenuAccount) return;
+                await toggleAccountActive(coaMenuAccount);
+                closeCoaMenu();
+              }}
+            >
+              {coaMenuAccount?.is_active === false ? "Activate" : "Deactivate"}
+            </MenuItem>
+            <MenuItem
+              disabled={
+                !coaMenuAccount ||
+                parseNumber(coaMenuAccount?.children_count) > 0 ||
+                parseNumber(coaMenuAccount?.journal_lines_count) > 0
+              }
+              onClick={async () => {
+                await deleteSelectedAccount();
+              }}
+            >
+              Delete
+            </MenuItem>
+          </Menu>
         </Box>
       ) : null}
 
@@ -1516,7 +1735,7 @@ function Accounting() {
                       }}
                     >
                       <TableCell>{row.property_name || row.property || row.property?.name || "-"}</TableCell>
-                      <TableCell>{row.unit_number || row.unit || row.unit?.unit_number || "-"}</TableCell>
+                      <TableCell>{row.unit_number || row.unit_name || row.unit || row.unit?.unit_number || "-"}</TableCell>
                       <TableCell>{row.tenant_name || "-"}</TableCell>
                       <TableCell>{money(row.monthly_rent)}</TableCell>
                       <TableCell>{last ? toDateStr(last) : "-"}</TableCell>
@@ -1908,8 +2127,8 @@ function Accounting() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={showAccount} onClose={() => setShowAccount(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Add Account</DialogTitle>
+      <Dialog open={showAccount} onClose={closeAccountDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{editingAccountId ? "Edit Account" : "Add Account"}</DialogTitle>
         <DialogContent sx={{ display: "grid", gap: 1.2, mt: 0.5 }}>
           <TextField
             label="Account Code"
@@ -1985,14 +2204,14 @@ function Accounting() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowAccount(false)}>Cancel</Button>
+          <Button onClick={closeAccountDialog}>Cancel</Button>
           <Button
             variant="contained"
             sx={{ bgcolor: accent }}
-            onClick={addAccount}
+            onClick={saveAccount}
             disabled={!addAccountForm.account_code || !addAccountForm.name}
           >
-            Add Account
+            {editingAccountId ? "Save Changes" : "Add Account"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2001,6 +2220,8 @@ function Accounting() {
 }
 
 export default Accounting;
+
+
 
 
 

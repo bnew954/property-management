@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db.models import Sum
+from decimal import Decimal
 from rest_framework import serializers
 
 from .models import (
@@ -455,7 +456,10 @@ class AccountingCategorySerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False,
     )
-    sub_accounts = serializers.SerializerMethodField(read_only=True)
+    parent = serializers.SerializerMethodField(read_only=True)
+    balance = serializers.SerializerMethodField(read_only=True)
+    children_count = serializers.SerializerMethodField(read_only=True)
+    journal_lines_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = AccountingCategory
@@ -463,6 +467,7 @@ class AccountingCategorySerializer(serializers.ModelSerializer):
             "id",
             "name",
             "category_type",
+            "parent",
             "is_system",
             "parent_account",
             "account_code",
@@ -474,13 +479,36 @@ class AccountingCategorySerializer(serializers.ModelSerializer):
             "tax_deductible",
             "tax_category",
             "description",
-            "sub_accounts",
+            "children_count",
+            "journal_lines_count",
+            "balance",
         ]
         read_only_fields = ["organization"]
 
-    def get_sub_accounts(self, obj):
-        queryset = obj.sub_accounts.filter(is_active=True).order_by("account_code", "name")
-        return AccountingCategorySerializer(queryset, many=True, context=self.context).data
+    def get_parent(self, obj):
+        return obj.parent_account_id
+
+    def get_balance(self, obj):
+        if obj.is_header:
+            return None
+
+        posted_lines = obj.journal_lines.filter(journal_entry__status=JournalEntry.STATUS_POSTED)
+        totals = posted_lines.aggregate(
+            total_debits=Sum("debit_amount"),
+            total_credits=Sum("credit_amount"),
+        )
+        debits = Decimal(totals["total_debits"] or 0)
+        credits = Decimal(totals["total_credits"] or 0)
+
+        if obj.normal_balance == AccountingCategory.NORMAL_BALANCE_CREDIT:
+            return float(credits - debits)
+        return float(debits - credits)
+
+    def get_children_count(self, obj):
+        return obj.sub_accounts.count()
+
+    def get_journal_lines_count(self, obj):
+        return obj.journal_lines.count()
 
 
 class JournalEntryLineSerializer(serializers.ModelSerializer):

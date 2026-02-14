@@ -159,6 +159,8 @@ export const createAccountingCategory = (data) =>
   api.post("accounting/categories/", data);
 export const updateAccountingCategory = (id, data) =>
   api.patch(`accounting/categories/${id}/`, data);
+export const deleteAccountingCategory = (id) =>
+  api.delete(`accounting/categories/${id}/`);
 export const getTransactions = (params = {}) =>
   api.get("accounting/transactions/", { params });
 export const createTransaction = (data) => api.post("accounting/transactions/", data);

@@ -1,5 +1,6 @@
-﻿from datetime import date
+from datetime import date
 
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import AccountingCategory
@@ -261,11 +262,18 @@ def seed_chart_of_accounts(organization):
         },
     ]
 
-    def _upsert_account(payload, parent=None):
-        fields = {
+    account_map = {}
+    parent_links = []
+
+    def _normalize_account_fields(payload):
+        code = str(payload.get("account_code", "")).strip()
+        if not code:
+            return None
+
+        return {
             "organization": organization,
             "name": payload["name"],
-            "account_code": payload["account_code"],
+            "account_code": code,
             "account_type": payload["account_type"],
             "normal_balance": payload.get(
                 "normal_balance", AccountingCategory.NORMAL_BALANCE_DEBIT
@@ -277,32 +285,67 @@ def seed_chart_of_accounts(organization):
             "tax_category": payload.get("tax_category", ""),
             "description": "Default chart account",
             "category_type": _normalize_chart_category_type(payload["account_type"]),
-            "parent_account": parent,
         }
+
+    def _ensure_account(payload):
+        fields = _normalize_account_fields(payload)
+        if not fields:
+            return None
+        code = fields["account_code"]
 
         account = AccountingCategory.objects.filter(
             organization=organization,
-            account_code=payload["account_code"],
-        ).first()
+            account_code=code,
+        ).order_by("id").first()
+        if not account:
+            account = AccountingCategory.objects.filter(
+                organization=organization,
+                name=fields["name"],
+            ).filter(
+                Q(account_code__isnull=True) | Q(account_code="")
+            ).order_by("id").first()
+            if not account:
+                account = AccountingCategory.objects.create(**fields)
 
-        if account:
-            changed = False
-            for key, value in fields.items():
-                if getattr(account, key) != value:
-                    setattr(account, key, value)
-                    changed = True
-            if changed:
-                account.save()
-        else:
-            account = AccountingCategory.objects.create(**fields)
+        changed = False
+        for key, value in fields.items():
+            if getattr(account, key) != value:
+                setattr(account, key, value)
+                changed = True
 
-        for child in payload.get("children", []):
-            _upsert_account(child, parent=account)
+        if changed:
+            account.save(update_fields=list(fields.keys()))
 
+        account_map[code] = account
         return account
 
     for entry in chart_definition:
-        _upsert_account(entry)
+        def _walk(entry_payload, parent_code=None):
+            payload = dict(entry_payload)
+            account = _ensure_account(payload)
+            if account is None:
+                return
+            account_code = str(payload["account_code"]).strip()
+            parent_links.append((account_code, parent_code))
+            children = payload.get("children", [])
+            for child in children:
+                _walk(child, parent_code=account_code)
+        _walk(entry)
+
+    for child_code, parent_code in parent_links:
+        if not child_code:
+            continue
+        account = account_map.get(child_code)
+        if not account:
+            continue
+        if parent_code:
+            parent = account_map.get(parent_code)
+            if parent and account.parent_account_id != parent.id:
+                account.parent_account = parent
+                account.save(update_fields=["parent_account"])
+        elif account.parent_account_id is not None:
+            account.parent_account = None
+            account.save(update_fields=["parent_account"])
 
     return list(
         AccountingCategory.objects.filter(organization=organization).values_list(
@@ -310,3 +353,5 @@ def seed_chart_of_accounts(organization):
             flat=True,
         )
     )
+
+
