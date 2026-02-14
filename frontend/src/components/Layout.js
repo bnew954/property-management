@@ -45,7 +45,7 @@ const drawerWidth = 240;
 
 function BrandLogo({ isDark }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
       <Box
         sx={{
           width: 32,
@@ -296,10 +296,20 @@ function Layout({ children }) {
         }}
       >
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <Toolbar sx={{ minHeight: 60, px: 2.2, pb: 1.2, flexDirection: "column", alignItems: "flex-start" }}>
+          <Toolbar
+            sx={{
+              minHeight: 60,
+              px: 2.2,
+              pt: "16px",
+              pb: 1.2,
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <BrandLogo isDark={isDark} />
             {orgName ? (
-              <Typography variant="caption" sx={{ color: "text.secondary", fontSize: 11, mt: 0.3 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", fontSize: 11, mt: 0.3, textAlign: "center", mb: 1.5 }}>
                 {orgName}
               </Typography>
             ) : null}
