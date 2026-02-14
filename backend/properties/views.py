@@ -62,6 +62,16 @@ from .serializers import (
 )
 from .signals import recalculate_lease_balances
 from .utils import generate_lease_document
+from .emails import (
+    send_application_received,
+    send_application_status_update,
+    send_lease_fully_executed,
+    send_lease_signing_request,
+    send_lease_signed_confirmation,
+    send_maintenance_request_submitted,
+    send_maintenance_status_update,
+    send_screening_consent_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -384,6 +394,16 @@ class PublicListingApplicationView(APIView):
             electronic_signature=serializer.validated_data["electronic_signature"],
             signature_date=timezone.now(),
         )
+        try:
+            send_application_received(
+                applicant_email=application.email,
+                applicant_name=f"{application.first_name} {application.last_name}".strip(),
+                property_name=unit.property.name if unit.property else "",
+                unit_number=unit.unit_number,
+            )
+        except Exception:
+            logger.exception("Failed to send application received email for application=%s", application.id)
+
         return Response(
             {
                 "application_id": application.id,
@@ -416,6 +436,7 @@ class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
 
     def partial_update(self, request, *args, **kwargs):
         application = self.get_object()
+        old_status = application.status
         status_value = request.data.get("status")
         if status_value and status_value not in {
             RentalApplication.STATUS_SUBMITTED,
@@ -441,6 +462,24 @@ class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
             application.updated_at = timezone.now()
             update_fields.append("updated_at")
             application.save(update_fields=update_fields)
+
+        if status_value and status_value != old_status:
+            unit = application.unit
+            property_name = unit.property.name if unit and unit.property else "your property"
+            unit_number = unit.unit_number if unit else "N/A"
+            try:
+                send_application_status_update(
+                    applicant_email=application.email,
+                    applicant_name=f"{application.first_name} {application.last_name}".strip(),
+                    property_name=f"{property_name} Unit {unit_number}",
+                    status=status_value,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to send status update email for application=%s",
+                    application.id,
+                )
+
         serializer = self.get_serializer(application)
         return Response(serializer.data)
 
@@ -465,6 +504,18 @@ class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
         application.reviewed_by = request.user
         application.review_notes = (request.data.get("review_notes") or application.review_notes or "").strip()
         application.save(update_fields=["status", "reviewed_by", "review_notes", "updated_at"])
+        try:
+            unit = application.unit
+            property_name = unit.property.name if unit and unit.property else ""
+            unit_number = unit.unit_number if unit else ""
+            send_application_status_update(
+                applicant_email=application.email,
+                applicant_name=f"{application.first_name} {application.last_name}".strip(),
+                property_name=f"{property_name} Unit {unit_number}" if property_name else unit_number,
+                status=application.status,
+            )
+        except Exception:
+            logger.exception("Failed to send application status email for application=%s", application.id)
 
         screening = ScreeningRequest.objects.create(
             tenant=tenant,
@@ -536,6 +587,18 @@ class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet)
         application.reviewed_by = request.user
         application.review_notes = (request.data.get("review_notes") or application.review_notes or "").strip()
         application.save(update_fields=["status", "reviewed_by", "review_notes", "updated_at"])
+        try:
+            unit = application.unit
+            property_name = unit.property.name if unit and unit.property else ""
+            unit_number = unit.unit_number if unit else ""
+            send_application_status_update(
+                applicant_email=application.email,
+                applicant_name=f"{application.first_name} {application.last_name}".strip(),
+                property_name=f"{property_name} Unit {unit_number}" if property_name else unit_number,
+                status=application.status,
+            )
+        except Exception:
+            logger.exception("Failed to send application status email for application=%s", application.id)
         return Response(
             {
                 "detail": "Application denied.",
@@ -763,11 +826,26 @@ class LeaseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         lease.signature_status = Lease.SIGNATURE_SENT
         lease.save(update_fields=["signing_token", "signature_status", "updated_at"])
 
+        property_obj = lease.unit.property if lease.unit else None
+        property_name = property_obj.name if property_obj else ""
+        tenant_name = f"{lease.tenant.first_name} {lease.tenant.last_name}".strip() if lease.tenant else ""
+        signing_link = f"/lease/sign/{lease.signing_token}"
+        try:
+            send_lease_signing_request(
+                tenant_email=(lease.tenant.email if lease.tenant else ""),
+                tenant_name=tenant_name,
+                property_name=property_name,
+                landlord_name=(lease.organization.name if lease.organization else request.user.get_full_name() or request.user.username),
+                signing_link=signing_link,
+            )
+        except Exception:
+            logger.exception("Failed to send lease signing request for lease=%s", lease.id)
+
         return Response(
             {
                 "detail": "Lease sent for signing.",
                 "signing_token": lease.signing_token,
-                "signing_link": f"/lease/sign/{lease.signing_token}",
+                "signing_link": signing_link,
                 "lease": LeaseSerializer(lease).data,
             },
             status=status.HTTP_200_OK,
@@ -797,6 +875,22 @@ class LeaseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 "updated_at",
             ]
         )
+        try:
+            if lease.signature_status == Lease.SIGNATURE_SIGNED:
+                tenant_email = lease.tenant.email if lease.tenant else None
+                tenant_name = f"{lease.tenant.first_name} {lease.tenant.last_name}".strip() if lease.tenant else ""
+                property_name = lease.unit.property.name if lease.unit and lease.unit.property else ""
+                landlord_email = request.user.email or (lease.organization.owner.email if lease.organization and lease.organization.owner else None)
+                landlord_name = lease.organization.name if lease.organization else (request.user.get_full_name() or request.user.username)
+                send_lease_fully_executed(
+                    tenant_email=tenant_email,
+                    tenant_name=tenant_name,
+                    property_name=property_name,
+                    landlord_email=landlord_email,
+                    landlord_name=landlord_name,
+                )
+        except Exception:
+            logger.exception("Failed to send fully executed lease emails for lease=%s", lease.id)
         return Response(
             {
                 "detail": "Landlord signature saved.",
@@ -908,6 +1002,43 @@ class LeaseSigningPublicView(APIView):
             lease.tenant_signed_date = timezone.now()
 
         lease.save(update_fields=["tenant_signature", "tenant_signed_date", "signature_status", "updated_at"])
+        try:
+            tenant_name = (
+                f"{lease.tenant.first_name} {lease.tenant.last_name}".strip()
+                if lease.tenant
+                else ""
+            )
+            property_name = (
+                lease.unit.property.name
+                if lease.unit and lease.unit.property
+                else ""
+            )
+            if agreed:
+                send_lease_signed_confirmation(
+                    tenant_email=lease.tenant.email if lease.tenant else "",
+                    tenant_name=tenant_name,
+                    property_name=property_name,
+                )
+            if agreed and lease.landlord_signature and lease.signature_status == Lease.SIGNATURE_SIGNED:
+                send_lease_fully_executed(
+                    tenant_email=lease.tenant.email if lease.tenant else "",
+                    tenant_name=tenant_name,
+                    property_name=property_name,
+                    landlord_email=(
+                        lease.application and lease.application.reviewed_by.email
+                        if lease.application and lease.application.reviewed_by
+                        else lease.organization.owner.email
+                        if lease.organization and lease.organization.owner
+                        else None
+                    ),
+                    landlord_name=(
+                        lease.organization.name
+                        if lease.organization
+                        else "Property Management"
+                    ),
+                )
+        except Exception:
+            logger.exception("Failed to send lease notification after tenant signature for lease=%s", lease.id)
         return Response(
             {
                 "detail": "Tenant signature recorded.",
@@ -982,33 +1113,59 @@ class MaintenanceRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet
                 raise ValidationError(
                     {"tenant": "Tenant users must be linked to a tenant record."}
                 )
-            serializer.save(tenant_id=profile.tenant_id, organization=organization)
-            return
-        serializer.save(organization=organization)
-
-    def perform_update(self, serializer):
-        profile = getattr(self.request.user, "profile", None)
-        organization = resolve_request_organization(self.request)
-        if not organization:
-            if self.request.user.is_authenticated:
-                logger.warning(
-                    "Updating maintenance request without organization context. user=%s",
-                    getattr(self.request.user, "id", None),
-                )
-                organization = None
-            else:
-                raise PermissionDenied("You must belong to an organization to create records.")
-        if profile and profile.role == UserProfile.ROLE_TENANT:
-            if not profile.tenant_id:
-                raise ValidationError(
-                    {"tenant": "Tenant users must be linked to a tenant record."}
-                )
-            serializer.save(
+            instance = serializer.save(
                 tenant_id=profile.tenant_id, organization=organization
             )
-            return
-        serializer.save(organization=organization)
+        else:
+            instance = serializer.save(organization=organization)
 
+        if instance:
+            try:
+                property_obj = instance.unit.property if instance.unit else None
+                property_name = property_obj.name if property_obj else ""
+                unit_number = instance.unit.unit_number if instance.unit else ""
+                landlord = organization.owner if organization else None
+                tenant_name = (
+                    f"{instance.tenant.first_name} {instance.tenant.last_name}".strip()
+                    if instance.tenant
+                    else ""
+                )
+                if landlord and landlord.email:
+                    send_maintenance_request_submitted(
+                        landlord_email=landlord.email,
+                        landlord_name=landlord.get_full_name() or landlord.username,
+                        tenant_name=tenant_name,
+                        property_name=property_name,
+                        unit_number=unit_number,
+                        request_title=instance.title,
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to send maintenance request submitted email for request=%s",
+                    instance.id if instance else None,
+                )
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        old_status = instance.status
+        updated_instance = serializer.save()
+        if old_status != updated_instance.status:
+            try:
+                property_obj = updated_instance.unit.property if updated_instance.unit else None
+                property_name = property_obj.name if property_obj else ""
+                unit_number = updated_instance.unit.unit_number if updated_instance.unit else ""
+                if updated_instance.tenant and updated_instance.tenant.email:
+                    send_maintenance_status_update(
+                        tenant_email=updated_instance.tenant.email,
+                        tenant_name=f"{updated_instance.tenant.first_name} {updated_instance.tenant.last_name}".strip(),
+                        request_title=updated_instance.title,
+                        new_status=updated_instance.status,
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to send maintenance status update email for request=%s",
+                    updated_instance.id,
+                )
 
 class NotificationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Notification.objects.select_related("recipient")
@@ -1341,6 +1498,12 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="send-consent")
     def send_consent(self, request, pk=None):
         screening = self.get_object()
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned to this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         token = screening.consent_token
         if not token:
             token = uuid.uuid4().hex
@@ -1350,6 +1513,33 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             screening.save(update_fields=["consent_token", "updated_at"])
 
         link = f"/screening/consent/{token}"
+        property_name = ""
+        if screening.tenant and screening.tenant.id:
+            latest_lease = (
+                Lease.objects.filter(
+                    tenant=screening.tenant, is_active=True, organization=organization
+                )
+                .select_related("unit__property")
+                .order_by("-start_date", "-created_at")
+                .first()
+            )
+            if latest_lease and latest_lease.unit and latest_lease.unit.property:
+                property_name = latest_lease.unit.property.name
+        if not property_name and screening.tenant:
+            property_name = f"Tenant {screening.tenant.first_name} {screening.tenant.last_name}".strip()
+
+        try:
+            send_screening_consent_request(
+                tenant_email=screening.tenant_email or screening.tenant.email,
+                tenant_name=f"{screening.tenant.first_name} {screening.tenant.last_name}".strip(),
+                property_name=property_name,
+                landlord_name=(
+                    request.user.get_full_name() or request.user.username
+                ),
+                consent_link=link,
+            )
+        except Exception:
+            logger.exception("Failed to send screening consent email for screening=%s", screening.id)
         print(f"Screening consent link for request #{screening.id}: {link}")
         return Response(
             {"consent_link": link, "consent_token": token},

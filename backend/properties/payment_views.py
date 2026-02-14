@@ -1,4 +1,5 @@
 from decimal import Decimal
+import logging
 
 from django.conf import settings
 from django.utils import timezone
@@ -10,6 +11,7 @@ from rest_framework.views import APIView
 from .models import Lease, Payment, UserProfile
 from .mixins import resolve_request_organization
 from .serializers import PaymentSerializer
+from .emails import send_payment_confirmation, send_payment_received_landlord
 
 
 def _tenant_for_user(user):
@@ -167,6 +169,37 @@ class ConfirmStripePaymentView(APIView):
             stripe_payment_intent_id=payment_intent_id,
             notes="Stripe online rent payment",
         )
+        unit = lease.unit
+        property_obj = unit.property if unit else None
+        tenant_name = (
+            f"{lease.tenant.first_name} {lease.tenant.last_name}".strip()
+            if lease.tenant
+            else "Tenant"
+        )
+        try:
+            send_payment_confirmation(
+                tenant_email=lease.tenant.email if lease.tenant else "",
+                tenant_name=tenant_name,
+                amount=payment.amount,
+                property_name=property_obj.name if property_obj else "",
+                unit_number=unit.unit_number if unit else "",
+                confirmation_id=payment.id,
+            )
+            organization = payment.organization
+            landlord_email = organization.owner.email if organization and organization.owner else None
+            landlord_name = organization.name if organization else "Landlord"
+            send_payment_received_landlord(
+                landlord_email=landlord_email,
+                landlord_name=landlord_name,
+                tenant_name=tenant_name,
+                amount=payment.amount,
+                property_name=property_obj.name if property_obj else "",
+                unit_number=unit.unit_number if unit else "",
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Failed to send payment notification emails for payment=%s", payment.id
+            )
         return Response(
             PaymentSerializer(payment).data,
             status=status.HTTP_201_CREATED,
