@@ -151,11 +151,63 @@ export const getAccountingTaxReport = (params = {}) =>
   api.get("accounting/tax-report/", { params });
 export const getAccountingCategories = (params = {}) =>
   api.get("accounting/categories/", { params });
+export const getAccountingCategoryTree = (params = {}) =>
+  api.get("accounting/categories/", { params: { ...params, tree: true } });
+export const getAccountingCategoryLedger = (categoryId, params = {}) =>
+  api.get(`accounting/categories/${categoryId}/ledger/`, { params });
+export const createAccountingCategory = (data) =>
+  api.post("accounting/categories/", data);
+export const updateAccountingCategory = (id, data) =>
+  api.patch(`accounting/categories/${id}/`, data);
 export const getTransactions = (params = {}) =>
   api.get("accounting/transactions/", { params });
 export const createTransaction = (data) => api.post("accounting/transactions/", data);
 export const updateTransaction = (id, data) => api.patch(`accounting/transactions/${id}/`, data);
 export const deleteTransaction = (id) => api.delete(`accounting/transactions/${id}/`);
+
+export const getJournalEntries = (params = {}) =>
+  api.get("accounting/journal-entries/", { params });
+export const createJournalEntry = (data) =>
+  api.post("accounting/journal-entries/", data);
+export const getJournalEntry = (id) =>
+  api.get(`accounting/journal-entries/${id}/`);
+export const postJournalEntry = (id) =>
+  api.post(`accounting/journal-entries/${id}/post/`);
+export const reverseJournalEntry = (id) =>
+  api.post(`accounting/journal-entries/${id}/reverse/`);
+export const voidJournalEntry = (id) =>
+  api.post(`accounting/journal-entries/${id}/void/`);
+export const recordIncome = (payload) =>
+  api.post("accounting/record-income/", payload);
+export const recordExpense = (payload) =>
+  api.post("accounting/record-expense/", payload);
+export const recordTransfer = (payload) =>
+  api.post("accounting/record-transfer/", payload);
+export const getTrialBalanceReport = (params = {}) =>
+  api.get("accounting/reports/trial-balance/", { params });
+export const getBalanceSheetReport = (params = {}) =>
+  api.get("accounting/reports/balance-sheet/", { params });
+export const getGeneralLedgerReport = (params = {}) =>
+  api.get("accounting/reports/general-ledger/", { params });
+
+export const getAccountingPeriods = (params = {}) =>
+  api.get("accounting/periods/", { params });
+export const createAccountingPeriod = (data) =>
+  api.post("accounting/periods/", data);
+export const lockAccountingPeriod = (id) =>
+  api.post(`accounting/periods/${id}/lock/`);
+export const unlockAccountingPeriod = (id) =>
+  api.post(`accounting/periods/${id}/unlock/`);
+
+export const getRecurringTransactions = (params = {}) =>
+  api.get("accounting/recurring/", { params });
+export const createRecurringTransaction = (data) =>
+  api.post("accounting/recurring/", data);
+export const updateRecurringTransaction = (id, data) =>
+  api.patch(`accounting/recurring/${id}/`, data);
+export const runRecurringTransaction = (id) =>
+  api.post(`accounting/recurring/${id}/run/`);
+
 export const getOwnerStatements = (params = {}) =>
   api.get("accounting/owner-statements/", { params });
 export const generateOwnerStatement = (data) =>
