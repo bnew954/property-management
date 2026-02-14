@@ -1,7 +1,8 @@
-﻿import {
+import {
   Alert,
   Menu,
   Box,
+  Grid,
   Button,
   Card,
   CardContent,
@@ -18,6 +19,7 @@
   FormControlLabel,
   IconButton,
   InputLabel,
+  InputAdornment,
   Link,
   List,
   ListItem,
@@ -50,6 +52,7 @@ import {
   Delete,
   MoreVert,
   Refresh,
+  CheckCircle,
   Rule,
 } from "@mui/icons-material";
 import { useTheme } from "@mui/material";
@@ -106,6 +109,13 @@ import {
   reverseJournalEntry,
   runRecurringTransaction,
   updateAccountingCategory,
+  getReconciliations,
+  createReconciliation,
+  getReconciliation,
+  completeReconciliation,
+  addReconciliationMatch,
+  removeReconciliationMatch,
+  excludeReconciliationItem,
   unlockAccountingPeriod,
   updateRecurringTransaction,
   voidJournalEntry,
@@ -121,6 +131,16 @@ const toDateStr = (value) => {
   if (!value) return "";
   const date = typeof value === "string" ? new Date(value) : value;
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+const formatDisplayDate = (value) => {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }).format(date);
+};
+const formatMoneyWithSign = (value) => {
+  const amount = parseNumber(value);
+  const abs = Math.abs(amount).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return amount < 0 ? `(${abs})` : abs;
 };
 
 const parseList = (payload) => {
@@ -407,6 +427,19 @@ function Accounting() {
   const [importBulkCategory, setImportBulkCategory] = useState("");
   const [importBookingSummary, setImportBookingSummary] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
+  const [showReconcileStart, setShowReconcileStart] = useState(false);
+  const [showReconciliationWorkspace, setShowReconciliationWorkspace] = useState(false);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  const [reconciliationError, setReconciliationError] = useState("");
+  const [reconciliationForm, setReconciliationForm] = useState({
+    account_id: "",
+    start_date: bounds.start,
+    end_date: bounds.end,
+    statement_ending_balance: "0",
+  });
+  const [activeReconciliation, setActiveReconciliation] = useState(null);
+  const [reconBankSelection, setReconBankSelection] = useState([]);
+  const [reconBookSelection, setReconBookSelection] = useState([]);
 
   const [periods, setPeriods] = useState([]);
   const [periodsLoading, setPeriodsLoading] = useState(false);
@@ -417,6 +450,98 @@ function Accounting() {
     () => new Set((activeImport?.column_mapping?.auto_classified_ids || importSummary.auto_classified_ids || []).map((id) => String(id))),
     [activeImport?.column_mapping?.auto_classified_ids, importSummary.auto_classified_ids]
   );
+  const reconciliationAccounts = useMemo(
+    () => categoryFlat.filter((account) => account.is_active !== false && account.account_type === "asset" && !account.is_header),
+    [categoryFlat]
+  );
+  const reconciliationMatches = parseList(activeReconciliation?.matches);
+  const reconMatchByBank = useMemo(
+    () =>
+      Object.fromEntries(
+        parseList(reconciliationMatches)
+          .filter((match) => match?.imported_transaction || match?.imported_transaction_id)
+          .map((match) => [String(match.imported_transaction || match.imported_transaction_id), match])
+      ),
+    [reconciliationMatches]
+  );
+  const reconMatchByBookLine = useMemo(
+    () =>
+      Object.fromEntries(
+        parseList(reconciliationMatches)
+          .filter((match) => match?.journal_entry_line || match?.journal_entry_line_id)
+          .map((match) => [String(match.journal_entry_line || match.journal_entry_line_id), match])
+      ),
+    [reconciliationMatches]
+  );
+  const reconciliationUnmatchedBank = useMemo(() => parseList(activeReconciliation?.unmatched_bank_transactions), [activeReconciliation]);
+  const reconciliationUnmatchedBook = useMemo(() => parseList(activeReconciliation?.unmatched_book_entries), [activeReconciliation]);
+  const reconciliationMatchedItems = useMemo(() => parseList(activeReconciliation?.matches), [activeReconciliation]);
+  const reconciledBankRows = useMemo(
+    () =>
+      reconciliationMatchedItems
+        .map((match) => {
+          const detail = match.imported_transaction_detail || match.imported_transaction || {};
+          if (!detail || !detail.id) return null;
+          return {
+            ...detail,
+            _matchedMatchId: match.id || null,
+            _source: "matched",
+          };
+        })
+        .filter(Boolean),
+    [reconciliationMatchedItems]
+  );
+  const reconciledBookRows = useMemo(
+    () =>
+      reconciliationMatchedItems
+        .map((match) => {
+          const detail = match.journal_entry_line_detail || match.journal_entry_line || {};
+          if (!detail || !detail.id) return null;
+          return {
+            ...detail,
+            _matchedMatchId: match.id || null,
+            _source: "matched",
+          };
+        })
+        .filter(Boolean),
+    [reconciliationMatchedItems]
+  );
+  const reconciliationBankRows = useMemo(() => {
+    const merged = [...reconciliationUnmatchedBank, ...reconciledBankRows];
+    const seen = new Set();
+    return merged.filter((row) => {
+      const id = String(row.id || row.imported_transaction || "");
+      if (!id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [reconciliationUnmatchedBank, reconciledBankRows]);
+  const reconciliationBookRows = useMemo(() => {
+    const merged = [...reconciliationUnmatchedBook, ...reconciledBookRows];
+    const seen = new Set();
+    return merged.filter((row) => {
+      const id = String(row.id || row.journal_entry_line || "");
+      if (!id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [reconciliationUnmatchedBook, reconciledBookRows]);
+  const reconciliationSummary = useMemo(() => {
+    const statementBalance = parseNumber(activeReconciliation?.statement_ending_balance);
+    const bookBalance = parseNumber(activeReconciliation?.book_balance);
+    const difference = statementBalance - bookBalance;
+    return {
+      matchedCount: parseNumber(activeReconciliation?.matched_count || reconciliationMatches.length),
+      unmatchedBankCount: parseNumber(activeReconciliation?.unmatched_bank_count || reconciliationUnmatchedBank.length),
+      unmatchedBookCount: parseNumber(activeReconciliation?.unmatched_book_count || reconciliationUnmatchedBook.length),
+      statementBalance,
+      bookBalance,
+      difference,
+      isBalanced: Math.abs(difference) < 0.01,
+    };
+  }, [activeReconciliation, reconciliationMatches, reconciliationUnmatchedBank.length, reconciliationUnmatchedBook.length]);
 
   const visibleCategoryTree = useMemo(() => {
     if (showInactiveAccounts) return categoryTree;
@@ -539,6 +664,162 @@ function Accounting() {
       setSelectedAccountLedger(parseList(response.data.entries));
     } else {
       setSelectedAccountLedger(parseList(response.data));
+    }
+  };
+
+  const loadReconciliation = async (id) => {
+    if (!id) return null;
+    const response = await getReconciliation(id);
+    const payload = response.data || null;
+    setActiveReconciliation(payload);
+    return payload;
+  };
+
+  const openReconcileStart = () => {
+    const defaults = reconciliationAccounts;
+    const defaultAccount = defaults.find((account) => account.account_code === "1020") || defaults[0] || {};
+    setReconciliationForm({
+      account_id: String(defaultAccount.id || ""),
+      start_date: bounds.start,
+      end_date: bounds.end,
+      statement_ending_balance: "0",
+    });
+    setReconciliationError("");
+    setShowReconcileStart(true);
+  };
+
+  const closeReconcileStart = () => {
+    setShowReconcileStart(false);
+    setReconciliationError("");
+    setReconciliationForm((prev) => ({
+      ...prev,
+      start_date: prev.start_date || bounds.start,
+      end_date: prev.end_date || bounds.end,
+    }));
+  };
+
+  const closeReconciliationWorkspace = () => {
+    setShowReconciliationWorkspace(false);
+    setActiveReconciliation(null);
+    setReconBankSelection([]);
+    setReconBookSelection([]);
+  };
+
+  const startReconciliation = async () => {
+    setReconciliationLoading(true);
+    setReconciliationError("");
+    try {
+      const account = parseNumber(reconciliationForm.account_id);
+      if (!account) {
+        setReconciliationError("Select an asset account.");
+        return;
+      }
+      const response = await createReconciliation({
+        account,
+        start_date: reconciliationForm.start_date,
+        end_date: reconciliationForm.end_date,
+        statement_ending_balance: parseNumber(reconciliationForm.statement_ending_balance),
+      });
+      const payload = response.data || null;
+      if (payload?.id) {
+        await loadReconciliation(payload.id);
+        setReconBankSelection([]);
+        setReconBookSelection([]);
+        setShowReconcileStart(false);
+        setShowReconciliationWorkspace(true);
+      } else {
+        setReconciliationError("Unable to start reconciliation.");
+      }
+    } catch {
+      setReconciliationError("Unable to start reconciliation.");
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  const reloadActiveReconciliation = async () => {
+    if (!activeReconciliation?.id) return;
+    await loadReconciliation(activeReconciliation.id);
+  };
+
+  const toggleReconBankSelection = (id) => {
+    const value = String(id);
+    setReconBankSelection([value]);
+  };
+
+  const toggleReconBookSelection = (id) => {
+    const value = String(id);
+    setReconBookSelection([value]);
+  };
+
+  const handleReconcileMatch = async () => {
+    if (!activeReconciliation?.id) return;
+    const importedTransactionId = reconBankSelection[0];
+    const journalEntryLineId = reconBookSelection[0];
+    if (!importedTransactionId || !journalEntryLineId) return;
+    setReconciliationLoading(true);
+    setReconciliationError("");
+    try {
+      await addReconciliationMatch(activeReconciliation.id, {
+        imported_transaction_id: Number(importedTransactionId),
+        journal_entry_line_id: Number(journalEntryLineId),
+      });
+      setReconBankSelection([]);
+      setReconBookSelection([]);
+      await reloadActiveReconciliation();
+    } catch {
+      setReconciliationError("Unable to match transactions.");
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  const handleReconcileExclude = async () => {
+    if (!activeReconciliation?.id) return;
+    const importedTransactionId = reconBankSelection[0];
+    if (!importedTransactionId) return;
+    if (reconMatchByBank[String(importedTransactionId)]) return;
+    setReconciliationLoading(true);
+    setReconciliationError("");
+    try {
+      await excludeReconciliationItem(activeReconciliation.id, {
+        imported_transaction_id: Number(importedTransactionId),
+      });
+      setReconBankSelection([]);
+      await reloadActiveReconciliation();
+    } catch {
+      setReconciliationError("Unable to exclude bank row.");
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  const handleReconcileUnmatch = async (matchId) => {
+    if (!activeReconciliation?.id || !matchId) return;
+    setReconciliationLoading(true);
+    setReconciliationError("");
+    try {
+      await removeReconciliationMatch(activeReconciliation.id, { match_id: Number(matchId) });
+      await reloadActiveReconciliation();
+    } catch {
+      setReconciliationError("Unable to remove match.");
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  const handleReconcileComplete = async () => {
+    if (!activeReconciliation?.id) return;
+    if (!reconciliationSummary.isBalanced) return;
+    setReconciliationLoading(true);
+    setReconciliationError("");
+    try {
+      await completeReconciliation(activeReconciliation.id);
+      await reloadActiveReconciliation();
+    } catch {
+      setReconciliationError("Reconciliation could not be completed.");
+    } finally {
+      setReconciliationLoading(false);
     }
   };
 
@@ -1222,6 +1503,27 @@ function Accounting() {
     });
   };
 
+  const renderReconAmount = (value) => {
+    const normalized = parseNumber(value);
+    return (
+      <Typography
+        variant="body2"
+        sx={{
+          color: normalized < 0 ? "error.main" : normalized > 0 ? "success.main" : "text.secondary",
+          fontFamily: "monospace",
+          fontSize: 13,
+        }}
+      >
+        {formatMoneyWithSign(normalized)}
+      </Typography>
+    );
+  };
+  const reconciliationBankRowsCount = reconciliationBankRows.length;
+  const reconciliationBookRowsCount = reconciliationBookRows.length;
+  const reconciliationHasData = Boolean(activeReconciliation);
+  const canMatchSelection = reconBankSelection.length === 1 && reconBookSelection.length === 1;
+  const canExcludeSelection = reconBankSelection.length === 1 && !reconMatchByBank[String(reconBankSelection[0])];
+
   if (role !== "landlord") {
     return (
       <Paper sx={{ p: 2 }}>
@@ -1398,6 +1700,9 @@ function Accounting() {
               </Button>
               <Button size="small" variant="outlined" color="info" onClick={openRuleManager}>
                 Manage Rules
+              </Button>
+              <Button size="small" variant="outlined" sx={{ borderColor: "success.main", color: "success.main" }} onClick={openReconcileStart}>
+                Reconcile
               </Button>
               <Button size="small" sx={{ ml: "auto" }} onClick={loadTransactions} startIcon={<Refresh />}>
                 Refresh
@@ -2218,6 +2523,315 @@ function Accounting() {
           </Box>
         </Paper>
       ) : null}
+
+      <Dialog open={showReconcileStart} onClose={closeReconcileStart} fullWidth maxWidth="sm">
+        <DialogTitle>Start Reconciliation</DialogTitle>
+        <DialogContent sx={{ display: "grid", gap: 1, pt: 1 }}>
+          {reconciliationError ? <Alert severity="error">{reconciliationError}</Alert> : null}
+          <FormControl fullWidth size="small">
+            <InputLabel>Bank Account</InputLabel>
+            <Select
+              value={reconciliationForm.account_id}
+              label="Bank Account"
+              onChange={(e) =>
+                setReconciliationForm((prev) => ({ ...prev, account_id: e.target.value }))
+              }
+            >
+              {reconciliationAccounts.map((account) => (
+                <MenuItem key={account.id} value={String(account.id)}>
+                  {account.account_code ? `${account.account_code} · ` : ""}
+                  {account.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            type="date"
+            label="Start Date"
+            value={reconciliationForm.start_date}
+            onChange={(e) =>
+              setReconciliationForm((prev) => ({ ...prev, start_date: e.target.value }))
+            }
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="End Date"
+            value={reconciliationForm.end_date}
+            onChange={(e) => setReconciliationForm((prev) => ({ ...prev, end_date: e.target.value }))}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Statement Ending Balance"
+            value={reconciliationForm.statement_ending_balance}
+            onChange={(e) =>
+              setReconciliationForm((prev) => ({ ...prev, statement_ending_balance: e.target.value }))
+            }
+            InputProps={{
+              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeReconcileStart}>Cancel</Button>
+          <Button
+            variant="contained"
+            sx={{ bgcolor: accent }}
+            onClick={startReconciliation}
+            disabled={reconciliationLoading}
+          >
+            {reconciliationLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+            Start Reconciliation
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={showReconciliationWorkspace}
+        onClose={closeReconciliationWorkspace}
+        fullWidth
+        maxWidth="xl"
+        PaperProps={{ sx: { maxHeight: "94vh" } }}
+      >
+        <DialogTitle>Reconciliation Workspace</DialogTitle>
+        <DialogContent dividers sx={{ display: "grid", gap: 1.5 }}>
+          {reconciliationError ? <Alert severity="error">{reconciliationError}</Alert> : null}
+          {!reconciliationHasData ? (
+            <Alert severity="info">No reconciliation loaded.</Alert>
+          ) : null}
+          {reconciliationHasData ? (
+            <>
+              <Paper variant="outlined" sx={{ p: 1.2, display: "grid", gap: 0.8 }}>
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  Statement Balance: {money(reconciliationSummary.statementBalance)} | Book Balance:{" "}
+                  {money(reconciliationSummary.bookBalance)}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    color: reconciliationSummary.isBalanced ? "success.main" : "error.main",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  Difference: {formatMoneyWithSign(reconciliationSummary.difference)}
+                </Typography>
+                <Typography variant="body2">
+                  Matched: {reconciliationSummary.matchedCount} | Bank Unmatched:{" "}
+                  {reconciliationSummary.unmatchedBankCount} | Book Unmatched:{" "}
+                  {reconciliationSummary.unmatchedBookCount}
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    sx={{ bgcolor: accent }}
+                    onClick={reloadActiveReconciliation}
+                    disabled={reconciliationLoading}
+                  >
+                    {reconciliationLoading ? <CircularProgress size={14} sx={{ mr: 1 }} /> : <Refresh fontSize="small" />}
+                    Refresh
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    sx={{ bgcolor: reconciliationSummary.isBalanced ? "success.main" : "text.disabled" }}
+                    color={reconciliationSummary.isBalanced ? "success" : "inherit"}
+                    disabled={!reconciliationSummary.isBalanced || reconciliationLoading}
+                    onClick={handleReconcileComplete}
+                  >
+                    {reconciliationLoading ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
+                    Complete
+                  </Button>
+                </Box>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ p: 1 }}>
+                <Typography sx={{ fontWeight: 700, mb: 1 }}>Matching Actions</Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    sx={{ bgcolor: "success.main" }}
+                    disabled={!canMatchSelection || reconciliationLoading}
+                    onClick={handleReconcileMatch}
+                  >
+                    {reconciliationLoading ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
+                    Match Selected
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    sx={{ bgcolor: "warning.main" }}
+                    disabled={!canExcludeSelection || reconciliationLoading}
+                    onClick={handleReconcileExclude}
+                  >
+                    {reconciliationLoading ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
+                    Exclude
+                  </Button>
+                </Box>
+              </Paper>
+
+              <Grid container spacing={1.5}>
+                <Grid item xs={12} md={6}>
+                  <Paper variant="outlined" sx={{ p: 1 }}>
+                    <Typography sx={{ mb: 1, fontWeight: 700 }}>
+                      Bank Transactions ({reconciliationSummary.unmatchedBankCount} unmatched)
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={headerCellStyle}></TableCell>
+                            <TableCell sx={headerCellStyle}>Date</TableCell>
+                            <TableCell sx={headerCellStyle}>Description</TableCell>
+                            <TableCell sx={headerCellStyle} align="right">
+                              Amount
+                            </TableCell>
+                            <TableCell sx={headerCellStyle}>Status</TableCell>
+                            <TableCell sx={headerCellStyle} align="right">
+                              Actions
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {reconciliationBankRowsCount === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} sx={{ textAlign: "center", color: "text.secondary" }}>
+                                No bank rows in this reconciliation.
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                          {reconciliationBankRows.map((row) => {
+                            const rowId = String(row.id || row.imported_transaction || "");
+                            const rowMatch = reconMatchByBank[rowId];
+                            const isMatched = Boolean(rowMatch);
+                            const isExcluded = rowMatch?.match_type === "excluded";
+                            return (
+                              <TableRow key={rowId} sx={{ opacity: isMatched ? 0.8 : 1 }}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={reconBankSelection.includes(rowId)}
+                                    disabled={isMatched}
+                                    onChange={() => {
+                                      if (isMatched) return;
+                                      toggleReconBankSelection(rowId);
+                                    }}
+                                  />
+                                  {isMatched ? <CheckCircle color="success" fontSize="small" sx={{ ml: 0.4 }} /> : null}
+                                </TableCell>
+                                <TableCell>{toDateStr(row.date || row.entry_date || row.transaction_date)}</TableCell>
+                                <TableCell>{row.description || row.memo || "-"}</TableCell>
+                                <TableCell align="right">{renderReconAmount(parseNumber(row.amount || 0))}</TableCell>
+                                <TableCell>
+                                  {isMatched ? (
+                                    <Chip
+                                      size="small"
+                                      color={isExcluded ? "default" : "success"}
+                                      label={isExcluded ? "Excluded" : "Matched"}
+                                    />
+                                  ) : (
+                                    <Chip size="small" label="Unmatched" />
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {isMatched ? (
+                                    <Button
+                                      size="small"
+                                      onClick={() => handleReconcileUnmatch(rowMatch.id)}
+                                      disabled={reconciliationLoading}
+                                    >
+                                      Unmatch
+                                    </Button>
+                                  ) : null}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper variant="outlined" sx={{ p: 1 }}>
+                    <Typography sx={{ mb: 1, fontWeight: 700 }}>
+                      Book Entries ({reconciliationSummary.unmatchedBookCount} unmatched)
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={headerCellStyle}></TableCell>
+                            <TableCell sx={headerCellStyle}>Date</TableCell>
+                            <TableCell sx={headerCellStyle}>Memo</TableCell>
+                            <TableCell sx={headerCellStyle} align="right">
+                              Amount
+                            </TableCell>
+                            <TableCell sx={headerCellStyle} align="right">
+                              Actions
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {reconciliationBookRowsCount === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} sx={{ textAlign: "center", color: "text.secondary" }}>
+                                No book lines in this reconciliation.
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                          {reconciliationBookRows.map((line) => {
+                            const rowId = String(line.id || line.journal_entry_line || "");
+                            const rowMatch = reconMatchByBookLine[rowId];
+                            const isMatched = Boolean(rowMatch);
+                            const amount = parseNumber(line.debit_amount) - parseNumber(line.credit_amount);
+                            return (
+                              <TableRow key={rowId} sx={{ opacity: isMatched ? 0.8 : 1 }}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={reconBookSelection.includes(rowId)}
+                                    disabled={isMatched}
+                                    onChange={() => {
+                                      if (isMatched) return;
+                                      toggleReconBookSelection(rowId);
+                                    }}
+                                  />
+                                  {isMatched ? <CheckCircle color="success" fontSize="small" sx={{ ml: 0.4 }} /> : null}
+                                </TableCell>
+                                <TableCell>{toDateStr(line.entry_date || line.date || line.transaction_date)}</TableCell>
+                                <TableCell>{line.memo || line.description || line.journal_entry?.memo || "-"}</TableCell>
+                                <TableCell align="right">{renderReconAmount(amount)}</TableCell>
+                                <TableCell align="right">
+                                  {isMatched ? (
+                                    <Button
+                                      size="small"
+                                      onClick={() => handleReconcileUnmatch(rowMatch.id)}
+                                      disabled={reconciliationLoading}
+                                    >
+                                      Unmatch
+                                    </Button>
+                                  ) : null}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                </Grid>
+              </Grid>
+            </>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeReconciliationWorkspace}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={showImportDialog} onClose={closeImportDialog} fullWidth maxWidth="md">
         <DialogTitle>Import Transactions</DialogTitle>
