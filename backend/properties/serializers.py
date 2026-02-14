@@ -18,7 +18,10 @@ from .models import (
     Document,
     Expense,
     RentLedgerEntry,
+    Transaction,
     LateFeeRule,
+    OwnerStatement,
+    AccountingCategory,
 )
 
 
@@ -435,10 +438,47 @@ class RentLedgerEntrySerializer(serializers.ModelSerializer):
 
 
 class LateFeeRuleSerializer(serializers.ModelSerializer):
-    property_detail = PropertySerializer(source="property", read_only=True)
-
     class Meta:
         model = LateFeeRule
         fields = "__all__"
         read_only_fields = ["organization"]
+
+
+class AccountingCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountingCategory
+        fields = "__all__"
+        read_only_fields = ["organization"]
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    category_detail = AccountingCategorySerializer(source="category", read_only=True)
+    property_detail = PropertySerializer(source="property", read_only=True)
+    unit_detail = UnitSerializer(source="unit", read_only=True)
+    tenant_detail = TenantSerializer(source="tenant", read_only=True)
+    lease_detail = LeaseSerializer(source="lease", read_only=True)
+    created_by_detail = UserSummarySerializer(source="created_by", read_only=True)
+
+    class Meta:
+        model = Transaction
+        fields = "__all__"
+        read_only_fields = ["organization"]
+
+    def validate(self, attrs):
+        transaction_type = attrs.get("transaction_type")
+        amount = attrs.get("amount")
+        if amount is not None and amount < 0:
+            raise serializers.ValidationError({"amount": "Amount must be positive."})
+        if transaction_type in {Transaction.TYPE_EXPENSE} and amount is not None and amount < 0:
+            raise serializers.ValidationError({"amount": "Expense amount must be positive."})
+        return attrs
+
+
+class OwnerStatementSerializer(serializers.ModelSerializer):
+    property_detail = PropertySerializer(source="property", read_only=True)
+
+    class Meta:
+        model = OwnerStatement
+        fields = "__all__"
+        read_only_fields = ["organization", "generated_at", "generated_by"]
 

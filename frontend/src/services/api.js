@@ -131,16 +131,35 @@ export const deleteExpense = (id) => api.delete(`expenses/${id}/`);
 
 export const getRentLedgerEntries = (params = {}) =>
   api.get("rent-ledger/", { params });
-export const getLateFeeRules = () => api.get("late-fee-rules/");
-export const createLateFeeRule = (data) => api.post("late-fee-rules/", data);
+export const getLateFeeRules = () => api.get("accounting/late-fee-rules/");
+export const createLateFeeRule = (data) => api.post("accounting/late-fee-rules/", data);
 export const updateLateFeeRule = (id, data) =>
-  api.patch(`late-fee-rules/${id}/`, data);
-export const deleteLateFeeRule = (id) => api.delete(`late-fee-rules/${id}/`);
+  api.patch(`accounting/late-fee-rules/${id}/`, data);
+export const deleteLateFeeRule = (id) => api.delete(`accounting/late-fee-rules/${id}/`);
 
 export const generateAccountingCharges = () =>
   api.post("accounting/generate-charges/");
-export const getAccountingReports = (params = {}) =>
-  api.get("accounting/reports/", { params });
+export const getAccountingDashboard = (params = {}) =>
+  api.get("accounting/dashboard/", { params });
+export const getAccountingPnL = (params = {}) =>
+  api.get("accounting/pnl/", { params });
+export const getAccountingCashflow = (params = {}) =>
+  api.get("accounting/cashflow/", { params });
+export const getAccountingRentRoll = (params = {}) =>
+  api.get("accounting/rent-roll/", { params });
+export const getAccountingTaxReport = (params = {}) =>
+  api.get("accounting/tax-report/", { params });
+export const getAccountingCategories = (params = {}) =>
+  api.get("accounting/categories/", { params });
+export const getTransactions = (params = {}) =>
+  api.get("accounting/transactions/", { params });
+export const createTransaction = (data) => api.post("accounting/transactions/", data);
+export const updateTransaction = (id, data) => api.patch(`accounting/transactions/${id}/`, data);
+export const deleteTransaction = (id) => api.delete(`accounting/transactions/${id}/`);
+export const getOwnerStatements = (params = {}) =>
+  api.get("accounting/owner-statements/", { params });
+export const generateOwnerStatement = (data) =>
+  api.post("accounting/owner-statements/generate/", data);
 
 export const getPayments = () => api.get("payments/");
 export const getPayment = (id) => api.get(`payments/${id}/`);

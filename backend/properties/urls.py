@@ -7,7 +7,15 @@ from .payment_views import (
     PaymentHistoryView,
 )
 from .views import (
-    AccountingReportsView,
+    AccountingDashboardView,
+    AccountingCashflowView,
+    AccountingPnLView,
+    AccountingRentRollView,
+    AccountingTaxReportView,
+    AccountingCategoryViewSet,
+    TransactionViewSet,
+    OwnerStatementViewSet,
+    GenerateOwnerStatementView,
     DocumentViewSet,
     ExpenseViewSet,
     GenerateChargesView,
@@ -47,9 +55,12 @@ router.register("notifications", NotificationViewSet, basename="notification")
 router.register("messages", MessageViewSet, basename="message")
 router.register("screenings", ScreeningRequestViewSet, basename="screening")
 router.register("documents", DocumentViewSet, basename="document")
+router.register("accounting/categories", AccountingCategoryViewSet, basename="accounting-category")
+router.register("accounting/transactions", TransactionViewSet, basename="transaction")
+router.register("accounting/owner-statements", OwnerStatementViewSet, basename="owner-statement")
 router.register("expenses", ExpenseViewSet, basename="expense")
 router.register("rent-ledger", RentLedgerEntryViewSet, basename="rent-ledger")
-router.register("late-fee-rules", LateFeeRuleViewSet, basename="late-fee-rule")
+router.register("accounting/late-fee-rules", LateFeeRuleViewSet, basename="late-fee-rule")
 router.register(
     "maintenance-requests",
     MaintenanceRequestViewSet,
@@ -110,9 +121,34 @@ urlpatterns = [
         name="accounting-generate-charges",
     ),
     path(
-        "accounting/reports/",
-        AccountingReportsView.as_view(),
-        name="accounting-reports",
+        "accounting/dashboard/",
+        AccountingDashboardView.as_view(),
+        name="accounting-dashboard",
+    ),
+    path(
+        "accounting/pnl/",
+        AccountingPnLView.as_view(),
+        name="accounting-pnl",
+    ),
+    path(
+        "accounting/cashflow/",
+        AccountingCashflowView.as_view(),
+        name="accounting-cashflow",
+    ),
+    path(
+        "accounting/rent-roll/",
+        AccountingRentRollView.as_view(),
+        name="accounting-rent-roll",
+    ),
+    path(
+        "accounting/tax-report/",
+        AccountingTaxReportView.as_view(),
+        name="accounting-tax-report",
+    ),
+    path(
+        "accounting/owner-statements/generate/",
+        GenerateOwnerStatementView.as_view(),
+        name="accounting-generate-owner-statement",
     ),
 ]
 router.register("applications", RentalApplicationViewSet, basename="rental-application")

@@ -25,15 +25,13 @@ import { useTheme } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  deleteExpense,
   generateAccountingCharges,
-  getAccountingReports,
-  getExpenses,
-  getLeases,
+  getAccountingCategories,
+  getAccountingDashboard,
+  getAccountingRentRoll,
   getProperties,
-  getRentLedgerEntries,
-  getTenants,
-  getUnits,
+  getTransactions,
+  deleteTransaction,
 } from "../services/api";
 import { useUser } from "../services/userContext";
 
@@ -61,18 +59,22 @@ const formatDate = (value) =>
       })
     : "-";
 
+const asArray = (payload) => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  return payload.results || [];
+};
+
 function Accounting() {
   const { role } = useUser();
   const theme = useTheme();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [report, setReport] = useState(null);
-  const [expenses, setExpenses] = useState([]);
-  const [leases, setLeases] = useState([]);
-  const [units, setUnits] = useState([]);
+  const [rentRoll, setRentRoll] = useState({ rows: [], summary: {} });
+  const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [properties, setProperties] = useState([]);
-  const [tenants, setTenants] = useState([]);
-  const [ledgerEntries, setLedgerEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expensePropertyFilter, setExpensePropertyFilter] = useState("all");
@@ -81,30 +83,31 @@ function Accounting() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [
-        reportRes,
-        expensesRes,
-        leasesRes,
-        unitsRes,
-        propertiesRes,
-        tenantsRes,
-        ledgerRes,
-      ] = await Promise.all([
-        getAccountingReports(),
-        getExpenses(),
-        getLeases(),
-        getUnits(),
+      setError("");
+
+      const [dashboardRes, rentRollRes, propertiesRes, categoriesRes, expenseRes] = await Promise.all([
+        getAccountingDashboard(),
+        getAccountingRentRoll(),
         getProperties(),
-        getTenants(),
-        getRentLedgerEntries(),
+        getAccountingCategories(),
+        getTransactions({ transaction_type: "expense" }),
       ]);
-      setReport(reportRes.data || null);
-      setExpenses(expensesRes.data || []);
-      setLeases(leasesRes.data || []);
-      setUnits(unitsRes.data || []);
-      setProperties(propertiesRes.data || []);
-      setTenants(tenantsRes.data || []);
-      setLedgerEntries(ledgerRes.data || []);
+
+      setReport(dashboardRes.data || null);
+
+      const rentRollPayload = rentRollRes.data || {};
+      setRentRoll({
+        rows: Array.isArray(rentRollPayload)
+          ? rentRollPayload
+          : Array.isArray(rentRollPayload.rows)
+            ? rentRollPayload.rows
+            : [],
+        summary: rentRollPayload.summary || {},
+      });
+
+      setProperties(asArray(propertiesRes.data || []));
+      setCategories(asArray(categoriesRes.data || []));
+      setTransactions(asArray(expenseRes.data || []));
     } catch {
       setError("Unable to load accounting data.");
     } finally {
@@ -121,55 +124,39 @@ function Accounting() {
   }, [role]);
 
   const propertyMap = useMemo(
-    () => Object.fromEntries(properties.map((p) => [p.id, p])),
+    () => Object.fromEntries((properties || []).map((p) => [String(p.id), p])),
     [properties]
   );
-  const unitMap = useMemo(() => Object.fromEntries(units.map((u) => [u.id, u])), [units]);
-  const tenantMap = useMemo(
-    () => Object.fromEntries(tenants.map((t) => [t.id, t])),
-    [tenants]
-  );
+
+  const incomeVsExpenseTrend = report?.income_by_month || report?.monthly_trend || report?.income_expenses_by_month || [];
 
   const expenseRows = useMemo(() => {
-    return expenses.filter((expense) => {
+    return transactions.filter((expense) => {
       const propertyMatch =
         expensePropertyFilter === "all" ||
-        String(expense.property) === String(expensePropertyFilter);
+        String(expense.property_detail?.id || expense.property) === String(expensePropertyFilter);
       const categoryMatch =
-        expenseCategoryFilter === "all" || expense.category === expenseCategoryFilter;
+        expenseCategoryFilter === "all" ||
+        String(expense.category_detail?.id || expense.category || expense.category_id) === String(expenseCategoryFilter);
       return propertyMatch && categoryMatch;
     });
-  }, [expenseCategoryFilter, expensePropertyFilter, expenses]);
+  }, [transactions, expensePropertyFilter, expenseCategoryFilter]);
 
-  const activeLeases = useMemo(
-    () => leases.filter((lease) => lease.is_active),
-    [leases]
-  );
+  const rentRollRows = useMemo(() => rentRoll.rows || [], [rentRoll]);
 
-  const leaseRoll = useMemo(() => {
-    return activeLeases.map((lease) => {
-      const leaseEntries = ledgerEntries
-        .filter((entry) => entry.lease === lease.id)
-        .sort((a, b) => {
-          const ad = new Date(a.date).getTime();
-          const bd = new Date(b.date).getTime();
-          if (ad !== bd) return ad - bd;
-          return a.id - b.id;
-        });
-      const balance = leaseEntries.length ? Number(leaseEntries[leaseEntries.length - 1].balance || 0) : 0;
-      const lastPayment = leaseEntries
-        .filter((entry) => entry.entry_type === "payment")
-        .slice(-1)[0];
-      const status =
-        balance <= 0 ? "current" : balance < Number(lease.monthly_rent || 0) ? "partial" : "overdue";
-      return {
-        lease,
-        balance,
-        lastPaymentDate: lastPayment?.date || null,
-        status,
-      };
-    });
-  }, [activeLeases, ledgerEntries]);
+  const getStatusColor = (status) => {
+    switch (String(status || "").toLowerCase()) {
+      case "current":
+        return theme.palette.success.main;
+      case "late":
+        return theme.palette.warning.main;
+      case "delinquent":
+      case "overdue":
+        return theme.palette.error.main;
+      default:
+        return theme.palette.info.main;
+    }
+  };
 
   if (role !== "landlord") {
     return (
@@ -185,7 +172,9 @@ function Accounting() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
         <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}>
+          <Typography
+            sx={{ fontSize: 20, fontWeight: 600, color: "text.primary", letterSpacing: "-0.01em" }}
+          >
             Accounting
           </Typography>
           <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -193,7 +182,7 @@ function Accounting() {
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
-          <Button variant="outlined" size="small" onClick={() => navigate("/accounting/reports")}>
+          <Button variant="outlined" size="small" component={Link} to="/accounting/reports">
             Reports
           </Button>
           <Button variant="outlined" size="small" onClick={() => generateAccountingCharges().then(loadData)}>
@@ -201,13 +190,15 @@ function Accounting() {
           </Button>
         </Box>
       </Box>
-      {error ? <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert> : null}
-        <Paper sx={{ mb: 1.2 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            sx={{ borderBottom: "1px solid", borderColor: "divider" }}
-          >
+
+      {error ? (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <Paper sx={{ mb: 1.2 }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
           <Tab label="Overview" />
           <Tab label="Expenses" />
           <Tab label="Rent Roll" />
@@ -228,21 +219,17 @@ function Accounting() {
           >
             <Card>
               <CardContent>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-                  Total Income (YTD)
-                </Typography>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Income (YTD)</Typography>
                 <Typography sx={{ fontSize: 22, color: "success.main", fontWeight: 600 }}>
-                  {formatCurrency(report.total_income)}
+                  {formatCurrency(report.total_income_ytd || report.total_income || report.totalIncome)}
                 </Typography>
               </CardContent>
             </Card>
             <Card>
               <CardContent>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-                  Total Expenses (YTD)
-                </Typography>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Expenses (YTD)</Typography>
                 <Typography sx={{ fontSize: 22, color: "error.main", fontWeight: 600 }}>
-                  {formatCurrency(report.total_expenses)}
+                  {formatCurrency(report.total_expenses_ytd || report.total_expenses || report.totalExpenses)}
                 </Typography>
               </CardContent>
             </Card>
@@ -252,11 +239,11 @@ function Accounting() {
                 <Typography
                   sx={{
                     fontSize: 22,
-                    color: Number(report.net_operating_income) >= 0 ? "success.main" : "error.main",
+                    color: Number(report.net_operating_income || report.noi || 0) >= 0 ? "success.main" : "error.main",
                     fontWeight: 600,
                   }}
                 >
-                  {formatCurrency(report.net_operating_income)}
+                  {formatCurrency(report.net_operating_income || report.noi)}
                 </Typography>
               </CardContent>
             </Card>
@@ -269,13 +256,14 @@ function Accounting() {
               </CardContent>
             </Card>
           </Box>
+
           <Paper sx={{ p: 1.4 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 600, color: "text.primary", mb: 0.8 }}>
               Income vs Expenses by Month
             </Typography>
             <Box sx={{ width: "100%", height: 280 }}>
               <ResponsiveContainer>
-                <LineChart data={report.income_by_month || []}>
+                <LineChart data={incomeVsExpenseTrend}>
                   <XAxis
                     dataKey="month"
                     tick={{ fill: "text.secondary", fontSize: 11 }}
@@ -297,13 +285,7 @@ function Accounting() {
                       color: theme.palette.text.primary,
                     }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="income"
-                    stroke={theme.palette.success.main}
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  <Line type="monotone" dataKey="income" stroke={theme.palette.success.main} strokeWidth={2} dot={false} />
                   <Line
                     type="monotone"
                     dataKey="expenses"
@@ -347,21 +329,9 @@ function Accounting() {
                 onChange={(e) => setExpenseCategoryFilter(e.target.value)}
               >
                 <MenuItem value="all">All Categories</MenuItem>
-                {[
-                  "maintenance",
-                  "insurance",
-                  "taxes",
-                  "utilities",
-                  "management_fee",
-                  "legal",
-                  "advertising",
-                  "supplies",
-                  "landscaping",
-                  "capital_improvement",
-                  "other",
-                ].map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat.replaceAll("_", " ")}
+                {categories.map((cat) => (
+                  <MenuItem key={cat.id} value={String(cat.id)}>
+                    {cat.name}
                   </MenuItem>
                 ))}
               </Select>
@@ -387,20 +357,40 @@ function Accounting() {
                     sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 } }}
                   >
                     <TableCell>{formatDate(expense.date)}</TableCell>
-                    <TableCell>{propertyMap[expense.property]?.name || "-"}</TableCell>
                     <TableCell>
-                      <Chip label={expense.category.replaceAll("_", " ")} size="small" sx={{ fontSize: 11, textTransform: "capitalize" }} />
+                      {propertyMap[String(expense.property_detail?.id || expense.property)]?.name ||
+                        expense.property_name ||
+                        "-"}
                     </TableCell>
-                    <TableCell>{expense.vendor_name || "-"}</TableCell>
-                    <TableCell>{expense.description}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={expense.category_detail?.name || expense.category?.name || "Uncategorized"}
+                        size="small"
+                        sx={{ fontSize: 11, textTransform: "capitalize" }}
+                      />
+                    </TableCell>
+                    <TableCell>{expense.vendor || expense.vendor_name || "-"}</TableCell>
+                    <TableCell>{expense.description || "-"}</TableCell>
                     <TableCell sx={{ color: "error.main" }}>{formatCurrency(expense.amount)}</TableCell>
                     <TableCell align="right">
-                      <Button size="small" component={Link} to={`/accounting/expenses/${expense.id}/edit`}>Edit</Button>
-                      <Button size="small" color="error" onClick={() => deleteExpense(expense.id).then(loadData)}>Delete</Button>
+                      <Button size="small" component={Link} to={`/accounting/expenses/${expense.id}/edit`}>
+                        Edit
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => deleteTransaction(expense.id).then(loadData)}
+                      >
+                        Delete
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {expenseRows.length === 0 ? <TableRow><TableCell colSpan={7}>No expenses found.</TableCell></TableRow> : null}
+                {expenseRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>No expenses found.</TableCell>
+                  </TableRow>
+                ) : null}
               </TableBody>
             </Table>
           </TableContainer>
@@ -422,41 +412,43 @@ function Accounting() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {leaseRoll.map((row) => {
-                const unit = unitMap[row.lease.unit];
-                const property = unit ? propertyMap[unit.property] : null;
-                const tenant = tenantMap[row.lease.tenant];
-                const statusColor =
-                  row.status === "current"
-                    ? theme.palette.success.main
-                    : row.status === "overdue"
-                      ? theme.palette.error.main
-                      : theme.palette.warning.main;
+              {rentRollRows.map((row) => {
+                const leaseId = row.lease_id || row.lease?.id || row.lease;
+                const statusColor = getStatusColor(row.status);
+                const tenantName =
+                  row.tenant_name ||
+                  `${row.tenant_detail?.first_name || ""} ${row.tenant_detail?.last_name || ""}`.trim() ||
+                  row.tenant?.name ||
+                  "-";
                 return (
                   <TableRow
-                    key={row.lease.id}
-                    sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 }, cursor: "pointer" }}
-                    onClick={() => navigate(`/accounting/ledger/${row.lease.id}`)}
+                    key={row.id || leaseId}
+                    sx={{ "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13 }, cursor: leaseId ? "pointer" : "default" }}
+                    onClick={() => leaseId && navigate(`/accounting/ledger/${leaseId}`)}
                   >
-                    <TableCell>{property?.name || "-"}</TableCell>
-                    <TableCell>{unit?.unit_number || "-"}</TableCell>
-                    <TableCell>{tenant ? `${tenant.first_name} ${tenant.last_name}` : "-"}</TableCell>
-                    <TableCell>{formatCurrency(row.lease.monthly_rent)}</TableCell>
-                    <TableCell>{row.lastPaymentDate ? formatDate(row.lastPaymentDate) : "-"}</TableCell>
-                    <TableCell sx={{ color: row.balance <= 0 ? "success.main" : "error.main" }}>
-                      {formatCurrency(row.balance)}
+                    <TableCell>{row.property_name || row.property?.name || "-"}</TableCell>
+                    <TableCell>{row.unit_number || row.unit?.unit_number || "-"}</TableCell>
+                    <TableCell>{tenantName}</TableCell>
+                    <TableCell>{formatCurrency(row.monthly_rent)}</TableCell>
+                    <TableCell>{formatDate(row.last_payment_date || row.last_payment)}</TableCell>
+                    <TableCell sx={{ color: Number(row.balance_due || 0) <= 0 ? "success.main" : "error.main" }}>
+                      {formatCurrency(row.balance_due || 0)}
                     </TableCell>
                     <TableCell>
                       <Chip
                         size="small"
-                        label={row.status}
+                        label={row.status || "Current"}
                         sx={{ color: statusColor, bgcolor: `${statusColor}22`, textTransform: "capitalize", fontSize: 11 }}
                       />
                     </TableCell>
                   </TableRow>
                 );
               })}
-              {leaseRoll.length === 0 ? <TableRow><TableCell colSpan={7}>No active leases found.</TableCell></TableRow> : null}
+              {rentRollRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7}>No active leases found.</TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
         </TableContainer>

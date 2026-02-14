@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.models import User
+from django.contrib.auth.models import User
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -134,6 +134,7 @@ class Unit(models.Model):
 
     def __str__(self):
         return f"{self.property.name} - Unit {self.unit_number}"
+
 
 
 class Tenant(models.Model):
@@ -877,6 +878,142 @@ class RentLedgerEntry(models.Model):
         return f"Ledger {self.lease_id} {self.entry_type} {self.amount}"
 
 
+class AccountingCategory(models.Model):
+    TYPE_INCOME = "income"
+    TYPE_EXPENSE = "expense"
+    CATEGORY_TYPE_CHOICES = [
+        (TYPE_INCOME, "Income"),
+        (TYPE_EXPENSE, "Expense"),
+    ]
+
+    name = models.CharField(max_length=100)
+    category_type = models.CharField(max_length=10, choices=CATEGORY_TYPE_CHOICES)
+    is_system = models.BooleanField(default=False)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="accounting_categories",
+        null=True,
+        blank=True,
+    )
+    tax_deductible = models.BooleanField(default=True)
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.category_type})"
+
+
+class Transaction(models.Model):
+    TYPE_INCOME = "income"
+    TYPE_EXPENSE = "expense"
+    TRANSACTION_TYPE_CHOICES = [
+        (TYPE_INCOME, "Income"),
+        (TYPE_EXPENSE, "Expense"),
+    ]
+
+    RECURRENCE_MONTHLY = "monthly"
+    RECURRENCE_QUARTERLY = "quarterly"
+    RECURRENCE_ANNUALLY = "annually"
+    RECURRING_CHOICES = [
+        (RECURRENCE_MONTHLY, "Monthly"),
+        (RECURRENCE_QUARTERLY, "Quarterly"),
+        (RECURRENCE_ANNUALLY, "Annually"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+        null=True,
+        blank=True,
+    )
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPE_CHOICES)
+    category = models.ForeignKey(
+        AccountingCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="transactions",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    date = models.DateField()
+    description = models.CharField(max_length=255)
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
+    unit = models.ForeignKey(
+        Unit,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
+    lease = models.ForeignKey(
+        Lease,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
+    is_recurring = models.BooleanField(default=False)
+    recurring_frequency = models.CharField(
+        max_length=20,
+        choices=RECURRING_CHOICES,
+        null=True,
+        blank=True,
+    )
+    vendor = models.CharField(max_length=255, blank=True)
+    reference_number = models.CharField(max_length=120, blank=True)
+    receipt_document = models.ForeignKey(
+        "Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_receipts",
+    )
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_transactions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+
+    def save(self, *args, **kwargs):
+        if self.amount is not None and self.amount < 0:
+            self.amount = abs(self.amount)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.transaction_type.upper()} #{self.id}: {self.amount}"
+
+
 class LateFeeRule(models.Model):
     TYPE_FLAT = "flat"
     TYPE_PERCENTAGE = "percentage"
@@ -885,9 +1022,6 @@ class LateFeeRule(models.Model):
         (TYPE_PERCENTAGE, "Percentage"),
     ]
 
-    property = models.ForeignKey(
-        Property, on_delete=models.CASCADE, related_name="late_fee_rules"
-    )
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
@@ -895,11 +1029,13 @@ class LateFeeRule(models.Model):
         null=True,
         blank=True,
     )
+    name = models.CharField(max_length=120)
     grace_period_days = models.IntegerField(default=5)
     fee_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    fee_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
     max_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    apply_to_all = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -907,4 +1043,40 @@ class LateFeeRule(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"LateFeeRule {self.property.name} ({self.fee_type})"
+        return f"LateFeeRule {self.name} ({self.fee_type})"
+
+
+class OwnerStatement(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="owner_statements",
+    )
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="owner_statements",
+    )
+    period_start = models.DateField()
+    period_end = models.DateField()
+    total_income = models.DecimalField(max_digits=12, decimal_places=2)
+    total_expenses = models.DecimalField(max_digits=12, decimal_places=2)
+    net_income = models.DecimalField(max_digits=12, decimal_places=2)
+    generated_at = models.DateTimeField(auto_now_add=True)
+    generated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_owner_statements",
+    )
+    data = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-generated_at"]
+
+    def __str__(self):
+        return f"Statement #{self.id} for {self.property.name} ({self.period_start} to {self.period_end})"
+
+
+

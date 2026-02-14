@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Lease, Payment, UserProfile
+from .models import AccountingCategory, Lease, Payment, Transaction, UserProfile
 from .mixins import resolve_request_organization
 from .serializers import PaymentSerializer
 from .emails import send_payment_confirmation, send_payment_received_landlord
@@ -21,6 +21,46 @@ def _tenant_for_user(user):
     if profile.role != UserProfile.ROLE_TENANT:
         return None
     return profile.tenant_id
+
+
+def _get_rent_income_category(organization):
+    if organization:
+        category = AccountingCategory.objects.filter(
+            organization=organization,
+            name="Rent Income",
+            category_type=AccountingCategory.TYPE_INCOME,
+        ).first()
+        if category:
+            return category
+
+    return AccountingCategory.objects.filter(
+        name="Rent Income",
+        category_type=AccountingCategory.TYPE_INCOME,
+        organization__isnull=True,
+    ).first()
+
+
+def _create_payment_transaction(payment, user):
+    if not payment.organization or not payment.lease:
+        return
+    if Transaction.objects.filter(payment=payment).exists():
+        return
+
+    category = _get_rent_income_category(payment.organization)
+    Transaction.objects.create(
+        organization=payment.organization,
+        transaction_type=Transaction.TYPE_INCOME,
+        category=category,
+        amount=payment.amount,
+        date=payment.payment_date,
+        description=f"Rent payment for lease {payment.lease_id}",
+        property=payment.lease.unit.property if payment.lease.unit else None,
+        unit=payment.lease.unit,
+        tenant=payment.lease.tenant,
+        lease=payment.lease,
+        payment=payment,
+        created_by=user,
+    )
 
 
 class CreatePaymentIntentView(APIView):
@@ -140,6 +180,7 @@ class ConfirmStripePaymentView(APIView):
             organization=organization,
         ).first()
         if existing_payment:
+            _create_payment_transaction(existing_payment, request.user)
             return Response(PaymentSerializer(existing_payment).data)
 
         stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -169,6 +210,7 @@ class ConfirmStripePaymentView(APIView):
             stripe_payment_intent_id=payment_intent_id,
             notes="Stripe online rent payment",
         )
+        _create_payment_transaction(payment, request.user)
         unit = lease.unit
         property_obj = unit.property if unit else None
         tenant_name = (

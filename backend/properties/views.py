@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from collections import defaultdict
 from decimal import Decimal
 import logging
 import random
@@ -7,7 +8,8 @@ import uuid
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
-from django.db.models import Q, Sum
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, Count, Max
+from django.db.models.functions import Coalesce, TruncMonth
 from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -19,46 +21,52 @@ from rest_framework.views import APIView
 
 from .mixins import OrganizationQuerySetMixin, resolve_request_organization
 from .models import (
+    AccountingCategory,
+    Document,
+    Expense,
     Lease,
+    LateFeeRule,
     MaintenanceRequest,
     Message,
     Notification,
     Organization,
     OrganizationInvitation,
-    Document,
-    Expense,
-    LateFeeRule,
+    OwnerStatement,
     Payment,
     Property,
     RentalApplication,
     RentLedgerEntry,
     ScreeningRequest,
     Tenant,
+    Transaction,
     Unit,
     UserProfile,
 )
 from .permissions import IsLandlord, IsOrgAdmin
 from .serializers import (
+    AccountingCategorySerializer,
+    DocumentSerializer,
+    ExpenseSerializer,
     LeaseSerializer,
+    LateFeeRuleSerializer,
     MaintenanceRequestSerializer,
     MessageSerializer,
     NotificationSerializer,
-    DocumentSerializer,
-    ExpenseSerializer,
-    LateFeeRuleSerializer,
+    OrganizationInvitationSerializer,
+    OrganizationSerializer,
+    OwnerStatementSerializer,
     PaymentSerializer,
     PropertySerializer,
     RentLedgerEntrySerializer,
-    ScreeningRequestSerializer,
+    TransactionSerializer,
+    UserSummarySerializer,
     PublicUnitListingSerializer,
     RentalApplicationSerializer,
     RentalApplicationPublicSerializer,
-    TenantSerializer,
+    ScreeningRequestSerializer,
     TenantConsentSerializer,
+    TenantSerializer,
     UnitSerializer,
-    OrganizationSerializer,
-    UserSummarySerializer,
-    OrganizationInvitationSerializer,
 )
 from .signals import recalculate_lease_balances
 from .utils import generate_lease_document
@@ -72,6 +80,205 @@ from .emails import (
     send_maintenance_status_update,
     send_screening_consent_request,
 )
+
+
+DEFAULT_ACCOUNTING_CATEGORIES = [
+    ("Rent Income", AccountingCategory.TYPE_INCOME, True),
+    ("Late Fees", AccountingCategory.TYPE_EXPENSE, True),
+    ("Application Fees", AccountingCategory.TYPE_INCOME, True),
+    ("Other Income", AccountingCategory.TYPE_INCOME, True),
+    ("Repairs & Maintenance", AccountingCategory.TYPE_EXPENSE, True),
+    ("Insurance", AccountingCategory.TYPE_EXPENSE, True),
+    ("Property Tax", AccountingCategory.TYPE_EXPENSE, True),
+    ("Utilities", AccountingCategory.TYPE_EXPENSE, True),
+    ("Landscaping", AccountingCategory.TYPE_EXPENSE, True),
+    ("Management Fees", AccountingCategory.TYPE_EXPENSE, True),
+    ("Legal & Professional", AccountingCategory.TYPE_EXPENSE, True),
+    ("Advertising", AccountingCategory.TYPE_EXPENSE, True),
+    ("Supplies", AccountingCategory.TYPE_EXPENSE, True),
+    ("Capital Improvements", AccountingCategory.TYPE_EXPENSE, True),
+    ("Mortgage Interest", AccountingCategory.TYPE_EXPENSE, True),
+    ("HOA Fees", AccountingCategory.TYPE_EXPENSE, True),
+    ("Pest Control", AccountingCategory.TYPE_EXPENSE, True),
+    ("Cleaning", AccountingCategory.TYPE_EXPENSE, True),
+    ("Other Expense", AccountingCategory.TYPE_EXPENSE, True),
+]
+
+
+def ensure_default_categories(organization):
+    org = organization
+    for name, category_type, is_system in DEFAULT_ACCOUNTING_CATEGORIES:
+        category = AccountingCategory.objects.filter(
+            name=name,
+            category_type=category_type,
+            organization__isnull=True,
+        ).first()
+        if not category:
+            category, created = AccountingCategory.objects.get_or_create(
+                name=name,
+                category_type=category_type,
+                organization=None,
+                defaults={
+                    "is_system": True,
+                    "description": "System accounting category",
+                    "tax_deductible": category_type == AccountingCategory.TYPE_EXPENSE,
+                },
+            )
+            if created:
+                category = category
+
+        if org:
+            AccountingCategory.objects.get_or_create(
+                name=name,
+                category_type=category_type,
+                organization=org,
+                defaults={
+                    "is_system": False,
+                    "description": "Organization accounting category" if is_system else "",
+                    "tax_deductible": category_type == AccountingCategory.TYPE_EXPENSE,
+                },
+            )
+
+
+def resolve_accounting_category(organization, name, category_type):
+    queryset = AccountingCategory.objects.filter(
+        name=name,
+        category_type=category_type,
+        organization__isnull=True,
+    )
+    if organization:
+        organization_override = AccountingCategory.objects.filter(
+            name=name,
+            category_type=category_type,
+            organization=organization,
+        ).first()
+        if organization_override:
+            return organization_override
+    return queryset.first() or AccountingCategory.objects.create(
+        name=name,
+        category_type=category_type,
+        organization=None,
+        is_system=True,
+        tax_deductible=category_type == AccountingCategory.TYPE_EXPENSE,
+        description="System accounting category",
+    )
+
+
+def _month_range_bounds(target):
+    month_start = date(target.year, target.month, 1)
+    if target.month == 12:
+        next_month = date(target.year + 1, 1, 1)
+    else:
+        next_month = date(target.year, target.month + 1, 1)
+    return month_start, next_month - timedelta(days=1)
+
+
+def _parse_date_value(value):
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _month_labels(start_date, end_date):
+    months = []
+    cursor = date(start_date.year, start_date.month, 1)
+    end_marker = date(end_date.year, end_date.month, 1)
+    while cursor <= end_marker:
+        months.append((cursor.strftime("%Y-%m"), cursor.strftime("%b %Y")))
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+    return months
+
+
+def _to_float(value):
+    if value is None:
+        return 0.0
+    return float(value)
+
+
+def _coerce_int(value, default=None):
+    if value in (None, ""):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _month_start(target_date):
+    return date(target_date.year, target_date.month, 1)
+
+
+def _month_end(target_date):
+    if target_date.month == 12:
+        return date(target_date.year + 1, 1, 1) - timedelta(days=1)
+    return date(target_date.year, target_date.month + 1, 1) - timedelta(days=1)
+
+
+def _month_range(start_date, end_date):
+    months = []
+    cursor = _month_start(start_date)
+    final = _month_start(end_date)
+    while cursor <= final:
+        months.append(cursor)
+        cursor = _month_start(date(cursor.year + 1, 1, 1) if cursor.month == 12 else date(cursor.year, cursor.month + 1, 1))
+    return months
+
+
+def _resolve_reporting_category(organization, category_name, category_type):
+    if not organization:
+        return AccountingCategory.objects.filter(
+            name=category_name,
+            category_type=category_type,
+            organization__isnull=True,
+        ).first()
+    category = AccountingCategory.objects.filter(
+        organization=organization, name=category_name, category_type=category_type
+    ).first()
+    if category:
+        return category
+    category = AccountingCategory.objects.filter(
+        name=category_name,
+        category_type=category_type,
+        organization__isnull=True,
+    ).first()
+    if category:
+        return category
+    return AccountingCategory.objects.create(
+        organization=organization if organization else None,
+        name=category_name,
+        category_type=category_type,
+        is_system=False,
+        tax_deductible=category_type == AccountingCategory.TYPE_EXPENSE,
+    )
+
+
+def _latest_lease_balances(org, lease_ids):
+    if not lease_ids:
+        return {}
+    latest_ids = (
+        RentLedgerEntry.objects.filter(
+            organization=org, lease_id__in=lease_ids
+        )
+        .values("lease_id")
+        .annotate(last_id=Max("id"))
+        .values_list("lease_id", "last_id")
+    )
+    balance_map = {}
+    latest_lookup = {lease_id: entry_id for lease_id, entry_id in latest_ids}
+    if not latest_lookup:
+        return balance_map
+    balances = RentLedgerEntry.objects.filter(id__in=latest_lookup.values()).values_list(
+        "lease_id", "balance"
+    )
+    for lease_id, balance in balances:
+        balance_map[lease_id] = balance
+    return balance_map
 
 logger = logging.getLogger(__name__)
 
@@ -1799,6 +2006,685 @@ class DocumentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         )
 
 
+class AccountingCategoryViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = AccountingCategory.objects.all()
+    serializer_class = AccountingCategorySerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        organization = resolve_request_organization(self.request)
+        ensure_default_categories(organization)
+        if not organization:
+            return AccountingCategory.objects.none()
+        return AccountingCategory.objects.filter(
+            Q(organization__isnull=True) | Q(organization=organization)
+        )
+
+    def perform_create(self, serializer):
+        organization = resolve_request_organization(self.request)
+        if not organization:
+            raise PermissionDenied("You must belong to an organization.")
+        serializer.save(organization=organization, is_system=False)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        if instance and instance.is_system:
+            raise PermissionDenied("System categories cannot be edited.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.is_system:
+            raise PermissionDenied("System categories cannot be deleted.")
+        instance.delete()
+
+
+class TransactionViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
+    queryset = Transaction.objects.select_related(
+        "category",
+        "property",
+        "unit",
+        "tenant",
+        "lease",
+        "payment",
+        "created_by",
+    )
+    serializer_class = TransactionSerializer
+    permission_classes = [IsLandlord]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+        property_id = params.get("property")
+        if property_id:
+            queryset = queryset.filter(property_id=property_id)
+        unit_id = params.get("unit")
+        if unit_id:
+            queryset = queryset.filter(unit_id=unit_id)
+        tenant_id = params.get("tenant")
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        category_id = params.get("category")
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+        transaction_type = params.get("transaction_type")
+        if transaction_type:
+            queryset = queryset.filter(transaction_type=transaction_type)
+        date_from = params.get("date_from")
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        date_to = params.get("date_to")
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        organization = resolve_request_organization(request)
+        if not organization:
+            raise PermissionDenied("You must belong to an organization.")
+
+        payload = request.data
+        is_bulk = isinstance(payload, list)
+        serializer = self.get_serializer(data=payload, many=is_bulk)
+        serializer.is_valid(raise_exception=True)
+
+        if is_bulk:
+            rows = []
+            for row in serializer.validated_data:
+                rows.append(
+                    Transaction(
+                        organization=organization,
+                        created_by=request.user,
+                        category=row.get("category"),
+                        transaction_type=row.get("transaction_type"),
+                        amount=row.get("amount"),
+                        date=row.get("date"),
+                        description=row.get("description"),
+                        property=row.get("property"),
+                        unit=row.get("unit"),
+                        tenant=row.get("tenant"),
+                        lease=row.get("lease"),
+                        payment=row.get("payment"),
+                        is_recurring=row.get("is_recurring", False),
+                        recurring_frequency=row.get("recurring_frequency"),
+                        vendor=row.get("vendor", ""),
+                        reference_number=row.get("reference_number", ""),
+                        receipt_document=row.get("receipt_document"),
+                        notes=row.get("notes", ""),
+                    )
+                )
+            objs = Transaction.objects.bulk_create(rows)
+            response = self.get_serializer(objs, many=True)
+            return Response(response.data, status=status.HTTP_201_CREATED)
+
+        instance = serializer.save(organization=organization, created_by=request.user)
+        return Response(
+            self.get_serializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AccountingDashboardView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        ensure_default_categories(organization)
+
+        today = timezone.now().date()
+        month_start = date(today.year, today.month, 1)
+        ytd_start = date(today.year, 1, 1)
+        property_id = request.query_params.get("property_id")
+
+        base_transactions = Transaction.objects.filter(organization=organization)
+        if property_id:
+            base_transactions = base_transactions.filter(property_id=property_id)
+
+        month_txns = base_transactions.filter(date__gte=month_start, date__lte=today)
+        ytd_txns = base_transactions.filter(date__gte=ytd_start, date__lte=today)
+
+        total_income_current = (
+            month_txns.filter(transaction_type=Transaction.TYPE_INCOME).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+        total_expenses_current = (
+            month_txns.filter(transaction_type=Transaction.TYPE_EXPENSE).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+        total_income_ytd = (
+            ytd_txns.filter(transaction_type=Transaction.TYPE_INCOME).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+        total_expenses_ytd = (
+            ytd_txns.filter(transaction_type=Transaction.TYPE_EXPENSE).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+
+        rent_income_category = _resolve_reporting_category(
+            organization,
+            "Rent Income",
+            AccountingCategory.TYPE_INCOME,
+        )
+        paid_this_month = (
+            month_txns.filter(
+                transaction_type=Transaction.TYPE_INCOME,
+                category=rent_income_category,
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+        expected_monthly_rent = (
+            Lease.objects.filter(organization=organization, is_active=True).aggregate(
+                total=Sum("monthly_rent")
+            )["total"]
+            or Decimal("0.00")
+        )
+        rent_collection_rate = (
+            (paid_this_month / expected_monthly_rent * Decimal("100"))
+            if expected_monthly_rent > 0
+            else Decimal("0.00")
+        )
+
+        total_units = Unit.objects.filter(organization=organization).count() or 0
+        occupied_units = (
+            Lease.objects.filter(organization=organization, is_active=True)
+            .values("unit_id")
+            .distinct()
+            .count()
+        )
+        occupancy_rate = (
+            (Decimal(occupied_units) / Decimal(total_units) * Decimal("100"))
+            if total_units > 0
+            else Decimal("0.00")
+        )
+
+        outstanding_balances = Decimal("0.00")
+        for lease in Lease.objects.filter(organization=organization, is_active=True):
+            lease_payment = (
+                month_txns.filter(
+                    lease_id=lease.id,
+                    transaction_type=Transaction.TYPE_INCOME,
+                    category=rent_income_category,
+                ).aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            outstanding_balances += max(Decimal("0.00"), lease.monthly_rent - lease_payment)
+
+        trend_start = today.replace(day=1) - timedelta(days=365)
+        trend = []
+        for month_key, month_label in _month_labels(trend_start, today):
+            year_value, month_value = month_key.split("-", 1)
+            month_start_value = date(int(year_value), int(month_value), 1)
+            month_end_value = _month_end(month_start_value)
+            bucket = base_transactions.filter(date__gte=month_start_value, date__lte=month_end_value)
+            month_income = (
+                bucket.filter(transaction_type=Transaction.TYPE_INCOME).aggregate(
+                    total=Sum("amount")
+                )["total"]
+                or Decimal("0.00")
+            )
+            month_expenses = (
+                bucket.filter(transaction_type=Transaction.TYPE_EXPENSE).aggregate(
+                    total=Sum("amount")
+                )["total"]
+                or Decimal("0.00")
+            )
+            trend.append(
+                {
+                    "month": month_label,
+                    "income": _to_float(month_income),
+                    "expenses": _to_float(month_expenses),
+                }
+            )
+
+        top_expense_categories = (
+            base_transactions.filter(transaction_type=Transaction.TYPE_EXPENSE)
+            .values("category__name")
+            .annotate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))
+            .order_by("-total")[:5]
+        )
+
+        return Response(
+            {
+                "total_income_current_month": _to_float(total_income_current),
+                "total_expenses_current_month": _to_float(total_expenses_current),
+                "noi_current_month": _to_float(total_income_current - total_expenses_current),
+                "total_income_ytd": _to_float(total_income_ytd),
+                "total_expenses_ytd": _to_float(total_expenses_ytd),
+                "noi_ytd": _to_float(total_income_ytd - total_expenses_ytd),
+                "monthly_trend": trend,
+                "top_expense_categories": [
+                    {"category": row["category__name"] or "Uncategorized", "total": _to_float(row["total"])}
+                    for row in top_expense_categories
+                ],
+                "occupancy_rate": float(occupancy_rate),
+                "rent_collection_rate": float(rent_collection_rate),
+                "outstanding_balances": _to_float(outstanding_balances),
+            }
+        )
+
+
+class AccountingPnLView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        property_id = request.query_params.get("property_id")
+        date_from = _parse_date_value(request.query_params.get("date_from")) or date(
+            timezone.now().year,
+            1,
+            1,
+        )
+        date_to = _parse_date_value(request.query_params.get("date_to")) or timezone.now().date()
+
+        queryset = Transaction.objects.filter(
+            organization=organization,
+            date__gte=date_from,
+            date__lte=date_to,
+        )
+        if property_id:
+            queryset = queryset.filter(property_id=property_id)
+
+        income_lines = (
+            queryset.filter(transaction_type=Transaction.TYPE_INCOME)
+            .values("category__name")
+            .annotate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))
+            .order_by("category__name")
+        )
+        expense_lines = (
+            queryset.filter(transaction_type=Transaction.TYPE_EXPENSE)
+            .values("category__name")
+            .annotate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))
+            .order_by("category__name")
+        )
+
+        total_income = (
+            queryset.filter(transaction_type=Transaction.TYPE_INCOME).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+        total_expenses = (
+            queryset.filter(transaction_type=Transaction.TYPE_EXPENSE).aggregate(
+                total=Sum("amount")
+            )["total"]
+            or Decimal("0.00")
+        )
+
+        return Response(
+            {
+                "property_id": property_id,
+                "date_from": str(date_from),
+                "date_to": str(date_to),
+                "income": [
+                    {
+                        "category": row["category__name"] or "Uncategorized",
+                        "total": _to_float(row["total"]),
+                    }
+                    for row in income_lines
+                ],
+                "expenses": [
+                    {
+                        "category": row["category__name"] or "Uncategorized",
+                        "total": _to_float(row["total"]),
+                    }
+                    for row in expense_lines
+                ],
+                "net_income": _to_float(total_income - total_expenses),
+            }
+        )
+
+class AccountingCashflowView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        today = timezone.now().date()
+        start = date(today.year - 1, today.month, 1)
+        queryset = Transaction.objects.filter(
+            organization=organization,
+            date__gte=start,
+            date__lte=today,
+        )
+
+        cashflow = []
+        for month_key, month_label in _month_labels(start, today):
+            year_value, month_value = month_key.split("-", 1)
+            bucket_start = date(int(year_value), int(month_value), 1)
+            bucket_end = _month_end(bucket_start)
+            bucket = queryset.filter(date__gte=bucket_start, date__lte=bucket_end)
+            income = (
+                bucket.filter(transaction_type=Transaction.TYPE_INCOME).aggregate(
+                    total=Sum("amount")
+                )["total"]
+                or Decimal("0.00")
+            )
+            expense = (
+                bucket.filter(transaction_type=Transaction.TYPE_EXPENSE).aggregate(
+                    total=Sum("amount")
+                )["total"]
+                or Decimal("0.00")
+            )
+            cashflow.append(
+                {
+                    "month": month_label,
+                    "income": _to_float(income),
+                    "expense": _to_float(expense),
+                    "net": _to_float(income - expense),
+                }
+            )
+
+        return Response({"cashflow": cashflow})
+
+
+class AccountingRentRollView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        property_id = request.query_params.get("property_id")
+        rent_income_category = _resolve_reporting_category(
+            organization,
+            "Rent Income",
+            AccountingCategory.TYPE_INCOME,
+        )
+        now = timezone.now().date()
+        month_start = date(now.year, now.month, 1)
+
+        leases = Lease.objects.filter(organization=organization, is_active=True).select_related(
+            "tenant",
+            "unit",
+            "unit__property",
+        )
+        if property_id:
+            leases = leases.filter(unit__property_id=property_id)
+
+        rows = []
+        total_expected_rent = Decimal("0.00")
+        total_collected = Decimal("0.00")
+        total_outstanding = Decimal("0.00")
+
+        for lease in leases:
+            monthly_rent = lease.monthly_rent or Decimal("0.00")
+            total_expected_rent += monthly_rent
+
+            collected_this_month = (
+                Transaction.objects.filter(
+                    organization=organization,
+                    lease=lease,
+                    transaction_type=Transaction.TYPE_INCOME,
+                    category=rent_income_category,
+                    date__gte=month_start,
+                ).aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            collected_total = (
+                Transaction.objects.filter(
+                    organization=organization,
+                    lease=lease,
+                    transaction_type=Transaction.TYPE_INCOME,
+                    category=rent_income_category,
+                ).aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            total_collected += collected_this_month
+            balance_due = max(Decimal("0.00"), monthly_rent - collected_this_month)
+            total_outstanding += balance_due
+
+            last_payment = (
+                Transaction.objects.filter(
+                    organization=organization,
+                    lease=lease,
+                    transaction_type=Transaction.TYPE_INCOME,
+                    category=rent_income_category,
+                )
+                .order_by("-date", "-id")
+                .first()
+            )
+            last_payment_date = last_payment.date if last_payment else None
+            days_since_last = (now - last_payment_date).days if last_payment_date else None
+            if balance_due <= Decimal("0.00"):
+                status_label = "current"
+            elif days_since_last is not None and days_since_last >= 30:
+                status_label = "delinquent"
+            else:
+                status_label = "overdue"
+
+            rows.append(
+                {
+                    "tenant_name": f"{lease.tenant.first_name} {lease.tenant.last_name}".strip(),
+                    "property": lease.unit.property.name if lease.unit and lease.unit.property else "",
+                    "unit": lease.unit.unit_number if lease.unit else "",
+                    "monthly_rent": _to_float(monthly_rent),
+                    "last_payment_date": str(last_payment_date) if last_payment_date else None,
+                    "days_since_last_payment": days_since_last,
+                    "balance_due": _to_float(balance_due),
+                    "status": status_label,
+                    "collected_total": _to_float(collected_total),
+                }
+            )
+
+        collection_rate = (
+            (float(total_collected) / float(total_expected_rent) * 100.0)
+            if total_expected_rent > 0
+            else 0.0
+        )
+
+        return Response(
+            {
+                "rows": rows,
+                "summary": {
+                    "total_expected_rent": float(total_expected_rent),
+                    "total_collected": float(total_collected),
+                    "total_outstanding": float(total_outstanding),
+                    "collection_rate": collection_rate,
+                },
+            }
+        )
+
+
+class AccountingTaxReportView(APIView):
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        property_id = request.query_params.get("property_id")
+        try:
+            year = int(request.query_params.get("year") or timezone.now().year)
+        except ValueError:
+            year = timezone.now().year
+
+        queryset = Transaction.objects.filter(
+            organization=organization,
+            transaction_type=Transaction.TYPE_EXPENSE,
+            date__year=year,
+        )
+        if property_id:
+            queryset = queryset.filter(property_id=property_id)
+
+        rows = queryset.order_by("date").values(
+            "date",
+            "description",
+            "amount",
+            "vendor",
+            "property__name",
+            "category__name",
+            "category__tax_deductible",
+        )
+
+        line_items = []
+        for row in rows:
+            line_items.append(
+                {
+                    "date": row["date"].isoformat(),
+                    "description": row["description"],
+                    "amount": _to_float(row["amount"]),
+                    "vendor": row["vendor"],
+                    "property": row["property__name"],
+                    "category": row["category__name"],
+                    "tax_deductible": bool(row["category__tax_deductible"]),
+                }
+            )
+
+        category_totals = defaultdict(Decimal)
+        deductible_total = Decimal("0.00")
+        for row in line_items:
+            category_totals[row["category"] or "Uncategorized"] += Decimal(str(row["amount"]))
+            if row["tax_deductible"]:
+                deductible_total += Decimal(str(row["amount"]))
+
+        total_expense = sum((Decimal(str(item["amount"])) for item in line_items), Decimal("0.00"))
+
+        return Response(
+            {
+                "year": year,
+                "property_id": property_id,
+                "line_items": line_items,
+                "expenses_by_category": [
+                    {"category": category, "total": _to_float(total)}
+                    for category, total in sorted(category_totals.items())
+                ],
+                "total_deductible": _to_float(deductible_total),
+                "total_expenses": _to_float(total_expense),
+            }
+        )
+
+
+class OwnerStatementViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = OwnerStatement.objects.select_related("property", "generated_by")
+    serializer_class = OwnerStatementSerializer
+    permission_classes = [IsLandlord]
+
+
+class GenerateOwnerStatementView(APIView):
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        organization = resolve_request_organization(request)
+        if not organization:
+            return Response(
+                {"detail": "No organization assigned."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        property_id = request.data.get("property_id")
+        period_start = self._parse_date(request.data.get("period_start"))
+        period_end = self._parse_date(request.data.get("period_end"))
+        if not property_id or not period_start or not period_end:
+            return Response(
+                {"detail": "property_id, period_start, and period_end are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if period_end < period_start:
+            return Response(
+                {"detail": "period_end must be on or after period_start."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            property_obj = Property.objects.get(id=property_id, organization=organization)
+        except Property.DoesNotExist:
+            return Response({"property_id": "Property not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        queryset = Transaction.objects.filter(
+            organization=organization,
+            property=property_obj,
+            date__gte=period_start,
+            date__lte=period_end,
+        )
+
+        income_by_category = (
+            queryset.filter(transaction_type=Transaction.TYPE_INCOME)
+            .values("category__name")
+            .annotate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))
+            .order_by("category__name")
+        )
+        expense_by_category = (
+            queryset.filter(transaction_type=Transaction.TYPE_EXPENSE)
+            .values("category__name")
+            .annotate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))
+            .order_by("category__name")
+        )
+
+        total_income = (
+            queryset.filter(transaction_type=Transaction.TYPE_INCOME).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+        total_expenses = (
+            queryset.filter(transaction_type=Transaction.TYPE_EXPENSE).aggregate(total=Sum("amount"))[
+                "total"
+            ]
+            or Decimal("0.00")
+        )
+
+        statement = OwnerStatement.objects.create(
+            organization=organization,
+            property=property_obj,
+            period_start=period_start,
+            period_end=period_end,
+            total_income=total_income,
+            total_expenses=total_expenses,
+            net_income=total_income - total_expenses,
+            generated_by=request.user,
+            data={
+                "income_by_category": [
+                    {"category": row["category__name"], "total": _to_float(row["total"])}
+                    for row in income_by_category
+                ],
+                "expenses_by_category": [
+                    {"category": row["category__name"], "total": _to_float(row["total"])}
+                    for row in expense_by_category
+                ],
+            },
+        )
+        return Response(OwnerStatementSerializer(statement).data, status=status.HTTP_201_CREATED)
+
+    def _parse_date(self, value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
 class ExpenseViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = Expense.objects.select_related("property", "unit", "receipt", "created_by")
     serializer_class = ExpenseSerializer
@@ -1855,7 +2741,7 @@ class RentLedgerEntryViewSet(OrganizationQuerySetMixin, viewsets.ReadOnlyModelVi
 
 
 class LateFeeRuleViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
-    queryset = LateFeeRule.objects.select_related("property")
+    queryset = LateFeeRule.objects.all()
     serializer_class = LateFeeRuleSerializer
     permission_classes = [IsLandlord]
 
@@ -1899,7 +2785,6 @@ class GenerateChargesView(APIView):
 
             rule = (
                 LateFeeRule.objects.filter(
-                    property=lease.unit.property,
                     organization=organization,
                     is_active=True,
                 )
@@ -1970,114 +2855,6 @@ class GenerateChargesView(APIView):
                 "late_fees_created": late_fees_created,
             }
         )
-
-
-class AccountingReportsView(APIView):
-    permission_classes = [IsLandlord]
-
-    def get(self, request):
-        today = timezone.now().date()
-        property_id = request.query_params.get("property_id")
-        date_from = request.query_params.get("date_from")
-        date_to = request.query_params.get("date_to")
-
-        start_date = self._parse_date(date_from) or date(today.year, 1, 1)
-        end_date = self._parse_date(date_to) or today
-        org = resolve_request_organization(request)
-
-        payments = Payment.objects.filter(
-            organization=org,
-            status=Payment.STATUS_COMPLETED,
-            payment_date__gte=start_date,
-            payment_date__lte=end_date,
-        ).select_related("lease__unit__property")
-        expenses = Expense.objects.filter(
-            organization=org,
-            date__gte=start_date,
-            date__lte=end_date,
-        ).select_related("property")
-        charges = RentLedgerEntry.objects.filter(
-            organization=org,
-            entry_type__in=[RentLedgerEntry.TYPE_CHARGE, RentLedgerEntry.TYPE_LATE_FEE],
-            date__gte=start_date,
-            date__lte=end_date,
-        ).select_related("lease__unit__property")
-
-        if property_id:
-            payments = payments.filter(lease__unit__property_id=property_id)
-            expenses = expenses.filter(property_id=property_id)
-            charges = charges.filter(lease__unit__property_id=property_id)
-
-        total_income = payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-        total_expenses = expenses.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-        noi = total_income - total_expenses
-
-        income_by_month_map = {}
-        for payment in payments:
-            key = payment.payment_date.strftime("%Y-%m")
-            label = payment.payment_date.strftime("%b %Y")
-            if key not in income_by_month_map:
-                income_by_month_map[key] = {
-                    "month": label,
-                    "income": Decimal("0.00"),
-                    "expenses": Decimal("0.00"),
-                }
-            income_by_month_map[key]["income"] += payment.amount
-        for expense in expenses:
-            key = expense.date.strftime("%Y-%m")
-            label = expense.date.strftime("%b %Y")
-            if key not in income_by_month_map:
-                income_by_month_map[key] = {
-                    "month": label,
-                    "income": Decimal("0.00"),
-                    "expenses": Decimal("0.00"),
-                }
-            income_by_month_map[key]["expenses"] += expense.amount
-
-        income_by_month = [
-            {
-                "month": v["month"],
-                "income": float(v["income"]),
-                "expenses": float(v["expenses"]),
-            }
-            for _, v in sorted(income_by_month_map.items(), key=lambda item: item[0])
-        ]
-
-        category_totals = {}
-        for expense in expenses:
-            category_totals.setdefault(expense.category, Decimal("0.00"))
-            category_totals[expense.category] += expense.amount
-        expenses_by_category = [
-            {"category": k, "total": float(v)} for k, v in sorted(category_totals.items())
-        ]
-
-        total_charges = charges.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-        rent_collection_rate = (
-            (total_income / total_charges) * Decimal("100.00")
-            if total_charges > 0
-            else Decimal("0.00")
-        )
-
-        return Response(
-            {
-                "total_income": float(total_income),
-                "total_expenses": float(total_expenses),
-                "net_operating_income": float(noi),
-                "income_by_month": income_by_month,
-                "expenses_by_category": expenses_by_category,
-                "rent_collection_rate": float(rent_collection_rate),
-                "date_from": str(start_date),
-                "date_to": str(end_date),
-            }
-        )
-
-    def _parse_date(self, value):
-        if not value:
-            return None
-        try:
-            return date.fromisoformat(value)
-        except ValueError:
-            return None
 
 
 class MeView(APIView):
@@ -2232,5 +3009,6 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
 
 
