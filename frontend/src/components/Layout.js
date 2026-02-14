@@ -6,20 +6,21 @@ import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import DescriptionIcon from "@mui/icons-material/Description";
+import KeyIcon from "@mui/icons-material/Key";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
 import FolderIcon from "@mui/icons-material/Folder";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
-import SettingsIcon from "@mui/icons-material/Settings";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import {
   Avatar,
   Box,
-  Button,
   Collapse,
   Divider,
   Drawer,
@@ -117,6 +118,7 @@ const landlordGroups = [
   {
     key: "leasing",
     label: "Leasing",
+    headerIcon: <KeyIcon />,
     items: [
       { label: "Listings", path: "/listings", icon: <HomeWorkIcon /> },
       { label: "Applications", path: "/applications", icon: <AssignmentIcon /> },
@@ -128,6 +130,7 @@ const landlordGroups = [
   {
     key: "operations",
     label: "Operations",
+    headerIcon: <SettingsSuggestIcon />,
     items: [
       { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
       { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
@@ -138,6 +141,7 @@ const landlordGroups = [
   {
     key: "finance",
     label: "Finance",
+    headerIcon: <CurrencyExchangeIcon />,
     items: [
       { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
       { label: "Accounting", path: "/accounting", icon: <AccountBalanceIcon /> },
@@ -149,7 +153,7 @@ function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, toggleTheme } = useThemeMode();
-  const { role, user, clearUser, isOrgAdmin, organization } = useUser();
+  const { role, user, clearUser, organization } = useUser();
   const isDark = mode === "dark";
   const theme = useTheme();
   const [expandedGroups, setExpandedGroups] = useState(() => {
@@ -203,12 +207,14 @@ function Layout({ children }) {
   };
 
   const navItemSx = (active) => ({
-    borderRadius: "6px",
-    ml: 0.5,
-    mr: 0.5,
-    px: 2,
-    py: 0.75,
-    minHeight: 38,
+    borderRadius: "8px",
+    minHeight: 44,
+    pl: "16px",
+    pr: "12px",
+    py: "8px",
+    mx: "8px",
+    gap: "12px",
+    alignItems: "center",
     backgroundColor: active ? alpha(theme.palette.primary.main, isDark ? 0.1 : 0.08) : "transparent",
     borderLeft: active ? "2px solid" : "2px solid transparent",
     borderColor: active ? "primary.main" : "transparent",
@@ -221,33 +227,46 @@ function Layout({ children }) {
   });
 
   const groupHeaderSx = {
-    px: 2,
-    py: 0.35,
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: "6px",
-    "&:hover": {
-      backgroundColor: "transparent",
-    },
+    pl: "16px",
+    pr: "12px",
+    py: "8px",
+    mx: "8px",
+    gap: "12px",
+    alignItems: "center",
+    "&:hover": { backgroundColor: alpha(theme.palette.text.secondary, isDark ? 0.06 : 0.04) },
+  };
+
+  const navTextTypographyProps = {
+    fontSize: 14,
+    fontWeight: 400,
+    lineHeight: 1.2,
   };
 
   const groupHeaderTextSx = {
-    fontSize: 11,
-    fontWeight: 500,
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
-    color: "#6b7280",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#9ca3af",
+  };
+
+  const subItemTextTypographyProps = {
+    fontSize: 13,
+    fontWeight: 400,
+    color: "#878C9E",
+    lineHeight: 1.2,
   };
 
   const renderNavItem = (item) => {
     const active = isActive(item.path);
     return (
-      <ListItem disablePadding sx={{ px: 0.6, py: 0.1 }}>
+      <ListItem disablePadding sx={{ px: 0, py: 0 }}>
         <ListItemButton component={Link} to={item.path} sx={navItemSx(active)}>
           <ListItemIcon
             sx={{
               color: active ? "text.primary" : "text.secondary",
-              minWidth: 32,
-              "& svg": { fontSize: 18 },
+              minWidth: 24,
+              "& svg": { fontSize: 24 },
             }}
           >
             {item.icon}
@@ -255,8 +274,7 @@ function Layout({ children }) {
           <ListItemText
             primary={item.label}
             primaryTypographyProps={{
-              fontSize: 13,
-              fontWeight: 400,
+              ...navTextTypographyProps,
               color: active ? "text.primary" : "text.secondary",
             }}
           />
@@ -315,7 +333,7 @@ function Layout({ children }) {
             ) : null}
           </Toolbar>
           <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
-            <List sx={{ py: 1.3, minHeight: 0 }}>
+            <List sx={{ py: 0, minHeight: 0 }}>
               {role === "tenant"
                 ? [topNavItems[0], ...tenantNavItems].map((item) => renderNavItem(item))
                 : [topNavItems[0]].map((item) => renderNavItem(item))}
@@ -323,25 +341,36 @@ function Layout({ children }) {
 
             {role === "tenant" ? null : (
               <>
-                {landlordGroups.map((group, groupIndex) => {
+                {landlordGroups.map((group) => {
                 const isExpanded = expandedGroups[group.key];
                 return (
                   <Box key={group.key}>
-                    <List sx={{ py: 0.2, mt: 1.5 }}>
-                      <ListItem disablePadding sx={{ px: 0.6, py: 0.05 }}>
+                    <Divider sx={{ borderColor: "rgba(255,255,255,0.06)", mx: "8px", my: 0.5 }} />
+                    <List sx={{ py: 0, mt: 0 }}>
+                      <ListItem disablePadding sx={{ px: 0, py: 0 }}>
                         <ListItemButton
                           disableRipple
                           onClick={() => toggleGroup(group.key)}
                           sx={groupHeaderSx}
                         >
+                          <ListItemIcon
+                            sx={{
+                              color: "#6b7280",
+                              minWidth: 24,
+                              "& svg": { fontSize: 24 },
+                            }}
+                          >
+                            {group.headerIcon}
+                          </ListItemIcon>
                           <ListItemText
                             primary={group.label}
                             primaryTypographyProps={groupHeaderTextSx}
+                            sx={{ mr: 0.7 }}
                           />
                           {isExpanded ? (
-                            <ExpandLessIcon sx={{ fontSize: 16, color: "#6b7280" }} />
+                            <ExpandLessIcon sx={{ fontSize: 20, color: "#6b7280" }} />
                           ) : (
-                            <ExpandMoreIcon sx={{ fontSize: 16, color: "#6b7280" }} />
+                            <ExpandMoreIcon sx={{ fontSize: 20, color: "#6b7280" }} />
                           )}
                         </ListItemButton>
                       </ListItem>
@@ -350,21 +379,17 @@ function Layout({ children }) {
                           {group.items.map((item) => {
                             const active = isActive(item.path);
                             return (
-                              <ListItem
-                                key={item.path}
-                                disablePadding
-                                sx={{ px: 0.6, py: 0.1, pl: "22px" }}
-                              >
+                              <ListItem key={item.path} disablePadding sx={{ px: 0, py: 0 }}>
                                 <ListItemButton
                                   component={Link}
                                   to={item.path}
-                                  sx={navItemSx(active)}
+                                  sx={{ ...navItemSx(active), pl: "40px" }}
                                 >
                                   <ListItemIcon
                                     sx={{
                                       color: active ? "text.primary" : "text.secondary",
-                                      minWidth: 32,
-                                      "& svg": { fontSize: 18 },
+                                      minWidth: 24,
+                                      "& svg": { fontSize: 24 },
                                     }}
                                   >
                                     {item.icon}
@@ -372,9 +397,9 @@ function Layout({ children }) {
                                   <ListItemText
                                     primary={item.label}
                                     primaryTypographyProps={{
-                                      fontSize: 13,
-                                      fontWeight: 400,
-                                      color: active ? "text.primary" : "text.secondary",
+                                      ...subItemTextTypographyProps,
+                                      color: active ? "#fff" : "#878C9E",
+                                      fontWeight: active ? 500 : 400,
                                     }}
                                   />
                                 </ListItemButton>
@@ -384,84 +409,52 @@ function Layout({ children }) {
                         </List>
                       </Collapse>
                     </List>
-                    {groupIndex !== landlordGroups.length - 1 ? (
-                      <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
-                    ) : null}
                   </Box>
                 );
               })}
               </>
             )}
-
-            <Divider sx={{ borderColor: "divider" }} />
-            {isOrgAdmin ? (
-              <>
-                <List sx={{ py: 0.8 }}>
-                  <ListItem disablePadding sx={{ px: 0.6, py: 0.1 }}>
-                    <ListItemButton
-                      component={Link}
-                      to="/settings"
-                      sx={navItemSx(isActive("/settings"))}
-                    >
-                      <ListItemIcon
-                        sx={{
-                          color: isActive("/settings") ? "text.primary" : "text.secondary",
-                          minWidth: 32,
-                          "& svg": { fontSize: 18 },
-                        }}
-                      >
-                        <SettingsIcon />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary="Settings"
-                        primaryTypographyProps={{
-                          fontSize: 13,
-                          fontWeight: 400,
-                          color: isActive("/settings") ? "text.primary" : "text.secondary",
-                        }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                </List>
-                <Divider sx={{ borderColor: "divider" }} />
-              </>
-            ) : null}
           </Box>
 
           <Box sx={{ px: 1.8, py: 1.2, mt: "auto" }}>
-            <Box sx={{ mb: 1.2, display: "flex", alignItems: "center", gap: 1.2 }}>
+            <Divider sx={{ borderColor: "rgba(255,255,255,0.06)", mx: "8px" }} />
+            <Box
+              sx={{
+                mt: 1.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1.2,
+              }}
+            >
               <Avatar sx={{ width: 26, height: 26, bgcolor: "divider", fontSize: "0.75rem", color: "text.secondary" }}>
                 {(user?.first_name || user?.username || "U").slice(0, 1).toUpperCase()}
               </Avatar>
-              <Box>
-                <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 500, color: "text.secondary", lineHeight: 1.1 }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 500, color: "#fff", lineHeight: 1.1 }}>
                   {fullName}
                 </Typography>
-                <Typography variant="caption" sx={{ fontSize: 11, color: "text.secondary" }}>
-                  {userRoleText}
-                </Typography>
               </Box>
+              <IconButton
+                aria-label="Logout"
+                onClick={() => {
+                  logout();
+                  clearUser();
+                  navigate("/login", { replace: true });
+                }}
+                size="small"
+                sx={{
+                  color: "#6b7280",
+                  "&:hover": {
+                    color: "#fff",
+                    backgroundColor: "transparent",
+                  },
+                }}
+              >
+                <LogoutIcon fontSize="small" />
+              </IconButton>
             </Box>
-            <Button
-              fullWidth
-              variant="text"
-              onClick={() => {
-                logout();
-                clearUser();
-                navigate("/login", { replace: true });
-              }}
-              sx={{
-                justifyContent: "flex-start",
-                color: "text.secondary",
-                fontSize: 12,
-                px: 0.5,
-                minHeight: 28,
-                "&:hover": { color: "text.primary", backgroundColor: "transparent" },
-              }}
-            >
-              <LogoutIcon sx={{ fontSize: 16, mr: 0.8 }} />
-              Logout
-            </Button>
+            <Typography sx={{ fontSize: 11, color: "#6b7280", mt: 0.6, pl: 2.6 }}>{userRoleText}</Typography>
           </Box>
         </Box>
       </Drawer>
