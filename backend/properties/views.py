@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 import logging
 import random
+import uuid
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError
@@ -48,6 +49,7 @@ from .serializers import (
     RentLedgerEntrySerializer,
     ScreeningRequestSerializer,
     TenantSerializer,
+    TenantConsentSerializer,
     UnitSerializer,
     OrganizationSerializer,
     UserSummarySerializer,
@@ -653,8 +655,29 @@ class MessageViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
 class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
     queryset = ScreeningRequest.objects.select_related("tenant", "requested_by")
     serializer_class = ScreeningRequestSerializer
-    permission_classes = [IsLandlord]
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "head", "options", "patch", "put"]
+
+    def get_permissions(self):
+        landlord_only_actions = {
+            "create",
+            "update",
+            "partial_update",
+            "destroy",
+            "run_screening",
+            "send_consent",
+        }
+        if self.action in landlord_only_actions:
+            return [IsLandlord()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        profile = getattr(self.request.user, "profile", None)
+        if profile and profile.role == UserProfile.ROLE_TENANT:
+            if not profile.tenant_id:
+                return queryset.none()
+            return queryset.filter(tenant_id=profile.tenant_id)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         organization = resolve_request_organization(self.request)
@@ -670,6 +693,7 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                     {"detail": "No organization assigned to this user."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+
         tenant_id = request.data.get("tenant")
         if not tenant_id:
             return Response(
@@ -679,7 +703,7 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         try:
             tenant = Tenant.objects.get(
                 id=tenant_id,
-                organization=resolve_request_organization(request),
+                organization=organization,
             )
         except Tenant.DoesNotExist:
             return Response(
@@ -687,21 +711,49 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        consent_token = uuid.uuid4().hex
+        while ScreeningRequest.objects.filter(consent_token=consent_token).exists():
+            consent_token = uuid.uuid4().hex
+
         screening = ScreeningRequest.objects.create(
             tenant=tenant,
             requested_by=request.user,
             organization=organization,
             status=ScreeningRequest.STATUS_PENDING,
+            consent_status=ScreeningRequest.CONSENT_PENDING,
+            consent_token=consent_token,
+            tenant_email=(request.data.get("tenant_email") or tenant.email or "").strip(),
             notes=(request.data.get("notes") or "").strip(),
         )
+        return Response(self.get_serializer(screening).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="send-consent")
+    def send_consent(self, request, pk=None):
+        screening = self.get_object()
+        token = screening.consent_token
+        if not token:
+            token = uuid.uuid4().hex
+            while ScreeningRequest.objects.filter(consent_token=token).exists():
+                token = uuid.uuid4().hex
+            screening.consent_token = token
+            screening.save(update_fields=["consent_token", "updated_at"])
+
+        link = f"/screening/consent/{token}"
+        print(f"Screening consent link for request #{screening.id}: {link}")
         return Response(
-            self.get_serializer(screening).data,
-            status=status.HTTP_201_CREATED,
+            {"consent_link": link, "consent_token": token},
+            status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"], url_path="run-screening")
     def run_screening(self, request, pk=None):
         screening = self.get_object()
+        if screening.consent_status != ScreeningRequest.CONSENT_CONSENTED:
+            return Response(
+                {"detail": "Tenant consent is required before running screening."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         screening.status = ScreeningRequest.STATUS_PROCESSING
         screening.save(update_fields=["status", "updated_at"])
 
@@ -714,6 +766,7 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
             credit_rating = ScreeningRequest.CREDIT_RATING_FAIR
         else:
             credit_rating = ScreeningRequest.CREDIT_RATING_POOR
+
         background_check = random.choices(
             [
                 ScreeningRequest.BACKGROUND_CLEAR,
@@ -773,6 +826,102 @@ class ScreeningRequestViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):
         }
         screening.save()
         return Response(self.get_serializer(screening).data)
+
+
+class ScreeningConsentPublicView(APIView):
+    permission_classes = [AllowAny]
+
+    def _landlord_name(self, screening):
+        return screening.requested_by.get_full_name() or screening.requested_by.username
+
+    def _property_name(self, screening):
+        latest_lease = (
+            Lease.objects.filter(tenant=screening.tenant, is_active=True)
+            .select_related("unit__property")
+            .order_by("-start_date", "-created_at")
+            .first()
+        )
+        if latest_lease and latest_lease.unit and latest_lease.unit.property:
+            return latest_lease.unit.property.name
+        return ""
+
+    def get(self, request, token):
+        screening = ScreeningRequest.objects.filter(
+            consent_token=token,
+            consent_status=ScreeningRequest.CONSENT_PENDING,
+        ).select_related("tenant", "requested_by").first()
+
+        if not screening:
+            return Response(
+                {"detail": "Consent link not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "screening_id": screening.id,
+                "tenant_name": f"{screening.tenant.first_name} {screening.tenant.last_name}".strip(),
+                "property_name": self._property_name(screening),
+                "landlord_name": self._landlord_name(screening),
+                "consent_status": screening.consent_status,
+            }
+        )
+
+    def post(self, request, token):
+        screening = ScreeningRequest.objects.filter(
+            consent_token=token,
+            consent_status=ScreeningRequest.CONSENT_PENDING,
+        ).select_related("tenant", "requested_by").first()
+
+        if not screening:
+            return Response(
+                {"detail": "Consent link not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        consent = request.data.get("consent")
+        if consent is None:
+            return Response(
+                {"consent": "consent is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if isinstance(consent, str):
+            consent = consent.lower() in {"true", "1", "yes", "y"}
+        if not isinstance(consent, bool):
+            return Response(
+                {"consent": "consent must be a boolean."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if consent:
+            serializer = TenantConsentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            screening.tenant_ssn_last4 = serializer.validated_data.get("ssn_last4")
+            screening.tenant_dob = serializer.validated_data.get("date_of_birth")
+            screening.consent_status = ScreeningRequest.CONSENT_CONSENTED
+        else:
+            screening.consent_status = ScreeningRequest.CONSENT_DECLINED
+            screening.tenant_ssn_last4 = None
+            screening.tenant_dob = None
+
+        screening.consent_date = timezone.now()
+        screening.save(
+            update_fields=[
+                "tenant_ssn_last4",
+                "tenant_dob",
+                "consent_status",
+                "consent_date",
+                "updated_at",
+            ]
+        )
+        return Response(
+            {
+                "screening_id": screening.id,
+                "consent_status": screening.consent_status,
+                "consent_date": screening.consent_date,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class DocumentViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):

@@ -1,9 +1,24 @@
-import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { Alert, Box, Button, Chip, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+﻿import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useTheme } from "@mui/material";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getScreenings } from "../services/api";
+import { getScreenings, runScreening } from "../services/api";
 import { useUser } from "../services/userContext";
 
 const headerCellSx = {
@@ -58,30 +73,71 @@ const recommendationChipSx = (value, theme) => {
   };
 };
 
+const consentChipSx = (consentStatus, theme) => {
+  const colorMap = {
+    pending: theme.palette.warning.main,
+    consented: theme.palette.info.main,
+    declined: theme.palette.error.main,
+  };
+  const color = colorMap[consentStatus] || theme.palette.text.secondary;
+  return {
+    bgcolor: `${color}22`,
+    color,
+    fontWeight: 500,
+    fontSize: 11,
+    height: 22,
+    textTransform: "capitalize",
+  };
+};
+
+const consentLabel = (status) => {
+  if (status === "consented") {
+    return "Consented";
+  }
+  if (status === "declined") {
+    return "Declined";
+  }
+  return "Awaiting Consent";
+};
+
 function ScreeningList() {
   const { role } = useUser();
   const theme = useTheme();
   const [screenings, setScreenings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [runError, setRunError] = useState("");
+
+  const load = async () => {
+    try {
+      const response = await getScreenings();
+      setScreenings(response.data || []);
+      setRunError("");
+    } catch {
+      setError("Unable to load screening requests.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const response = await getScreenings();
-        setScreenings(response.data || []);
-      } catch {
-        setError("Unable to load screening requests.");
-      } finally {
-        setLoading(false);
-      }
-    };
     if (role === "landlord") {
       load();
     } else {
       setLoading(false);
     }
   }, [role]);
+
+  const handleRun = async (event, id) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await runScreening(id);
+      await load();
+    } catch {
+      setRunError("Unable to run screening.");
+    }
+  };
 
   if (role !== "landlord") {
     return (
@@ -96,7 +152,14 @@ function ScreeningList() {
   return (
     <Box>
       <Box sx={{ mb: 0.8 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: "text.primary" }}>
+        <Typography
+          sx={{
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            color: "text.primary",
+          }}
+        >
           Screening
         </Typography>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
@@ -125,16 +188,19 @@ function ScreeningList() {
       </Box>
       {loading ? <Typography sx={{ mb: 1.5 }}>Loading...</Typography> : null}
       {error ? <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert> : null}
-          <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "background.paper" }}>
+      {runError ? <Alert severity="warning" sx={{ mb: 1.5 }}>{runError}</Alert> : null}
+      <TableContainer component={Paper} sx={{ borderRadius: 1, bgcolor: "background.paper" }}>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell sx={headerCellSx}>Tenant Name</TableCell>
               <TableCell sx={headerCellSx}>Date Requested</TableCell>
-              <TableCell sx={headerCellSx}>Status</TableCell>
+              <TableCell sx={headerCellSx}>Consent Status</TableCell>
+              <TableCell sx={headerCellSx}>Report Status</TableCell>
               <TableCell sx={headerCellSx}>Credit Score</TableCell>
               <TableCell sx={headerCellSx}>Background</TableCell>
               <TableCell sx={headerCellSx}>Recommendation</TableCell>
+              <TableCell sx={headerCellSx}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -146,7 +212,12 @@ function ScreeningList() {
                 sx={{
                   textDecoration: "none",
                   cursor: "pointer",
-                  "& td": { borderBottom: "1px solid", borderColor: "divider", fontSize: 13, color: "text.primary" },
+                  "& td": {
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                    fontSize: 13,
+                    color: "text.primary",
+                  },
                   "&:hover": { backgroundColor: "action.hover" },
                 }}
               >
@@ -156,6 +227,13 @@ function ScreeningList() {
                     : `Tenant #${screening.tenant}`}
                 </TableCell>
                 <TableCell>{formatDate(screening.created_at)}</TableCell>
+                <TableCell>
+                  <Chip
+                    size="small"
+                    label={consentLabel(screening.consent_status)}
+                    sx={consentChipSx(screening.consent_status, theme)}
+                  />
+                </TableCell>
                 <TableCell>
                   <Chip size="small" label={screening.status} sx={statusChipSx(screening.status, theme)} />
                 </TableCell>
@@ -170,11 +248,29 @@ function ScreeningList() {
                     sx={recommendationChipSx(screening.recommendation, theme)}
                   />
                 </TableCell>
+                <TableCell onClick={(event) => event.preventDefault()}>
+                  {screening.consent_status === "consented" && screening.status !== "completed" ? (
+                    <Tooltip title="Run this screening now">
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="primary"
+                        onClick={(event) => handleRun(event, screening.id)}
+                        startIcon={<PlayCircleOutlineIcon />}
+                        sx={{ minWidth: 0, px: 1.3 }}
+                      >
+                        Run Screening
+                      </Button>
+                    </Tooltip>
+                  ) : (
+                    <Typography sx={{ fontSize: 12, color: "text.secondary" }}>No action</Typography>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {!loading && screenings.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>No screening requests found.</TableCell>
+                <TableCell colSpan={8}>No screening requests found.</TableCell>
               </TableRow>
             ) : null}
           </TableBody>
@@ -185,3 +281,4 @@ function ScreeningList() {
 }
 
 export default ScreeningList;
+

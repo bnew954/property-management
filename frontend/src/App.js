@@ -34,6 +34,7 @@ import RentLedger from "./pages/RentLedger";
 import ScreeningDetail from "./pages/ScreeningDetail";
 import ScreeningList from "./pages/ScreeningList";
 import ScreeningRequest from "./pages/ScreeningRequest";
+import ScreeningConsent from "./pages/ScreeningConsent";
 import TenantForm from "./pages/TenantForm";
 import TenantList from "./pages/TenantList";
 import OrgSettings from "./pages/OrgSettings";
@@ -221,6 +222,7 @@ function AppContent() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/screening/consent/:token" element={<ScreeningConsent />} />
               <Route
                 element={
                   <ProtectedRoute>

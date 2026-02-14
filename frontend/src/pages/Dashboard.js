@@ -28,6 +28,7 @@ import {
 import {
   getLeases,
   getMaintenanceRequests,
+  getScreenings,
   getPayments,
   getProperties,
   getTenants,
@@ -47,6 +48,7 @@ function Dashboard() {
     myPayments: 0,
     myMaintenance: 0,
     myLeaseInfo: 0,
+    pendingConsentScreening: null,
   });
   const [revenueData, setRevenueData] = useState([]);
   const [occupancyData, setOccupancyData] = useState([
@@ -61,12 +63,13 @@ function Dashboard() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        if (role === "tenant") {
+      if (role === "tenant") {
           const tenantId = user?.tenant_id;
-          const [paymentsRes, maintenanceRes, leasesRes] = await Promise.all([
+          const [paymentsRes, maintenanceRes, leasesRes, screeningsRes] = await Promise.all([
             getPayments(),
             getMaintenanceRequests(),
             getLeases(),
+            getScreenings(),
           ]);
           const paymentItems = tenantId
           ? (paymentsRes.data || []).filter((item) => item.lease_detail?.tenant === tenantId)
@@ -80,12 +83,16 @@ function Dashboard() {
           const activeLease = leaseItems
             .filter((item) => item.is_active)
             .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))[0];
+          const pendingConsentScreening = (screeningsRes.data || []).find(
+            (screening) => screening.consent_status === "pending"
+          );
 
           setCounts((prev) => ({
             ...prev,
             myPayments: paymentItems.length,
             myMaintenance: maintenanceItems.length,
             myLeaseInfo: leaseItems.filter((item) => item.is_active).length,
+            pendingConsentScreening,
           }));
           setTenantAmountDue(activeLease ? Number(activeLease.monthly_rent || 0) : null);
         } else {
@@ -299,6 +306,25 @@ function Dashboard() {
       <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
         {today}
       </Typography>
+      {role === "tenant" && counts.pendingConsentScreening?.id ? (
+        <Paper
+          sx={{
+            mb: 1.5,
+            p: 1.1,
+            border: `1px solid ${theme.palette.warning.main}`,
+            backgroundColor: `${theme.palette.warning.main}12`,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, color: "text.primary", mb: 0.2 }}>
+            You have a pending screening request.
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+            <Link to={`/screening/consent/${counts.pendingConsentScreening.consent_token}`}>
+              Review and authorize
+            </Link>
+          </Typography>
+        </Paper>
+      ) : null}
       {loading ? <Typography sx={{ mb: 2 }}>Loading...</Typography> : null}
       {!loading &&
       role === "landlord" &&

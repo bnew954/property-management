@@ -1,7 +1,9 @@
-import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Paper, Select, Snackbar, Typography, useTheme } from "@mui/material";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { Alert, Box, Button, Chip, FormControl, InputLabel, MenuItem, Paper, Select, Snackbar, TextField, Typography, useTheme } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createScreening, getTenants, runScreening } from "../services/api";
+import { createScreening, getTenants, sendScreeningConsent } from "../services/api";
 import { useUser } from "../services/userContext";
 import { alpha } from "@mui/material/styles";
 
@@ -11,7 +13,10 @@ function ScreeningRequest() {
   const theme = useTheme();
   const [tenant, setTenant] = useState("");
   const [tenants, setTenants] = useState([]);
+  const [createdLink, setCreatedLink] = useState("");
+  const [createdId, setCreatedId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
@@ -51,19 +56,45 @@ function ScreeningRequest() {
       setSubmitting(true);
       const createRes = await createScreening({ tenant });
       const screeningId = createRes.data?.id;
-      if (!screeningId) {
+      const token = createRes.data?.consent_token;
+      if (!screeningId || !token) {
         throw new Error("Screening creation failed.");
       }
-      await runScreening(screeningId);
-      navigate(`/screenings/${screeningId}`);
+      setCreatedId(screeningId);
+      const consentLink = `${window.location.origin}/screening/consent/${token}`;
+      setCreatedLink(consentLink);
+      await sendScreeningConsent(screeningId);
+      setSnackbar({
+        open: true,
+        message: "Screening request created. A consent link has been generated for the tenant.",
+        severity: "success",
+      });
+      await navigator.clipboard
+        .writeText(consentLink)
+        .then(() => setCopyFeedback(true))
+        .catch(() => {});
     } catch {
       setSnackbar({
         open: true,
-        message: "Unable to run screening.",
+        message: "Unable to create screening request.",
         severity: "error",
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!createdLink) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(createdLink);
+      setSnackbar({ open: true, message: "Consent link copied.", severity: "success" });
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1700);
+    } catch {
+      setSnackbar({ open: true, message: "Unable to copy link.", severity: "error" });
     }
   };
 
@@ -99,6 +130,29 @@ function ScreeningRequest() {
             This will run a background check, credit check, and eviction history
             search. Results are typically available within seconds.
           </Alert>
+          <Alert
+            severity="warning"
+            icon={<CheckCircleOutlineIcon />}
+            sx={{
+              mb: 1.8,
+              bgcolor: alpha(theme.palette.warning.main, 0.08),
+              border: `1px solid ${alpha(theme.palette.warning.main, 0.28)}`,
+            }}
+          >
+            Status after creation:{" "}
+            <Chip
+              size="small"
+              label="Awaiting Tenant Consent"
+              sx={{
+                ml: 1,
+                height: 22,
+                bgcolor: alpha(theme.palette.warning.main, 0.16),
+                color: theme.palette.warning.main,
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            />
+          </Alert>
           <FormControl fullWidth required sx={{ mb: 2 }}>
             <InputLabel>Tenant</InputLabel>
             <Select
@@ -113,13 +167,46 @@ function ScreeningRequest() {
               ))}
             </Select>
           </FormControl>
+          {createdLink ? (
+            <Paper sx={{ p: 1.6, mb: 1.8, bgcolor: "action.hover", border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}` }}>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.5 }}>
+                Screening request created. A consent link has been generated for the tenant.
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                label="Consent Link"
+                value={createdLink}
+                InputProps={{ readOnly: true }}
+                sx={{ mb: 1 }}
+              />
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                <Typography sx={{ fontSize: 12, color: copyFeedback ? "success.main" : "text.secondary" }}>
+                  {copyFeedback ? "Copied to clipboard." : "Share this link with the tenant."}
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleCopy}
+                  startIcon={<ContentCopyIcon />}
+                >
+                  Copy Link
+                </Button>
+              </Box>
+            </Paper>
+          ) : null}
           <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
             <Button variant="text" onClick={() => navigate("/screenings")} sx={{ color: "text.secondary" }}>
               Cancel
             </Button>
             <Button type="submit" variant="contained" disabled={submitting}>
-              Run Screening
+              Create Request
             </Button>
+            {createdId ? (
+              <Button variant="outlined" onClick={() => navigate(`/screenings/${createdId}`)} sx={{ color: "text.secondary" }}>
+                View Request
+              </Button>
+            ) : null}
           </Box>
         </Paper>
       ) : null}
@@ -141,3 +228,4 @@ function ScreeningRequest() {
 }
 
 export default ScreeningRequest;
+

@@ -198,11 +198,53 @@ class MessageSerializer(serializers.ModelSerializer):
 class ScreeningRequestSerializer(serializers.ModelSerializer):
     tenant_detail = TenantSerializer(source="tenant", read_only=True)
     requested_by_detail = UserSummarySerializer(source="requested_by", read_only=True)
+    property_name = serializers.SerializerMethodField()
+    landlord_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ScreeningRequest
         fields = "__all__"
         read_only_fields = ["organization"]
+
+    def get_property_name(self, obj):
+        try:
+            lease = obj.tenant.leases.filter(is_active=True).order_by("-created_at").first()
+            if lease and lease.unit and lease.unit.property:
+                return lease.unit.property.name
+        except Exception:
+            return None
+        return None
+
+    def get_landlord_name(self, obj):
+        try:
+            return obj.requested_by.get_full_name() or obj.requested_by.username
+        except Exception:
+            return None
+
+
+class TenantConsentSerializer(serializers.Serializer):
+    tenant_name = serializers.CharField(read_only=True)
+    property_name = serializers.CharField(read_only=True)
+    landlord_name = serializers.CharField(read_only=True)
+    consent_status = serializers.CharField(read_only=True)
+    consent = serializers.BooleanField(write_only=True)
+    ssn_last4 = serializers.CharField(write_only=True, allow_blank=False, required=False)
+    date_of_birth = serializers.DateField(write_only=True, required=False)
+
+    def validate_ssn_last4(self, value):
+        if value is None:
+            raise serializers.ValidationError("ssn_last4 is required.")
+        if not value.isdigit() or len(value) != 4:
+            raise serializers.ValidationError("ssn_last4 must be exactly 4 digits.")
+        return value
+
+    def validate(self, attrs):
+        if attrs.get("consent"):
+            if not attrs.get("ssn_last4"):
+                raise serializers.ValidationError({"ssn_last4": "SSN last 4 is required."})
+            if not attrs.get("date_of_birth"):
+                raise serializers.ValidationError({"date_of_birth": "Date of birth is required."})
+        return attrs
 
 
 class DocumentSerializer(serializers.ModelSerializer):

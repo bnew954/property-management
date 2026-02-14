@@ -27,6 +27,7 @@ from .views import (
     RegisterView,
     RentLedgerEntryViewSet,
     ScreeningRequestViewSet,
+    ScreeningConsentPublicView,
     TenantViewSet,
     UnitViewSet,
 )
@@ -76,6 +77,11 @@ urlpatterns = [
         "organization/invitations/",
         OrganizationInvitationsView.as_view(),
         name="organization-invitations",
+    ),
+    path(
+        "screening/consent/<str:token>/",
+        ScreeningConsentPublicView.as_view(),
+        name="screening-consent",
     ),
     path(
         "accounting/generate-charges/",

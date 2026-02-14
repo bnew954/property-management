@@ -429,6 +429,15 @@ class Message(models.Model):
 
 
 class ScreeningRequest(models.Model):
+    CONSENT_PENDING = "pending"
+    CONSENT_CONSENTED = "consented"
+    CONSENT_DECLINED = "declined"
+    CONSENT_CHOICES = [
+        (CONSENT_PENDING, "Pending"),
+        (CONSENT_CONSENTED, "Consented"),
+        (CONSENT_DECLINED, "Declined"),
+    ]
+
     STATUS_PENDING = "pending"
     STATUS_PROCESSING = "processing"
     STATUS_COMPLETED = "completed"
@@ -492,6 +501,14 @@ class ScreeningRequest(models.Model):
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING
     )
+    consent_status = models.CharField(
+        max_length=20, choices=CONSENT_CHOICES, default=CONSENT_PENDING
+    )
+    consent_date = models.DateTimeField(null=True, blank=True)
+    tenant_email = models.EmailField(null=True, blank=True)
+    tenant_ssn_last4 = models.CharField(max_length=4, null=True, blank=True)
+    tenant_dob = models.DateField(null=True, blank=True)
+    consent_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
     credit_score = models.IntegerField(null=True, blank=True)
     credit_rating = models.CharField(
         max_length=20, choices=CREDIT_RATING_CHOICES, null=True, blank=True

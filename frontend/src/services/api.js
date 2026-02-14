@@ -107,6 +107,10 @@ export const getScreenings = () => api.get("screenings/");
 export const getScreening = (id) => api.get(`screenings/${id}/`);
 export const createScreening = (data) => api.post("screenings/", data);
 export const runScreening = (id) => api.post(`screenings/${id}/run-screening/`);
+export const sendScreeningConsent = (id) => api.post(`screenings/${id}/send-consent/`);
+export const getScreeningConsentDetails = (token) => api.get(`screening/consent/${token}/`);
+export const submitScreeningConsent = (token, payload) =>
+  api.post(`screening/consent/${token}/`, payload);
 export const getDocuments = (params = {}) => api.get("documents/", { params });
 export const getDocument = (id) => api.get(`documents/${id}/`);
 export const uploadDocument = (formData, onUploadProgress) =>
