@@ -1,6 +1,6 @@
 # Onyx PM — Product Roadmap
 
-**Last Updated:** February 14, 2026
+**Last Updated:** February 15, 2026
 
 ---
 
@@ -63,6 +63,7 @@
 - [x] Collapsible grouped sidebar (Leasing, Operations, Finance)
 - [x] Landing page with animated logo and particle effects
 - [x] Logo integration (transparent PNG, mix-blend-mode)
+- [x] Conversational Agent Feed in Dashboard for task review and execution
 
 ---
 

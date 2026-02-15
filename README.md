@@ -149,6 +149,7 @@ Protected/admin endpoints are under `/api/` (JWT required unless noted), served 
 - `frontend/src/services/api.js`
   - Central API client (axios) with request/refresh interceptors
   - Dedicated methods for each backend endpoint including public + tenant/landlord flows
+  - Agent API helper methods for dashboard automation (`getAgentSkills`, `getAgentTaskFeed`, `approveAgentTask`, `dismissAgentTask`, `executeAgentTask`, `previewAgentTask`, `runAgentSkill`, `getAgentTaskSummary`)
 - `frontend/src/services/userContext.js`
   - User + organization context + role flags (`isTenant`, `isLandlord`, `isOrgAdmin`)
 - `frontend/src/services/themeContext.js`
@@ -157,6 +158,11 @@ Protected/admin endpoints are under `/api/` (JWT required unless noted), served 
   - Sidebar, role-based nav sections, top bar, notifications
 - `frontend/src/components/NotificationBell.js`
   - Read/unread UX with mark-as-read and popover list
+- `frontend/src/pages/Dashboard.js`
+  - Conversational Agent Feed UI replaces the prior two-column pending-review/performance section while retaining all existing dashboard sections.
+  - Filterable agent message list by skill type (All, Collections, Leasing, Maintenance, Bookkeeping, Compliance).
+  - Message-level actions: preview (`Show Me`), execute (`Approve & Run`), and `Skip`.
+  - Natural-language command input (`scan`, `run`, `check`, `approve all`, `run all`, `dismiss all`) to trigger active agent scans.
 
 ## Data flow diagrams (agent quick references)
 
@@ -188,7 +194,7 @@ Landlord
 Draft JE
   -> POST /api/accounting/journal-entries/{id}/post/
   -> revalidate balance + lock state
-  -> set status=posted, posted_at
+ -> set status=posted, posted_at
 
 Posted JE
   -> POST /api/accounting/journal-entries/{id}/reverse/
@@ -197,6 +203,16 @@ Posted JE
 Draft JE only
   -> POST /api/accounting/journal-entries/{id}/void/
   -> set status=voided
+```
+
+### 5) Dashboard agent feed workflow
+
+```text
+Dashboard user types command / reviews feed
+  -> handleAgentCommand or message action
+  -> optional api.runAgentSkill(skillId) for scans, or api.executeAgentTask(taskId) / api.dismissAgentTask(taskId)
+  -> api.getAgentTaskFeed refreshes pending queue
+  -> optional api.previewAgentTask(taskId) for inline preview before execution
 ```
 
 ### 3) Reporting from posted lines
