@@ -7,6 +7,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Grid,
   Box,
   Button,
   Container,
@@ -424,6 +425,7 @@ function MaintenanceMockup() {
 function LandingPage() {
   const [visibleSections, setVisibleSections] = useState({});
   const [activeTab, setActiveTab] = useState(0);
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
   const sectionRefs = useRef({});
   const heroParticles = useMemo(() => {
     const ambientCount = 80;
@@ -501,6 +503,26 @@ function LandingPage() {
             "0%,100%": { transform: "translateY(0px)" },
             "50%": { transform: "translateY(-10px)" },
           },
+          "@keyframes float": {
+            "0%,100%": {
+              transform: "translateY(0px)",
+              filter: "drop-shadow(0 0 20px rgba(124, 92, 252, 0.5))",
+            },
+            "50%": {
+              transform: "translateY(-16px)",
+              filter: "drop-shadow(0 0 35px rgba(124, 92, 252, 0.9))",
+            },
+          },
+          "@keyframes shake": {
+            "0%, 100%": { transform: "translateX(0) rotate(0deg)" },
+            "10%": { transform: "translateX(-4px) rotate(-3deg)" },
+            "20%": { transform: "translateX(4px) rotate(3deg)" },
+            "30%": { transform: "translateX(-4px) rotate(-2deg)" },
+            "40%": { transform: "translateX(4px) rotate(2deg)" },
+            "50%": { transform: "translateX(-2px) rotate(-1deg)" },
+            "60%": { transform: "translateX(2px) rotate(1deg)" },
+            "70%, 100%": { transform: "translateX(0) rotate(0deg)" },
+          },
           "@keyframes breatheGlow": {
             "0%,100%": { filter: "drop-shadow(0 0 20px rgba(124,92,252,0.3))" },
             "50%": { filter: "drop-shadow(0 0 40px rgba(124,92,252,0.6)) drop-shadow(0 0 80px rgba(124,92,252,0.2))" },
@@ -531,7 +553,7 @@ function LandingPage() {
               position: "relative",
               minHeight: "calc(100vh - 96px)",
               pt: { xs: 4, md: 0 },
-              pb: 8,
+              pb: 6,
               display: "grid",
               gap: 5,
               justifyItems: "center",
@@ -581,6 +603,8 @@ function LandingPage() {
                 }}
               >
                 <Box
+                  onMouseEnter={() => setIsLogoHovered(true)}
+                  onMouseLeave={() => setIsLogoHovered(false)}
                   sx={{
                     position: "relative",
                     display: "inline-block",
@@ -591,23 +615,28 @@ function LandingPage() {
                     src={`${process.env.PUBLIC_URL || ""}/logo-icon.png`}
                     alt="Onyx PM"
                     style={{
-                      height: 48,
-                      width: "auto",
-                      display: "block",
-                      position: "relative",
-                      zIndex: 2,
-                      background: "transparent",
-                      margin: "0 auto",
-                      mixBlendMode: "screen",
-                      animation: "breatheGlow 3.4s ease-in-out infinite, subtleFloat 6.2s ease-in-out infinite",
-                      willChange: "transform, opacity, filter",
-                    }}
-                  />
+                    height: 48,
+                    width: "auto",
+                    display: "block",
+                    position: "relative",
+                    zIndex: 2,
+                    background: "transparent",
+                    margin: "0 auto",
+                    mixBlendMode: "screen",
+                    animation: isLogoHovered ? "shake 0.6s ease-in-out" : "float 3s ease-in-out infinite",
+                    filter: isLogoHovered
+                      ? "drop-shadow(0 0 40px rgba(255, 60, 60, 0.9)) brightness(1.3) hue-rotate(200deg)"
+                      : "drop-shadow(0 0 20px rgba(124, 92, 252, 0.5))",
+                    transition: "filter 0.3s ease",
+                    cursor: "pointer",
+                    willChange: "transform, opacity, filter",
+                  }}
+                />
                 </Box>
               </Box>
               <Typography
                 sx={{
-                  fontSize: { xs: "2.4rem", md: "3.5rem", lg: "3.8rem" },
+                  fontSize: { xs: "2rem", md: "3rem", lg: "3.2rem" },
                   lineHeight: 1.05,
                   fontWeight: 700,
                   letterSpacing: "-0.03em",
@@ -615,10 +644,10 @@ function LandingPage() {
                   whiteSpace: "pre-line",
                 }}
               >
-                Stop Paying for Property Management Software.
+                AI-Native Property Management Software
               </Typography>
               <Typography sx={{ mt: 2, maxWidth: 640, mx: "auto", color: "#878C9E", fontSize: 18, lineHeight: 1.45 }}>
-                Onyx PM is 100% free. No subscriptions. No per-unit fees. No limits. We only make money when you collect rent or screen tenants.
+                Modern interface, intelligent automation, and zero legacy baggage.
               </Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} justifyContent="center" sx={{ mt: 3 }}>
                 <Button
@@ -626,8 +655,9 @@ function LandingPage() {
                   to="/register"
                   size="medium"
                   variant="contained"
-                  sx={{
+                sx={{
                     px: 2.2,
+                    py: 1,
                     backgroundColor: "#6347f5",
                     "&:hover": { backgroundColor: "#5539d9" },
                     fontWeight: 600,
@@ -636,9 +666,6 @@ function LandingPage() {
                   Get Started - It's Free
                 </Button>
               </Stack>
-              <Typography sx={{ mt: 1.2, fontSize: 12, color: "#6b7280" }}>
-                No credit card required. Unlimited units. Free forever.
-              </Typography>
             </Box>
 
             <Box sx={{ width: "100%", maxWidth: 1080 }}>
@@ -685,7 +712,7 @@ function LandingPage() {
               <Box
                 sx={{
                   mt: 4,
-                  width: "100%",
+                  width: "75%",
                   maxWidth: "900px",
                   mx: "auto",
                   height: "440px",
@@ -735,7 +762,7 @@ function LandingPage() {
             Built for the Future of Property Management
           </Typography>
           <Typography sx={{ mt: 1, textAlign: "center", color: "#878C9E", fontSize: 16 }}>
-            Onyx PM is the first AI-native property management platform. Modern interface, intelligent automation, and zero legacy baggage — built from the ground up for how landlords actually work.
+            Modern interface, intelligent automation, and zero legacy baggage.
           </Typography>
           <Box
             sx={{
@@ -777,86 +804,162 @@ function LandingPage() {
         </SectionFadeIn>
 
         <SectionFadeIn id="pricing" visibleSections={visibleSections} ref={registerSection("pricing")} sx={{ mb: { xs: 8, md: 10 } }}>
-          <Typography sx={{ fontSize: 32, fontWeight: 700, textAlign: "center", color: "#fff" }}>
-            Free. Really.
+          <Typography variant="h4" sx={{ color: "#fff", fontWeight: 700, textAlign: "center" }}>
+            Simple, Transparent Pricing
           </Typography>
-          <Typography sx={{ mt: 1, textAlign: "center", color: "#878C9E", fontSize: 16 }}>
-            No subscriptions. No per-unit fees. No catches.
+          <Typography variant="body1" sx={{ mt: 1, mb: 6, textAlign: "center", color: "rgba(255,255,255,0.55)" }}>
+            Start free. Scale when you're ready.
           </Typography>
-          <Box sx={{ mt: 3.6, display: "flex", justifyContent: "center" }}>
-            <Box sx={{ width: { xs: "100%", md: 760 }, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, background: "#141414", p: { xs: 2.2, md: 3 } }}>
-              <Typography sx={{ fontSize: 14, color: "#878C9E" }}>Core plan</Typography>
-              <Typography sx={{ mt: 1, fontSize: 34, fontWeight: 700, color: "#fff" }}>
-                Onyx PM is free for every landlord
-              </Typography>
-              <Typography sx={{ mt: 1, fontSize: 46, fontWeight: 700, color: "#fff" }}>
-                $0 <Typography component="span" sx={{ fontSize: 16, fontWeight: 500, color: "#6b7280" }}>/ month</Typography>
-              </Typography>
-              <Box sx={{ mt: 2, display: "grid", gap: 0.8 }}>
-                {[
-                  "Unlimited properties & units",
-                  "Unlimited tenants & leases",
-                  "Maintenance management",
-                  "Accounting & financial reports",
-                  "Document storage",
-                  "In-app messaging",
-                  "Dark & light mode",
-                ].map((item) => (
-                  <Stack key={item} direction="row" spacing={1} alignItems="center">
-                    <CheckCircleOutlineIcon sx={{ fontSize: 14, color: "#22c55e" }} />
-                    <Typography sx={{ color: "#878C9E", fontSize: 13 }}>{item}</Typography>
-                  </Stack>
-                ))}
-              </Box>
-              <Box sx={{ mt: 1.8, borderTop: "1px solid rgba(255,255,255,0.08)", pt: 1.6 }}>
-                <Typography sx={{ fontSize: 16, color: "#fff", fontWeight: 600 }}>Pay only for what you use:</Typography>
-                <Typography sx={{ mt: 1, fontSize: 13, color: "#e5e7eb" }}>
-                  Rent collection: <Typography component="span" sx={{ color: "#fff", fontWeight: 600 }}>2.9% + 30c</Typography> per transaction
-                </Typography>
-                <Typography sx={{ fontSize: 11, color: "#878C9E" }}>(passed through from payment processor)</Typography>
-                <Typography sx={{ mt: 1, fontSize: 13, color: "#e5e7eb" }}>
-                  Tenant screening: <Typography component="span" sx={{ color: "#fff", fontWeight: 600 }}>$35</Typography> per report
-                </Typography>
-              </Box>
-              <Button
-                component={Link}
-                to="/register"
-                variant="contained"
-                fullWidth
-                sx={{ mt: 2.4, background: "#6347f5", "&:hover": { background: "#5539d9" }, borderRadius: 2, py: 1.2, fontWeight: 600 }}
+          <Grid container spacing={0} justifyContent="center" alignItems="stretch">
+            <Grid item xs={12} md={5} sx={{ display: "flex", width: "100%", flex: 1, justifyContent: "center" }}>
+              <Box
+                sx={{
+                  backgroundColor: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "16px",
+                  p: 4,
+                  width: "75%",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  height: "100%",
+                }}
               >
-                Get Started {"\u2014"} It's Free
-              </Button>
-              <Box sx={{ mt: 2.6, border: "1px solid rgba(124,92,252,0.3)", borderRadius: 2, p: 1.4, background: "#111111" }}>
-                <Typography sx={{ fontWeight: 600, color: "#fff" }}>How we compare</Typography>
-                {[
-                  { name: "AppFolio", value: "AppFolio: $1.40/unit/month + setup fees", active: false },
-                  { name: "Buildium", value: "Buildium: $58/month for 20 units", active: false },
-                  { name: "Onyx PM", value: "Onyx PM: $0/month for unlimited units", active: true },
-                ].map((item) => (
-                  <Box
-                    key={item.name}
-                    sx={{
-                      mt: 0.8,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      borderLeft: item.active ? "3px solid #7c5cfc" : "none",
-                      pl: item.active ? 1 : 0,
-                      color: item.active ? "#7c5cfc" : "#6b7280",
-                    }}
-                  >
-                    <Typography sx={{ fontSize: 12, fontWeight: item.active ? 600 : 400, color: item.active ? "#7c5cfc" : "#6b7280" }}>
-                      {item.name}
-                    </Typography>
-                    <Typography sx={{ fontSize: 12, fontWeight: item.active ? 600 : 400, color: item.active ? "#fff" : "#6b7280" }}>
-                      {item.value}
-                    </Typography>
-                  </Box>
-                ))}
+                <Chip
+                  label="MOST POPULAR"
+                  sx={{
+                    backgroundColor: "rgba(124,92,252,0.15)",
+                    color: "#7C5CFC",
+                    fontWeight: 700,
+                    fontSize: "0.7rem",
+                    mt: 0,
+                  }}
+                />
+                <Typography variant="h5" sx={{ mt: 1.5, color: "#fff", fontWeight: 700 }}>
+                  Core
+                </Typography>
+                <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.6, mt: 1 }}>
+                  <Typography variant="h3" sx={{ color: "#fff", fontWeight: 800, lineHeight: 1 }}>
+                    $0
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: "rgba(255,255,255,0.55)" }}>
+                    /mo
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ mt: 0.5, color: "rgba(255,255,255,0.55)" }}>
+                  Free forever. No credit card required.
+                </Typography>
+                <Divider sx={{ borderBottom: "1px solid rgba(255,255,255,0.06)", my: 2 }} />
+                <Box sx={{ display: "grid", gap: 1, mb: 4 }}>
+                  {[
+                    "Marketing & Listings",
+                    "Leasing & E-Signatures",
+                    "Maintenance Management",
+                    "Basic Accounting",
+                  ].map((item) => (
+                    <Box key={item} sx={{ display: "flex", alignItems: "center", gap: 1.1 }}>
+                      <CheckCircleOutlineIcon sx={{ color: "#7C5CFC", fontSize: 18 }} />
+                      <Typography variant="body2" sx={{ color: "#878C9E" }}>
+                        {item}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+                <Button
+                  component={Link}
+                  to="/register"
+                  variant="contained"
+                  sx={{
+                    mt: "auto",
+                    py: 1,
+                    px: 3,
+                    backgroundColor: "#7C5CFC",
+                    "&:hover": { backgroundColor: "#6946e8" },
+                    color: "#fff",
+                    textAlign: "center",
+                    display: "block",
+                    mx: "auto",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Get Started Free
+                </Button>
               </Box>
-            </Box>
-          </Box>
+            </Grid>
+            <Grid item xs={12} md={5} sx={{ display: "flex", width: "100%", flex: 1, justifyContent: "center" }}>
+              <Box
+                sx={{
+                  backgroundColor: "rgba(124, 92, 252, 0.06)",
+                  border: "1px solid rgba(124, 92, 252, 0.2)",
+                  borderRadius: "16px",
+                  p: 4,
+                  width: "75%",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  height: "100%",
+                }}
+              >
+                <Typography variant="h5" sx={{ mt: 1.5, color: "#fff", fontWeight: 700 }}>
+                  Enterprise
+                </Typography>
+                <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.6, mt: 1 }}>
+                  <Typography variant="h3" sx={{ color: "#fff", fontWeight: 800, lineHeight: 1 }}>
+                    $3
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: "rgba(255,255,255,0.55)" }}>
+                    /unit/mo
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ mt: 0.5, color: "rgba(255,255,255,0.55)" }}>
+                  Full-service accounting and financial management.
+                </Typography>
+                <Divider sx={{ borderBottom: "1px solid rgba(255,255,255,0.06)", my: 2 }} />
+                <Typography variant="body2" sx={{ color: "#fff", fontWeight: 600, mb: 2 }}>
+                  Everything in Core, plus:
+                </Typography>
+                <Box sx={{ display: "grid", gap: 1, mb: 4 }}>
+                  {[
+                    "Full Double-Entry Accounting",
+                    "Advanced Financial Reporting",
+                    "Bank Import & Reconciliation",
+                  ].map((item) => (
+                    <Box key={item} sx={{ display: "flex", alignItems: "center", gap: 1.1 }}>
+                      <CheckCircleOutlineIcon sx={{ color: "#7C5CFC", fontSize: 18 }} />
+                      <Typography variant="body2" sx={{ color: "#878C9E" }}>
+                        {item}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+                <Button
+                  component={Link}
+                  to="/register"
+                  variant="outlined"
+                  sx={{
+                    mt: "auto",
+                    py: 1,
+                    px: 3,
+                    borderColor: "#7C5CFC",
+                    color: "#7C5CFC",
+                    "&:hover": { backgroundColor: "rgba(124,92,252,0.1)" },
+                    textAlign: "center",
+                    display: "block",
+                    mx: "auto",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Start Free Trial
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+          <Typography
+            variant="body2"
+            sx={{ mt: 4, textAlign: "center", color: "rgba(255,255,255,0.55)" }}
+          >
+            All plans include free onboarding support. No contracts, cancel anytime.
+          </Typography>
         </SectionFadeIn>
 
         <SectionFadeIn id="faq" visibleSections={visibleSections} ref={registerSection("faq")}>

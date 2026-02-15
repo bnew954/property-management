@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import SendIcon from "@mui/icons-material/Send";
@@ -72,6 +71,7 @@ function renderMessageText(content) {
 }
 
 export default function AiAgent() {
+  const logoSrc = `${process.env.PUBLIC_URL || ""}/logo-icon.png`;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
@@ -219,26 +219,45 @@ export default function AiAgent() {
               setIsOpen(true);
             }}
             sx={{
+              "@keyframes float": {
+                "0%,100%": {
+                  transform: "translateY(0px)",
+                  filter: "drop-shadow(0 0 20px rgba(124, 92, 252, 0.5))",
+                },
+                "50%": {
+                  transform: "translateY(-3px)",
+                  filter: "drop-shadow(0 0 30px rgba(124, 92, 252, 0.7))",
+                },
+              },
               position: "fixed",
               bottom: 24,
               right: 24,
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
+              width: 44,
+              height: 44,
               zIndex: 1300,
-              backgroundColor: "#7C5CFC",
-              boxShadow: "0 0 20px rgba(124, 92, 252, 0.4)",
-              display: "grid",
-              placeItems: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               cursor: "pointer",
-              transition: "box-shadow 0.2s ease, transform 0.2s ease",
+              filter: "drop-shadow(0 0 20px rgba(124, 92, 252, 0.5))",
+              animation: "float 3s ease-in-out infinite",
+              transition: "all 0.3s ease",
               "&:hover": {
+                animation: "none",
                 transform: "scale(1.05)",
-                boxShadow: "0 0 30px rgba(124, 92, 252, 0.6)",
+                filter: "drop-shadow(0 0 40px rgba(255, 60, 60, 0.9)) brightness(1.3) hue-rotate(200deg)",
               },
             }}
           >
-            <AutoAwesomeIcon sx={{ color: "#fff", fontSize: 28 }} />
+            <img
+              src={logoSrc}
+              alt="AI Assistant"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+              }}
+            />
             {hasUnread ? (
               <Box
                 sx={{
