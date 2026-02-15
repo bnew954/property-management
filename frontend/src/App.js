@@ -55,6 +55,10 @@ import AccountingFeature from "./pages/features/AccountingFeature";
 import PaymentsFeature from "./pages/features/PaymentsFeature";
 import ScreeningFeature from "./pages/features/ScreeningFeature";
 import MaintenanceFeature from "./pages/features/MaintenanceFeature";
+import About from "./pages/About";
+import Blog from "./pages/Blog";
+import Careers from "./pages/Careers";
+import BlogPost from "./pages/BlogPost";
 import WhyOnyx from "./pages/WhyOnyx";
 import { UserProvider, useUser } from "./services/userContext";
 import { ThemeModeProvider, useThemeMode } from "./services/themeContext";
@@ -245,6 +249,10 @@ function AppContent() {
                 <Route path="/features/payments" element={<PaymentsFeature />} />
                 <Route path="/features/screening" element={<ScreeningFeature />} />
                 <Route path="/features/maintenance" element={<MaintenanceFeature />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/blog/:slug" element={<BlogPost />} />
+                <Route path="/careers" element={<Careers />} />
                 <Route path="/why-onyx" element={<WhyOnyx />} />
                 <Route path="/screening/consent/:token" element={<ScreeningConsent />} />
                 <Route path="/lease/sign/:token" element={<LeaseSigning />} />

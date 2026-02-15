@@ -1404,6 +1404,51 @@ class RecurringTransaction(models.Model):
         return f"Recurring {self.name} ({self.frequency})"
 
 
+class BlogPost(models.Model):
+    CATEGORY_PRODUCT_UPDATES = "product_updates"
+    CATEGORY_PROPERTY_MANAGEMENT = "property_management"
+    CATEGORY_ACCOUNTING = "accounting"
+    CATEGORY_AI_TECHNOLOGY = "ai_technology"
+    CATEGORY_TIPS_TRICKS = "tips_tricks"
+    CATEGORY_INDUSTRY_NEWS = "industry_news"
+    CATEGORY_CHOICES = [
+        (CATEGORY_PRODUCT_UPDATES, "Product Updates"),
+        (CATEGORY_PROPERTY_MANAGEMENT, "Property Management"),
+        (CATEGORY_ACCOUNTING, "Accounting"),
+        (CATEGORY_AI_TECHNOLOGY, "AI Technology"),
+        (CATEGORY_TIPS_TRICKS, "Tips & Tricks"),
+        (CATEGORY_INDUSTRY_NEWS, "Industry News"),
+    ]
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    excerpt = models.TextField(max_length=300)
+    content = models.TextField()
+    author_name = models.CharField(max_length=100, default="Onyx PM Team")
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    tags = models.CharField(max_length=300, blank=True, default="")
+    featured_image_url = models.URLField(blank=True, default="")
+    is_published = models.BooleanField(default=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    read_time_minutes = models.IntegerField(default=5)
+    meta_description = models.CharField(max_length=160, blank=True, default="")
+
+    class Meta:
+        ordering = ["-published_at"]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        if self.is_published and not self.published_at:
+            self.published_at = now()
+        super().save(*args, **kwargs)
+
+
 class LateFeeRule(models.Model):
     TYPE_FLAT = "flat"
     TYPE_PERCENTAGE = "percentage"

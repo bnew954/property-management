@@ -45,6 +45,7 @@ from .models import (
     OwnerStatement,
     Payment,
     Property,
+    BlogPost,
     RentalApplication,
     RentLedgerEntry,
     ScreeningRequest,
@@ -89,6 +90,8 @@ from .serializers import (
     ReconciliationMatchSerializer,
     AccountingPeriodSerializer,
     RecurringTransactionSerializer,
+    BlogPostListSerializer,
+    BlogPostDetailSerializer,
     TransactionImportSerializer,
     ImportedTransactionSerializer,
     CSVColumnMappingSerializer,
@@ -1066,6 +1069,39 @@ class PublicListingApplicationView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class BlogPostListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        queryset = BlogPost.objects.filter(is_published=True).order_by("-published_at")
+
+        category = request.query_params.get("category")
+        search = request.query_params.get("search")
+
+        if category:
+            queryset = queryset.filter(category=category)
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(content__icontains=search)
+            )
+
+        serializer = BlogPostListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class BlogPostDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        post = BlogPost.objects.filter(is_published=True, slug=slug).first()
+        if not post:
+            return Response(
+                {"detail": "Blog post not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(BlogPostDetailSerializer(post).data)
 
 
 class RentalApplicationViewSet(OrganizationQuerySetMixin, viewsets.ModelViewSet):

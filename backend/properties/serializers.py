@@ -33,6 +33,7 @@ from .models import (
     ReconciliationMatch,
     AccountingPeriod,
     RecurringTransaction,
+    BlogPost,
 )
 
 
@@ -679,6 +680,45 @@ class RecurringTransactionSerializer(serializers.ModelSerializer):
         if not obj.property_id:
             return None
         return obj.property.name
+
+
+class BlogPostListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlogPost
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "excerpt",
+            "author_name",
+            "category",
+            "tags",
+            "featured_image_url",
+            "published_at",
+            "read_time_minutes",
+        ]
+
+
+class BlogPostDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlogPost
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "excerpt",
+            "author_name",
+            "category",
+            "tags",
+            "featured_image_url",
+            "is_published",
+            "published_at",
+            "created_at",
+            "updated_at",
+            "read_time_minutes",
+            "meta_description",
+            "content",
+        ]
 
 
 class BankReconciliationSerializer(serializers.ModelSerializer):

@@ -57,6 +57,8 @@ from .views import (
     UnitViewSet,
     ClassificationRuleViewSet,
     BankReconciliationViewSet,
+    BlogPostDetailView,
+    BlogPostListView,
 )
 from .ai_views import AiChatView
 
@@ -134,6 +136,26 @@ urlpatterns = [
         "listings/<slug:slug>/",
         PublicListingDetailView.as_view(),
         name="listings-public-detail",
+    ),
+    path(
+        "api/blog/",
+        BlogPostListView.as_view(),
+        name="blog-list",
+    ),
+    path(
+        "api/blog/<slug:slug>/",
+        BlogPostDetailView.as_view(),
+        name="blog-detail",
+    ),
+    path(
+        "blog/",
+        BlogPostListView.as_view(),
+        name="blog-list-nested",
+    ),
+    path(
+        "blog/<slug:slug>/",
+        BlogPostDetailView.as_view(),
+        name="blog-detail-nested",
     ),
     path(
         "screening/consent/<str:token>/",

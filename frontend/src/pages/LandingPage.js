@@ -24,6 +24,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import PublicNavBar from "../components/PublicNavBar";
+import PublicFooter from "../components/PublicFooter";
 
 function BrandLogo({ textColor, onyxSize = 22, iconSize = 28, pillSize }) {
   const pmFontSize = pillSize || `${Math.round(onyxSize * 0.7)}px`;
@@ -164,7 +165,7 @@ function SectionFadeIn({ id, visibleSections, children, sx = {}, ref }) {
   );
 }
 
-const tabLabels = ["Marketing", "Leasing", "Accounting", "Maintenance"];
+const tabLabels = ["Marketing", "Leasing", "Maintenance", "Accounting"];
 
 function MarketingMockup() {
   const stats = [
@@ -509,8 +510,17 @@ function LandingPage() {
               filter: "drop-shadow(0 0 20px rgba(124, 92, 252, 0.5))",
             },
             "50%": {
-              transform: "translateY(-16px)",
+              transform: "translateY(-10px)",
               filter: "drop-shadow(0 0 35px rgba(124, 92, 252, 0.9))",
+            },
+          },
+          "@keyframes glowPulse": {
+            "0%,100%": {
+              textShadow: "0 0 10px rgba(124, 92, 252, 0.4), 0 0 20px rgba(124, 92, 252, 0.2)",
+            },
+            "50%": {
+              textShadow:
+                "0 0 20px rgba(124, 92, 252, 0.8), 0 0 40px rgba(124, 92, 252, 0.4), 0 0 60px rgba(124, 92, 252, 0.2)",
             },
           },
           "@keyframes shake": {
@@ -739,16 +749,16 @@ function LandingPage() {
                       <LeasingMockup />
                     </Box>
                   </Fade>
-                  <Fade in={activeTab === 2} timeout={300} unmountOnExit>
-                    <Box sx={{ height: "100%" }}>
-                      <AccountingMockup />
-                    </Box>
-                  </Fade>
-                  <Fade in={activeTab === 3} timeout={300} unmountOnExit>
-                    <Box sx={{ height: "100%" }}>
-                      <MaintenanceMockup />
-                    </Box>
-                  </Fade>
+                <Fade in={activeTab === 2} timeout={300} unmountOnExit>
+                  <Box sx={{ height: "100%" }}>
+                    <MaintenanceMockup />
+                  </Box>
+                </Fade>
+                <Fade in={activeTab === 3} timeout={300} unmountOnExit>
+                  <Box sx={{ height: "100%" }}>
+                    <AccountingMockup />
+                  </Box>
+                </Fade>
                 </Box>
               </Box>
             </Box>
@@ -759,10 +769,24 @@ function LandingPage() {
       <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, py: { xs: 8, md: 10 }, maxWidth: "1200px !important" }}>
         <SectionFadeIn id="features" visibleSections={visibleSections} ref={registerSection("features")} sx={{ mb: { xs: 8, md: 10 } }}>
           <Typography sx={{ fontSize: { xs: 30, md: 36 }, fontWeight: 700, letterSpacing: "-0.01em", textAlign: "center", color: "#fff" }}>
-            Built for the Future of Property Management
-          </Typography>
-          <Typography sx={{ mt: 1, textAlign: "center", color: "#878C9E", fontSize: 16 }}>
-            Modern interface, intelligent automation, and zero legacy baggage.
+            The Future of Property Management is{" "}
+            <Box
+              component="span"
+              sx={{
+                color: "#7C5CFC",
+                animation: "glowPulse 2s ease-in-out infinite",
+                display: "inline-block",
+                cursor: "pointer",
+                transition: "filter 0.3s ease",
+                "&:hover": {
+                  animation: "shake 0.6s ease-in-out, glowPulse 2s ease-in-out infinite",
+                  filter:
+                    "drop-shadow(0 0 40px rgba(255, 60, 60, 0.9)) brightness(1.3) hue-rotate(200deg)",
+                },
+              }}
+            >
+              Agentic
+            </Box>
           </Typography>
           <Box
             sx={{
@@ -954,12 +978,6 @@ function LandingPage() {
               </Box>
             </Grid>
           </Grid>
-          <Typography
-            variant="body2"
-            sx={{ mt: 4, textAlign: "center", color: "rgba(255,255,255,0.55)" }}
-          >
-            All plans include free onboarding support. No contracts, cancel anytime.
-          </Typography>
         </SectionFadeIn>
 
         <SectionFadeIn id="faq" visibleSections={visibleSections} ref={registerSection("faq")}>
@@ -994,80 +1012,7 @@ function LandingPage() {
         </SectionFadeIn>
       </Container>
 
-      <Box sx={{ mt: 8, bgcolor: "#111111", color: "#fff", pt: 6, pb: 4 }}>
-        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important" }}>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
-              gap: 2.5,
-            }}
-          >
-           <Box>
-             <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer", marginBottom: "24px" }}>
-               <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
-             </Link>
-             <Stack spacing={0}>
-                <MuiLink href="#features" underline="none" color="#fff" sx={{ fontSize: 13, mb: 1.5, display: "block", "&:last-child": { mb: 0 } }}>
-                  Features
-                </MuiLink>
-                <MuiLink href="#pricing" underline="none" color="#fff" sx={{ fontSize: 13, mb: 1.5, display: "block", "&:last-child": { mb: 0 } }}>
-                  Pricing
-                </MuiLink>
-                <MuiLink href="#faq" underline="none" color="#fff" sx={{ fontSize: 13, mb: 1.5, display: "block", "&:last-child": { mb: 0 } }}>
-                  FAQ
-                </MuiLink>
-                <MuiLink component={Link} to="/login" underline="none" color="#fff" sx={{ fontSize: 13, mb: 1.5, display: "block", "&:last-child": { mb: 0 } }}>
-                  Login
-                </MuiLink>
-              </Stack>
-            </Box>
-            <Box>
-              <Typography sx={{ fontWeight: 700, mb: 1.4 }}>Company</Typography>
-              <Stack spacing={1}>
-                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
-                  About
-                </MuiLink>
-                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
-                  Blog
-                </MuiLink>
-                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
-                  Careers
-                </MuiLink>
-              </Stack>
-            </Box>
-            <Box>
-              <Typography sx={{ fontWeight: 700, mb: 1.4 }}>Legal</Typography>
-              <Stack spacing={1}>
-                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
-                  Privacy Policy
-                </MuiLink>
-                <MuiLink href="#" underline="none" color="#878C9E" sx={{ fontSize: 13 }}>
-                  Terms of Service
-                </MuiLink>
-              </Stack>
-            </Box>
-          </Box>
-          <Divider sx={{ mt: 2.8, borderColor: "rgba(255,255,255,0.06)" }} />
-          <Box
-            sx={{
-              mt: 1.4,
-              display: "flex",
-              justifyContent: { xs: "center", md: "space-between" },
-              alignItems: "center",
-              flexDirection: { xs: "column", md: "row" },
-              gap: 0.8,
-            }}
-          >
-            <Typography sx={{ fontSize: 12, color: "#6b7280" }}>(c) 2026 Onyx PM. All rights reserved.</Typography>
-            <Stack direction="row" spacing={1.2} sx={{ color: "#6b7280", fontSize: 12 }}>
-              <MuiLink href="#" color="inherit" underline="none">LinkedIn</MuiLink>
-              <MuiLink href="#" color="inherit" underline="none">X</MuiLink>
-              <MuiLink href="#" color="inherit" underline="none">YouTube</MuiLink>
-            </Stack>
-          </Box>
-        </Container>
-      </Box>
+      <PublicFooter />
     </Box>
   );
 }

@@ -291,6 +291,9 @@ export const getListingBySlug = (slug) => api.get(`listings/${slug}/`);
 export const submitListingApplication = (slug, data) =>
   api.post(`listings/${slug}/apply/`, data);
 
+export const getBlogPosts = (params) => api.get("/api/blog/", { params });
+export const getBlogPost = (slug) => api.get(`/api/blog/${slug}/`);
+
 export const getApplications = (params = {}) => api.get("applications/", { params });
 export const getApplication = (id) => api.get(`applications/${id}/`);
 export const updateApplication = (id, data) => api.patch(`applications/${id}/`, data);
