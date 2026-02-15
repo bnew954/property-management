@@ -6,11 +6,23 @@ import { alpha } from "@mui/material/styles";
 import { login } from "../services/auth";
 import { useUser } from "../services/userContext";
 
-function BrandLogo({ textColor }) {
+function BrandLogo({ textColor, loginSuccess }) {
   const onyxSize = 28;
   const pmFontSize = Math.round(onyxSize * 0.7);
   return (
-    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 1,
+        transition: "filter 0.3s ease",
+        ...(loginSuccess && {
+          animation: "loginShake 0.6s ease-in-out",
+          filter: "drop-shadow(0 0 30px rgba(39, 202, 64, 0.8)) drop-shadow(0 0 60px rgba(39, 202, 64, 0.4)) brightness(1.2)",
+        }),
+      }}
+    >
       <img
         src="/logo-icon.png"
         alt="Onyx PM"
@@ -67,6 +79,7 @@ function Login() {
   const [values, setValues] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
   const successMessage = useMemo(() => location.state?.message || "", [location.state]);
 
@@ -79,23 +92,21 @@ function Login() {
     }
     try {
       setSubmitting(true);
+      setLoginSuccess(false);
+
       await login(values.username.trim(), values.password);
       const refreshedUser = await refreshUser();
       const shouldWelcome = Boolean(location.state?.showWelcome) && refreshedUser?.role === "landlord";
       const from = location.state?.from?.pathname;
+      const nextPath = shouldWelcome ? "/welcome" : from && from !== "/welcome" ? from : "/dashboard";
 
-      if (shouldWelcome) {
-        navigate("/welcome", { replace: true });
-        return;
-      }
-
-      if (from && from !== "/welcome") {
-        navigate(from, { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
-      }
+      setLoginSuccess(true);
+      setTimeout(() => {
+        navigate(nextPath, { replace: true });
+      }, 1200);
     } catch (requestError) {
       setError("Invalid username or password.");
+      setLoginSuccess(false);
     } finally {
       setSubmitting(false);
     }
@@ -110,8 +121,18 @@ function Login() {
         justifyContent: "center",
         px: 2,
         bgcolor: "background.default",
+        "@keyframes loginShake": {
+          "0%, 100%": { transform: "translateX(0) rotate(0deg)" },
+          "10%": { transform: "translateX(-4px) rotate(-3deg)" },
+          "20%": { transform: "translateX(4px) rotate(3deg)" },
+          "30%": { transform: "translateX(-4px) rotate(-2deg)" },
+          "40%": { transform: "translateX(4px) rotate(2deg)" },
+          "50%": { transform: "translateX(-2px) rotate(-1deg)" },
+          "60%": { transform: "translateX(2px) rotate(1deg)" },
+          "70%, 100%": { transform: "translateX(0) rotate(0deg)" },
+        },
       }}
-      >
+    >
       <Paper
         component="form"
         onSubmit={handleSubmit}
@@ -121,6 +142,7 @@ function Login() {
           p: 3,
           borderRadius: 1,
           bgcolor: "background.paper",
+          transition: "all 0.3s ease",
           boxShadow:
             mode === "dark" ? "none" : `0 6px 24px ${alpha(theme.palette.text.primary, 0.12)}`,
           border: mode === "dark" ? undefined : "none",
@@ -140,7 +162,7 @@ function Login() {
           </Link>
         </Box>
         <Box sx={{ mb: 2 }}>
-          <BrandLogo textColor={mode === "dark" ? "#fff" : "#111827"} />
+          <BrandLogo textColor={mode === "dark" ? "#fff" : "#111827"} loginSuccess={loginSuccess} />
         </Box>
         {successMessage ? (
           <Alert severity="success" sx={{ mb: 2 }}>
@@ -169,7 +191,7 @@ function Login() {
           required
           sx={{ mb: 1.8 }}
         />
-        <Button type="submit" variant="contained" fullWidth disabled={submitting} size="small">
+        <Button type="submit" variant="contained" fullWidth disabled={submitting || loginSuccess} size="small">
           Sign In
         </Button>
         <Typography sx={{ textAlign: "center", mt: 1.5, fontSize: 12, color: "text.secondary" }}>

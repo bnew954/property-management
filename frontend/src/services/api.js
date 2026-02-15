@@ -106,6 +106,8 @@ export const deleteLease = (id) => api.delete(`leases/${id}/`);
 export const getScreenings = () => api.get("screenings/");
 export const getScreening = (id) => api.get(`screenings/${id}/`);
 export const createScreening = (data) => api.post("screenings/", data);
+export const updateScreening = (id, data) => api.patch(`screenings/${id}/`, data);
+export const deleteScreening = (id) => api.delete(`screenings/${id}/`);
 export const runScreening = (id) => api.post(`screenings/${id}/run-screening/`);
 export const sendScreeningConsent = (id) => api.post(`screenings/${id}/send-consent/`);
 export const getScreeningConsentDetails = (token) => api.get(`screening/consent/${token}/`);
@@ -283,6 +285,8 @@ export const createMaintenanceRequest = (data) =>
   api.post("maintenance-requests/", data);
 export const updateMaintenanceRequest = (id, data) =>
   api.put(`maintenance-requests/${id}/`, data);
+export const patchMaintenanceRequest = (id, data) =>
+  api.patch(`maintenance-requests/${id}/`, data);
 export const deleteMaintenanceRequest = (id) =>
   api.delete(`maintenance-requests/${id}/`);
 

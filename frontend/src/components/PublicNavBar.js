@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -83,12 +83,40 @@ export default function PublicNavBar() {
   const [featuresMenuOpen, setFeaturesMenuOpen] = useState(false);
   const theme = useMuiTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const navLinks = [
     { label: "Why Onyx?", href: "/why-onyx" },
     { label: "Pricing", href: "#pricing" },
     { label: "FAQ", href: "#faq" },
   ];
+
+  const handlePricingClick = () => {
+    if (location.pathname === "/") {
+      document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+    } else {
+      navigate("/#pricing");
+    }
+  };
+
+  const handleFaqClick = () => {
+    if (location.pathname === "/") {
+      document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" });
+    } else {
+      navigate("/#faq");
+    }
+  };
+
+  const handleNavClick = (path, event) => {
+    if (event?.preventDefault) event.preventDefault();
+
+    if (location.pathname === path) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      navigate(path);
+    }
+  };
 
   return (
     <>
@@ -111,9 +139,13 @@ export default function PublicNavBar() {
       >
         <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, maxWidth: "1200px !important", width: "100%" }}>
           <Box sx={{ minHeight: 64, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
-            <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer" }}>
+            <MuiLink
+              component="button"
+              onClick={(event) => handleNavClick("/", event)}
+              sx={{ textDecoration: "none", display: "flex", alignItems: "center", cursor: "pointer", color: "inherit" }}
+            >
               <BrandLogo textColor="#fff" onyxSize={18} iconSize={26} />
-            </Link>
+            </MuiLink>
             {isMobile ? (
               <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "#fff" }} aria-label="Open menu">
                 <MenuIcon />
@@ -166,9 +198,10 @@ export default function PublicNavBar() {
                         return (
                           <Box
                             key={item.title}
-                            component={Link}
-                            to={item.route}
-                            onClick={() => setFeaturesMenuOpen(false)}
+                            onClick={(event) => {
+                              setFeaturesMenuOpen(false);
+                              handleNavClick(item.route, event);
+                            }}
                             sx={{
                               textDecoration: "none",
                               color: "#fff",
@@ -220,16 +253,30 @@ export default function PublicNavBar() {
                     </Paper>
                   </Fade>
                 </Box>
-                {navLinks.map((link) => (
-                  <MuiLink
-                    key={link.label}
-                    href={link.href}
-                    underline="none"
-                    sx={{ fontSize: 13, color: "#878C9E", "&:hover": { color: "#fff" } }}
-                  >
-                    {link.label}
-                  </MuiLink>
-                  ))}
+                {navLinks.map((link) => {
+                  const isPricing = link.label === "Pricing";
+                  const isFaq = link.label === "FAQ";
+                  const linkPath = link.href;
+
+                  return (
+                    <MuiLink
+                      key={link.label}
+                      href={isPricing ? "#pricing" : isFaq ? "#faq" : undefined}
+                      component={isPricing || isFaq ? "button" : "button"}
+                      onClick={
+                        isPricing
+                          ? handlePricingClick
+                          : isFaq
+                          ? handleFaqClick
+                          : (event) => handleNavClick(linkPath, event)
+                      }
+                      underline="none"
+                      sx={{ fontSize: 13, color: "#878C9E", "&:hover": { color: "#fff" } }}
+                    >
+                      {link.label}
+                    </MuiLink>
+                  );
+                })}
                 <Button component={Link} to="/login" size="small" sx={{ color: "#fff", fontWeight: 500 }}>
                   Log In
                 </Button>
@@ -278,11 +325,11 @@ export default function PublicNavBar() {
               {featureMenuConfig.map((item) => (
                 <ListItemButton
                   key={item.title}
-                  component={Link}
-                  to={item.route}
+                  component="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setMobileFeaturesOpen(false);
+                    handleNavClick(item.route);
                   }}
                   sx={{ borderRadius: 1, ml: 2, mt: 0.4, color: "#878C9E", "&:hover": { color: "#fff" } }}
                 >
@@ -296,17 +343,33 @@ export default function PublicNavBar() {
               ))}
             </List>
           </Collapse>
-          {navLinks.map((link) => (
-            <ListItemButton
-              key={link.label}
-              component="a"
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              sx={{ borderRadius: 1, color: "#878C9E", "&:hover": { color: "#fff" } }}
-            >
-              <ListItemText primary={link.label} />
-            </ListItemButton>
-          ))}
+          {navLinks.map((link) => {
+            const isPricing = link.label === "Pricing";
+            const isFaq = link.label === "FAQ";
+            const isSectionLink = isPricing || isFaq;
+
+            return (
+                <ListItemButton
+                  key={link.label}
+                  component={isSectionLink ? "button" : "button"}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    if (isSectionLink) {
+                      if (isPricing) {
+                        handlePricingClick();
+                      } else if (isFaq) {
+                        handleFaqClick();
+                      }
+                    } else {
+                      handleNavClick(link.href);
+                    }
+                  }}
+                  sx={{ borderRadius: 1, color: "#878C9E", "&:hover": { color: "#fff" } }}
+                >
+                <ListItemText primary={link.label} />
+              </ListItemButton>
+            );
+          })}
           <Divider sx={{ my: 1 }} />
           <ListItemButton
             component={Link}

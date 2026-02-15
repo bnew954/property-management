@@ -1,4 +1,4 @@
-import {
+﻿import {
   Alert,
   Menu,
   Box,
@@ -45,11 +45,21 @@ import {
 } from "@mui/material";
 import {
   Add,
+  AccountBalance,
   ChevronRight,
   ExpandLess,
   ExpandMore,
   Edit,
   Delete,
+  TrendingDown,
+  TrendingUp,
+  BarChart as BarChartIcon,
+  Print,
+  PostAdd,
+  Upload,
+  SwapHoriz,
+  Remove,
+  Assessment,
   MoreVert,
   Refresh,
   CheckCircle,
@@ -133,6 +143,11 @@ const toDateStr = (value) => {
   if (!value) return "";
   const date = typeof value === "string" ? new Date(value) : value;
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+const formatTransactionDate = (value) => {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
 };
 const formatDisplayDate = (value) => {
   if (!value) return "";
@@ -277,21 +292,58 @@ const recurringIsOverdue = (value, now) => recurringDateValue(value) < recurring
 const statusColor = (status = "") => {
   switch (String(status).toLowerCase()) {
     case "posted":
-      return "success";
+      return {
+        backgroundColor: "rgba(39,202,64,0.15)",
+        color: "#27ca40",
+      };
     case "reversed":
-      return "warning";
+      return {
+        backgroundColor: "rgba(251,191,36,0.15)",
+        color: "#fbbf24",
+      };
     case "voided":
-      return "error";
+      return {
+        backgroundColor: "rgba(239,68,68,0.15)",
+        color: "#ef4444",
+      };
     default:
-      return "default";
+      return {
+        backgroundColor: "rgba(156,163,175,0.15)",
+        color: "#9ca3af",
+      };
   }
 };
 
-const rentStatus = (daysSince) => {
-  if (daysSince === null) return { label: "Current", color: "success" };
-  if (daysSince >= 30) return { label: "Delinquent", color: "error" };
-  if (daysSince > 0) return { label: "Late 1-30", color: "warning" };
-  return { label: "Current", color: "success" };
+const rentStatus = (daysSince, balanceDue = 0, monthlyRent = 0) => {
+  const due = parseNumber(balanceDue);
+  const rent = parseNumber(monthlyRent);
+  if ((daysSince !== null && daysSince > 30) || (due > 0 && rent > 0 && due > rent)) {
+    return {
+      label: "Overdue",
+      color: "#ef4444",
+      backgroundColor: "rgba(239,68,68,0.15)",
+    };
+  }
+  if (daysSince > 0) return { label: "Late 1-30", color: "#f59e0b", backgroundColor: "rgba(251,191,36,0.15)" };
+  return { label: "Current", color: "#27ca40", backgroundColor: "rgba(39,202,64,0.15)" };
+};
+
+const reportEmptyState = () => (
+  <Box sx={{ textAlign: "center", py: 6 }}>
+    <Assessment sx={{ fontSize: 48, color: "rgba(255,255,255,0.08)", mb: 2 }} />
+    <Typography variant="body1" sx={{ color: "rgba(255,255,255,0.3)" }}>
+      No data for this period
+    </Typography>
+    <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.15)" }}>
+      Try adjusting the date range or recording some transactions first
+    </Typography>
+  </Box>
+);
+
+const reportPrintButtonSx = {
+  textTransform: "none",
+  borderColor: "rgba(255,255,255,0.15)",
+  color: "rgba(255,255,255,0.75)",
 };
 
 const incomeFormInitial = { amount: "", revenue_account_id: "", date: toDateStr(new Date()), property_id: "", deposit_to_account_id: "1020", description: "" };
@@ -358,6 +410,35 @@ const accountTypeLabel = {
   equity: "Equity",
   revenue: "Revenue",
   expense: "Expenses",
+};
+const accountTypeChipStyle = (type = "expense") => {
+  switch (String(type).toLowerCase()) {
+    case "asset":
+      return {
+        backgroundColor: "rgba(59,130,246,0.15)",
+        color: "#60a5fa",
+      };
+    case "liability":
+      return {
+        backgroundColor: "rgba(251,191,36,0.15)",
+        color: "#fbbf24",
+      };
+    case "equity":
+      return {
+        backgroundColor: "rgba(124,92,252,0.15)",
+        color: "#a78bfa",
+      };
+    case "revenue":
+      return {
+        backgroundColor: "rgba(39,202,64,0.15)",
+        color: "#27ca40",
+      };
+    default:
+      return {
+        backgroundColor: "rgba(239,68,68,0.15)",
+        color: "#ef4444",
+      };
+  }
 };
 const ruleMatchFieldLabel = {
   description: "Description",
@@ -461,6 +542,7 @@ function Accounting() {
   const [editingAccountId, setEditingAccountId] = useState("");
   const [coaMenuAnchor, setCoaMenuAnchor] = useState(null);
   const [coaMenuAccount, setCoaMenuAccount] = useState(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState(null);
 
   const [incomeForm, setIncomeForm] = useState(incomeFormInitial);
   const [expenseForm, setExpenseForm] = useState(expenseFormInitial);
@@ -710,6 +792,33 @@ const [periods, setPeriods] = useState([]);
   const loadTransactions = async () => {
     const response = await getJournalEntries(clean(txFilters));
     setJournalEntries(parseList(response.data));
+  };
+
+  const handleRefreshTransactions = async () => {
+    await loadTransactions();
+  };
+
+  const handleMoreMenu = (event) => {
+    setMoreMenuAnchor(event.currentTarget);
+  };
+
+  const closeMoreMenu = () => {
+    setMoreMenuAnchor(null);
+  };
+
+  const handleManageRules = () => {
+    closeMoreMenu();
+    openRuleManager();
+  };
+
+  const handleRecurring = () => {
+    closeMoreMenu();
+    openRecurringManager();
+  };
+
+  const handleReconcile = () => {
+    closeMoreMenu();
+    openReconcileStart();
   };
 
   const loadAll = async () => {
@@ -1697,6 +1806,93 @@ const [periods, setPeriods] = useState([]);
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
+  const hasCashflowData = monthRows.length > 0;
+  const recentDashboardTransactions = useMemo(
+    () =>
+      parseList(journalEntries).map((entry) => ({
+        id: entry.id,
+        date: formatTransactionDate(entry.entry_date || entry.date),
+        memo: entry.memo || "-",
+        amount: parseNumber(entry.total_debits || entry.total_credits),
+        status: String(entry.status || "draft").toLowerCase(),
+      })).slice(0, 5),
+    [journalEntries]
+  );
+  const topAccountBalances = useMemo(
+    () =>
+      parseList(accountBalances)
+        .map((line) => {
+          const account = accountById[String(line.account_id || line.account?.id)] || {};
+          const balance = parseNumber(line.net_balance ?? line.balance ?? parseNumber(line.total_debits) - parseNumber(line.total_credits));
+          const name = formatAccountWithCode(account) || line.account_name || line.account?.name || line.name || "-";
+          return {
+            id: String(line.account_id || line.account?.id || line.id || name),
+            name,
+            type: account.account_type || line.account_type || "expense",
+            balance,
+          };
+        })
+        .filter((row) => row.balance !== 0 || row.name !== "-")
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
+        .slice(0, 5),
+    [accountBalances, accountById]
+  );
+  const pnlRevenueRows = parseList(reportData.pnl?.revenue_accounts || reportData.pnl?.revenue);
+  const pnlExpenseRows = parseList(reportData.pnl?.expense_accounts || reportData.pnl?.expenses);
+  const balanceAssetRows = parseList(reportData.balance?.assets);
+  const balanceLiabilityRows = parseList(reportData.balance?.liabilities);
+  const balanceEquityRows = parseList(reportData.balance?.equity);
+  const cashflowRows = parseList(reportData.cashflow);
+  const trialRows = parseList(reportData.trial);
+  const glRows = parseList(reportData.gl?.accounts);
+  const rentRows = parseList(reportData.rent?.rows || reportData.rent?.data);
+  const taxRows = parseList(reportData.tax?.by_tax_category || reportData.tax);
+  const ownerRows = parseList(reportData.owner);
+  const reportHasData = {
+    pnl: !!reportData.pnl && (pnlRevenueRows.length > 0 || pnlExpenseRows.length > 0),
+    balance: !!reportData.balance && (balanceAssetRows.length > 0 || balanceLiabilityRows.length > 0 || balanceEquityRows.length > 0),
+    cashflow: cashflowRows.length > 0,
+    trial: trialRows.length > 0,
+    gl: glRows.length > 0,
+    rent: rentRows.length > 0,
+    tax: taxRows.length > 0,
+    owner: ownerRows.length > 0,
+  };
+  const formattedRentRollRows = useMemo(
+    () =>
+      parseList(rentRoll.rows).map((row) => {
+        const last = row.last_payment_date || row.last_payment;
+        const hasLastPayment = !!last;
+        let daysSince = null;
+        if (hasLastPayment) {
+          daysSince = Math.max(0, Math.floor((Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24)));
+        }
+        const balanceDueRaw = row.balance_due;
+        const hasBalanceDue = balanceDueRaw !== null && balanceDueRaw !== undefined && String(balanceDueRaw).trim() !== "" && String(balanceDueRaw).trim() !== "-";
+        const balanceDue = hasBalanceDue ? parseNumber(balanceDueRaw) : 0;
+        return {
+          id: row.id,
+          propertyName: row.property_name || row.property || row.property?.name || "-",
+          unit: row.unit_number || row.unit_name || row.unit || row.unit?.unit_number || "-",
+          tenant: row.tenant_name || "-",
+          monthlyRent: parseNumber(row.monthly_rent),
+          daysSince,
+          lastDateText: hasLastPayment ? toDateStr(last) : "",
+          status: rentStatus(daysSince, balanceDue, row.monthly_rent),
+          hasBalanceDue,
+          balanceDue,
+          hasNoPayments: !hasLastPayment,
+          leaseId: row.lease_id || row.lease,
+          hasBalanceStyle: hasBalanceDue ? (balanceDue > 0 ? "error.main" : "success.main") : "text.disabled",
+          balanceDisplay: hasBalanceDue ? money(balanceDue) : "-",
+          propertyId: row.property,
+          unitId: row.unit || row.unit_id,
+          tenantId: row.tenant_id || row.tenantId || "",
+        };
+      }),
+    [rentRoll.rows]
+  );
+
   useEffect(() => {
     if (role === "landlord") {
       loadAll();
@@ -1717,36 +1913,36 @@ const [periods, setPeriods] = useState([]);
       const rowBalance = parseNumber(account.balance ?? accountBalanceById[String(account.id)]);
       const accountCode = account.account_code || account.code || "";
       const isHeader = account.is_header === true;
-    const rowStyle = isHeader
-      ? { fontWeight: 700, fontSize: "0.95rem" }
-      : {};
-    const isInactive = account.is_active === false;
-    const balanceIsZero = rowBalance === 0;
-    const balanceColor = rowBalance < 0 ? "error.main" : "text.primary";
-    const row = (
-      <TableRow
+      const rowStyle = isHeader ? { fontWeight: 700, fontSize: "0.95rem" } : {};
+      const isInactive = account.is_active === false;
+      const balanceIsZero = rowBalance === 0;
+      const balanceColor = rowBalance > 0 ? "#27ca40" : rowBalance < 0 ? "#ef4444" : "text.secondary";
+      const typeStyle = accountTypeChipStyle(account.account_type);
+      const rowIndent = 16 + depth * 18;
+      const row = (
+        <TableRow
           key={account.id}
           hover
-        sx={{
-          "& td": { fontSize: 12, fontFamily: "monospace" },
-          "& .coa-row-menu": { opacity: 0, visibility: "hidden" },
-          "&:hover .coa-row-menu": { opacity: 1, visibility: "visible" },
-          bgcolor: isHeader ? "rgba(124,92,252,0.08)" : "transparent",
-          cursor: isHeader && hasChildren ? "pointer" : "pointer",
-          fontStyle: isInactive ? "italic" : "normal",
-          opacity: isInactive && !showInactiveAccounts ? 0.5 : 1,
-          color: isInactive && showInactiveAccounts ? "text.secondary" : undefined,
-        }}
-        onClick={() => {
-          if (isHeader) {
-            if (hasChildren) {
-              toggleNode(account.id);
+          sx={{
+            "& td": { fontSize: 12, fontFamily: "monospace" },
+            "& .coa-row-menu": { opacity: 0, visibility: "hidden" },
+            "&:hover .coa-row-menu": { opacity: 1, visibility: "visible" },
+            bgcolor: isHeader ? "rgba(255,255,255,0.02)" : "transparent",
+            cursor: isHeader && hasChildren ? "pointer" : "pointer",
+            fontStyle: isInactive ? "italic" : "normal",
+            opacity: isInactive && !showInactiveAccounts ? 0.5 : 1,
+            color: isInactive && showInactiveAccounts ? "text.secondary" : undefined,
+          }}
+          onClick={() => {
+            if (isHeader) {
+              if (hasChildren) {
+                toggleNode(account.id);
+              }
+              return;
             }
-            return;
-          }
-          if (!isHeader) setSelectedAccount(account.id);
-        }}
-      >
+            if (!isHeader) setSelectedAccount(account.id);
+          }}
+        >
           <TableCell sx={{ pl: 2 + depth * 3, display: { xs: "none", md: "table-cell" } }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {hasChildren ? (
@@ -1766,7 +1962,7 @@ const [periods, setPeriods] = useState([]);
               <Typography sx={rowStyle}>{accountCode || ""}</Typography>
             </Box>
           </TableCell>
-          <TableCell sx={{ pl: `${16 + depth * 24}px` }}>
+          <TableCell sx={{ pl: `${rowIndent}px` }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
               <Typography sx={rowStyle}>
                 {`${accountCode ? `${accountCode} · ` : ""}${account.name || ""}`}
@@ -1785,7 +1981,7 @@ const [periods, setPeriods] = useState([]);
             <Chip
               label={account.account_type || "expense"}
               size="small"
-              sx={{ textTransform: "uppercase", fontSize: 11 }}
+              sx={{ textTransform: "uppercase", fontSize: 11, ...typeStyle }}
             />
           </TableCell>
           <TableCell align="right" sx={{ fontFamily: "monospace" }}>
@@ -1807,7 +2003,6 @@ const [periods, setPeriods] = useState([]);
       return [row, ...nextRows];
     });
   };
-
   const renderReconAmount = (value) => {
     const normalized = parseNumber(value);
     return (
@@ -1868,56 +2063,173 @@ const [periods, setPeriods] = useState([]);
 
       {!loading && tab === 0 ? (
         <Box sx={{ display: "grid", gap: 1.5 }}>
-          <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" } }}>
-            <Card>
+          <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" } }}>
+            <Card sx={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", p: 3 }}>
               <CardContent>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Income (Current Month)</Typography>
-                <Typography sx={{ fontSize: 24, color: "success.main", fontWeight: 700 }}>{money(summaryIncome)}</Typography>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Expenses (Current Month)</Typography>
-                <Typography sx={{ fontSize: 24, color: "error.main", fontWeight: 700 }}>{money(summaryExpense)}</Typography>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Net Income (Current Month)</Typography>
-                <Typography
-                  sx={{
-                    fontSize: 24,
-                    color: summaryNet >= 0 ? "success.main" : "error.main",
-                    fontWeight: 700,
-                  }}
-                >
-                  {money(summaryNet)}
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Income</Typography>
+                <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
+                  Current Month
                 </Typography>
+                <Box sx={{ alignItems: "center", display: "flex", gap: 1, mt: 1 }}>
+                  <TrendingUp sx={{ color: "#27ca40", fontSize: 20 }} />
+                  <Typography sx={{ fontSize: 24, color: "#27ca40", fontWeight: 700 }}>{money(summaryIncome)}</Typography>
+                </Box>
+                {summaryIncome === 0 ? (
+                  <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5 }}>
+                    No transactions this period
+                  </Typography>
+                ) : null}
               </CardContent>
             </Card>
-            <Card>
+            <Card sx={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", p: 3 }}>
               <CardContent>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Cash Balance (1010+1020)</Typography>
-                <Typography sx={{ fontSize: 24, color: "info.main", fontWeight: 700 }}>{money(summaryCash)}</Typography>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Total Expenses</Typography>
+                <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
+                  Current Month
+                </Typography>
+                <Box sx={{ alignItems: "center", display: "flex", gap: 1, mt: 1 }}>
+                  <TrendingDown sx={{ color: "#ef4444", fontSize: 20 }} />
+                  <Typography sx={{ fontSize: 24, color: "#ef4444", fontWeight: 700 }}>{money(summaryExpense)}</Typography>
+                </Box>
+                {summaryExpense === 0 ? (
+                  <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5 }}>
+                    No transactions this period
+                  </Typography>
+                ) : null}
+              </CardContent>
+            </Card>
+            <Card sx={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", p: 3 }}>
+              <CardContent>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Net Income</Typography>
+                <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
+                  Current Month
+                </Typography>
+                <Box sx={{ alignItems: "center", display: "flex", gap: 1, mt: 1 }}>
+                  <AccountBalance sx={{ color: summaryNet >= 0 ? "#7C5CFC" : "#ef4444", fontSize: 20 }} />
+                  <Typography sx={{ fontSize: 24, color: summaryNet >= 0 ? "#7C5CFC" : "#ef4444", fontWeight: 700 }}>
+                    {money(summaryNet)}
+                  </Typography>
+                </Box>
+                {summaryNet === 0 ? (
+                  <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.5 }}>
+                    No transactions this period
+                  </Typography>
+                ) : null}
               </CardContent>
             </Card>
           </Box>
 
           <Paper sx={{ p: 1.5 }}>
             <Typography sx={{ mb: 1, fontWeight: 700, color: "text.secondary" }}>Monthly Cash Flow</Typography>
-            <Box sx={{ height: 260 }}>
-              <ResponsiveContainer>
-                <BarChart data={monthRows}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                  <RechartsTooltip contentStyle={{ backgroundColor: theme.palette.background.paper }} />
-                  <Bar dataKey="income" fill={debitColor} />
-                  <Bar dataKey="expenses" fill={creditColor} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
+            {hasCashflowData ? (
+              <Box sx={{ height: 260 }}>
+                <ResponsiveContainer>
+                  <BarChart data={monthRows}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
+                    <RechartsTooltip contentStyle={{ backgroundColor: theme.palette.background.paper }} />
+                    <Bar dataKey="income" fill={debitColor} />
+                    <Bar dataKey="expenses" fill={creditColor} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  backgroundColor: "rgba(255,255,255,0.02)",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  p: 4,
+                  textAlign: "center",
+                  mt: 3,
+                }}
+              >
+                <BarChartIcon sx={{ fontSize: 48, color: "rgba(255,255,255,0.08)", mb: 2 }} />
+                <Typography variant="body1" sx={{ color: "rgba(255,255,255,0.3)" }}>
+                  Cash flow chart will appear here
+                </Typography>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.15)" }}>
+                  Record income and expenses to see your monthly trends
+                </Typography>
+              </Box>
+            )}
           </Paper>
+
+          <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mt: 3 }}>
+            <Paper sx={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", p: 3, flex: 1 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1 }}>Recent Transactions</Typography>
+              {recentDashboardTransactions.length === 0 ? (
+                <Typography sx={{ color: "text.secondary" }}>No recent transactions</Typography>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={headerCellStyle}>Date</TableCell>
+                        <TableCell sx={headerCellStyle}>Memo</TableCell>
+                        <TableCell sx={headerCellStyle} align="right">Amount</TableCell>
+                        <TableCell sx={headerCellStyle}>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {recentDashboardTransactions.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>{entry.date || "-"}</TableCell>
+                          <TableCell sx={{ maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {entry.memo}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+                            {money(entry.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={entry.status} sx={statusColor(entry.status)} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Paper>
+            <Paper sx={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", p: 3, flex: 1 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1 }}>Account Balances</Typography>
+              {topAccountBalances.length === 0 ? (
+                <Typography sx={{ color: "text.secondary" }}>No account activity yet</Typography>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={headerCellStyle}>Account</TableCell>
+                        <TableCell sx={headerCellStyle}>Type</TableCell>
+                        <TableCell sx={headerCellStyle} align="right">Balance</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {topAccountBalances.map((row) => {
+                        const typeStyle = accountTypeChipStyle(row.type);
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell sx={{ fontSize: 12, maxWidth: 280 }}>{row.name}</TableCell>
+                            <TableCell>
+                              <Chip size="small" label={String(row.type || "").toUpperCase()} sx={typeStyle} />
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ fontFamily: "monospace", color: row.balance > 0 ? "#27ca40" : row.balance < 0 ? "#ef4444" : "text.secondary" }}
+                            >
+                              {money(row.balance)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Paper>
+          </Box>
 
           <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" } }}>
             <Paper sx={{ p: 1.5 }}>
@@ -1957,64 +2269,129 @@ const [periods, setPeriods] = useState([]);
               </Box>
             </Paper>
           </Box>
-
-          <Paper sx={{ p: 1.5 }}>
-            <Typography sx={{ mb: 1, fontWeight: 700, color: "text.secondary" }}>Recent Posted Journal Entries</Typography>
-            <List dense>
-              {journalEntries.slice(0, 10).map((entry) => (
-                <ListItem
-                  key={entry.id}
-                  secondaryAction={<Typography sx={{ fontFamily: "monospace" }}>{money(entry.total_debits || entry.total_credits)}</Typography>}
-                  sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}
-                >
-                  <ListItemText
-                    primary={`${entry.entry_date || entry.date} - ${entry.memo || "-"}`}
-                    secondary={entry.source_type || "manual"}
-                    primaryTypographyProps={{ fontSize: 13 }}
-                    secondaryTypographyProps={{ fontSize: 12 }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
         </Box>
       ) : null}
 
       {!loading && tab === 1 ? (
         <Box>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center", mb: 1 }}>
-            <Button size="small" variant="contained" onClick={() => setShowIncome(true)} sx={{ bgcolor: "success.main" }}>
-              Record Income
-            </Button>
-            <Button size="small" variant="contained" onClick={() => setShowExpense(true)} sx={{ bgcolor: "error.main" }}>
-              Record Expense
-            </Button>
-            <Button size="small" variant="contained" onClick={() => setShowTransfer(true)} sx={{ bgcolor: "info.main" }}>
-              Transfer
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              sx={{ borderColor: accent, color: accent }}
-              onClick={() => setShowJournal(true)}
-            >
-              Journal Entry
-            </Button>
-              <Button size="small" variant="outlined" onClick={startImportDialog}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+              flexWrap: "wrap",
+              gap: 2,
+            }}
+          >
+            <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<Add />}
+                sx={{ backgroundColor: "#27ca40", textTransform: "none", borderRadius: "8px", "&:hover": { backgroundColor: "#1fa834" } }}
+                onClick={() => setShowIncome(true)}
+              >
+                Record Income
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<Remove />}
+                sx={{ backgroundColor: "#ef4444", textTransform: "none", borderRadius: "8px", "&:hover": { backgroundColor: "#dc2626" } }}
+                onClick={() => setShowExpense(true)}
+              >
+                Record Expense
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setShowTransfer(true)}
+                startIcon={<SwapHoriz />}
+                sx={{ textTransform: "none", borderRadius: "8px", borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }}
+              >
+                Transfer
+              </Button>
+            </Box>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<PostAdd />}
+                sx={{ textTransform: "none", borderRadius: "8px", borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}
+                onClick={() => setShowJournal(true)}
+              >
+                Journal Entry
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Upload />}
+                sx={{ textTransform: "none", borderRadius: "8px", borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: "0.8rem" }}
+                onClick={startImportDialog}
+              >
                 Import
               </Button>
-              <Button size="small" variant="outlined" color="info" onClick={openRuleManager}>
-                Manage Rules
-              </Button>
-              <Button size="small" variant="outlined" color="success" onClick={openRecurringManager}>
-                Recurring
-              </Button>
-              <Button size="small" variant="outlined" sx={{ borderColor: "success.main", color: "success.main" }} onClick={openReconcileStart}>
-                Reconcile
-              </Button>
-              <Button size="small" sx={{ ml: "auto" }} onClick={loadTransactions} startIcon={<Refresh />}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Refresh />}
+                sx={{ textTransform: "none", borderRadius: "8px", borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: "0.8rem" }}
+                onClick={handleRefreshTransactions}
+              >
                 Refresh
               </Button>
+              <IconButton size="small" onClick={handleMoreMenu} sx={{ color: "rgba(255,255,255,0.5)" }}>
+                <MoreVert />
+              </IconButton>
+            </Box>
+          </Box>
+          <Menu anchorEl={moreMenuAnchor} open={Boolean(moreMenuAnchor)} onClose={closeMoreMenu}>
+            <MenuItem onClick={handleManageRules}>Manage Rules</MenuItem>
+            <MenuItem onClick={handleRecurring}>Recurring Transactions</MenuItem>
+            <MenuItem onClick={handleReconcile}>Reconcile</MenuItem>
+          </Menu>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 1,
+              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(4, 1fr)" },
+              mb: 1.5,
+            }}
+          >
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel>Source</InputLabel>
+              <Select
+                value={txFilters.source_type}
+                label="Source"
+                onChange={(e) => setTxFilters((prev) => ({ ...prev, source_type: e.target.value }))}
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="manual">manual</MenuItem>
+                <MenuItem value="rent_payment">rent_payment</MenuItem>
+                <MenuItem value="expense">expense</MenuItem>
+                <MenuItem value="late_fee">late_fee</MenuItem>
+                <MenuItem value="import">import</MenuItem>
+                <MenuItem value="recurring">recurring</MenuItem>
+                <MenuItem value="transfer">transfer</MenuItem>
+                <MenuItem value="deposit">deposit</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>Property</InputLabel>
+              <Select
+                value={txFilters.property_id}
+                label="Property"
+                onChange={(e) => setTxFilters((prev) => ({ ...prev, property_id: e.target.value }))}
+              >
+                <MenuItem value="">All</MenuItem>
+                {properties.map((property) => (
+                  <MenuItem key={property.id} value={String(property.id)}>
+                    {property.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               size="small"
               type="date"
@@ -2045,39 +2422,6 @@ const [periods, setPeriods] = useState([]);
                 <MenuItem value="voided">Voided</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 170 }}>
-              <InputLabel>Source</InputLabel>
-              <Select
-                value={txFilters.source_type}
-                label="Source"
-                onChange={(e) => setTxFilters((prev) => ({ ...prev, source_type: e.target.value }))}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="manual">manual</MenuItem>
-                <MenuItem value="rent_payment">rent_payment</MenuItem>
-                <MenuItem value="expense">expense</MenuItem>
-                <MenuItem value="late_fee">late_fee</MenuItem>
-                <MenuItem value="import">import</MenuItem>
-                <MenuItem value="recurring">recurring</MenuItem>
-                <MenuItem value="transfer">transfer</MenuItem>
-                <MenuItem value="deposit">deposit</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Property</InputLabel>
-              <Select
-                value={txFilters.property_id}
-                label="Property"
-                onChange={(e) => setTxFilters((prev) => ({ ...prev, property_id: e.target.value }))}
-              >
-                <MenuItem value="">All</MenuItem>
-                {properties.map((property) => (
-                  <MenuItem key={property.id} value={String(property.id)}>
-                    {property.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </Box>
 
           <Paper>
@@ -2101,7 +2445,9 @@ const [periods, setPeriods] = useState([]);
                 <TableBody>
                   {journalEntries.map((entry) => {
                     const lines = parseList(entry.lines);
+                    const status = String(entry.status || "draft").toLowerCase();
                     const isExpanded = expandedJournal[entry.id];
+                    const isBusy = !!journalBusy[entry.id];
                     const total = parseNumber(entry.total_debits || entry.total_credits);
                     return (
                       <>
@@ -2116,37 +2462,51 @@ const [periods, setPeriods] = useState([]);
                               {isExpanded ? <ExpandLess /> : <ExpandMore />}
                             </IconButton>
                           </TableCell>
-                          <TableCell>{toDateStr(entry.entry_date || entry.date)}</TableCell>
-                          <TableCell>{entry.memo || "-"}</TableCell>
+                          <TableCell>{formatTransactionDate(entry.entry_date || entry.date)}</TableCell>
+                          <TableCell sx={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {entry.memo || "-"}
+                          </TableCell>
                           <TableCell>{entry.source_type || "-"}</TableCell>
                           <TableCell align="right" sx={{ fontFamily: "monospace" }}>
                             {money(total)}
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={entry.status || "draft"} color={statusColor(entry.status)} />
+                            <Chip size="small" label={status} sx={statusColor(status)} />
                           </TableCell>
                           <TableCell align="right">
-                            <Button
-                              size="small"
-                              onClick={() => journalActions(entry.id, "post")}
-                              disabled={entry.status !== "draft" || journalBusy[entry.id]}
-                            >
-                              Post
-                            </Button>
-                            <Button
-                              size="small"
-                              onClick={() => journalActions(entry.id, "reverse")}
-                              disabled={entry.status !== "posted" || journalBusy[entry.id]}
-                            >
-                              Reverse
-                            </Button>
-                            <Button
-                              size="small"
-                              onClick={() => journalActions(entry.id, "void")}
-                              disabled={entry.status !== "draft" || journalBusy[entry.id]}
-                            >
-                              Void
-                            </Button>
+                            {status === "draft" ? (
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => journalActions(entry.id, "post")}
+                                disabled={isBusy}
+                                sx={{ color: "#7c5cfc", textTransform: "none", minWidth: "auto", px: 0.75 }}
+                              >
+                                Post
+                              </Button>
+                            ) : null}
+                            {status === "posted" ? (
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => journalActions(entry.id, "reverse")}
+                                disabled={isBusy}
+                                sx={{ color: "#f59e0b", textTransform: "none", minWidth: "auto", px: 0.75 }}
+                              >
+                                Reverse
+                              </Button>
+                            ) : null}
+                            {status === "draft" ? (
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => journalActions(entry.id, "void")}
+                                disabled={isBusy}
+                                sx={{ color: "#ef4444", textTransform: "none", minWidth: "auto", px: 0.75 }}
+                              >
+                                Void
+                              </Button>
+                            ) : null}
                           </TableCell>
                         </TableRow>
                         <TableRow>
@@ -2356,7 +2716,7 @@ const [periods, setPeriods] = useState([]);
                             fontWeight: 700,
                             color: "text.secondary",
                             fontSize: 12,
-                            backgroundColor: sectionIndex > 0 ? "rgba(124,92,252,0.05)" : "transparent",
+                            backgroundColor: "rgba(255,255,255,0.02)",
                           }}
                         >
                           {accountTypeLabel[section.type]}
@@ -2446,11 +2806,11 @@ const [periods, setPeriods] = useState([]);
             ))}
           </Box>
 
-          <Paper sx={{ p: 1 }}>
-            {activeReport === "pnl" ? (
-              <Box>
-                <Typography sx={{ fontWeight: 700, mb: 1 }}>Profit & Loss</Typography>
-                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+            <Paper sx={{ p: 1 }}>
+              {activeReport === "pnl" ? (
+                <Box>
+                  <Typography sx={{ fontWeight: 700, mb: 1 }}>Profit & Loss</Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
                   <TextField
                     size="small"
                     label="From"
@@ -2474,60 +2834,80 @@ const [periods, setPeriods] = useState([]);
                   <Button size="small" variant="contained" sx={{ bgcolor: accent }} onClick={() => loadReports("pnl")}>
                     Refresh
                   </Button>
-                  <Button size="small" onClick={() => window.print()}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Print />}
+                    onClick={() => window.print()}
+                    sx={reportPrintButtonSx}
+                  >
                     Print Report
                   </Button>
+                  </Box>
+                  {reportHasData.pnl ? (
+                    <TableContainer>
+                      <Table size="small">
+                        <TableBody>
+                          {pnlRevenueRows.map((row) => (
+                            <TableRow key={row.account_id || row.id}>
+                              <TableCell>{row.account_name || row.name || "Revenue"}</TableCell>
+                              <TableCell align="right" sx={{ fontFamily: "monospace", color: "success.main" }}>
+                                {money(row.total || row.amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {pnlExpenseRows.map((row) => (
+                            <TableRow key={row.account_id || row.id}>
+                              <TableCell>{row.account_name || row.name || "Expense"}</TableCell>
+                              <TableCell align="right" sx={{ fontFamily: "monospace", color: "error.main" }}>
+                                {money(row.total || row.amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  ) : (
+                    reportEmptyState()
+                  )}
                 </Box>
-                {reportData.pnl ? (
-                  <TableContainer>
-                    <Table size="small">
-                      <TableBody>
-                        {parseList(reportData.pnl.revenue_accounts || reportData.pnl).map((row) => (
-                          <TableRow key={row.account_id || row.id}>
-                            <TableCell>{row.account_name || row.name || "Revenue"}</TableCell>
-                            <TableCell align="right" sx={{ fontFamily: "monospace", color: "success.main" }}>
-                              {money(row.total || row.amount || 0)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {parseList(reportData.pnl.expense_accounts).map((row) => (
-                          <TableRow key={row.account_id || row.id}>
-                            <TableCell>{row.account_name || row.name || "Expense"}</TableCell>
-                            <TableCell align="right" sx={{ fontFamily: "monospace", color: "error.main" }}>
-                              {money(row.total || row.amount || 0)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : null}
-              </Box>
-            ) : null}
+              ) : null}
             {activeReport === "balance" ? (
               <Box>
                 <Typography sx={{ fontWeight: 700, mb: 1 }}>Balance Sheet</Typography>
                 <Button size="small" variant="contained" sx={{ bgcolor: accent }} onClick={() => loadReports("balance")}>
                   Refresh
                 </Button>
-                <Button size="small" onClick={() => window.print()} sx={{ ml: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={() => window.print()}
+                  sx={reportPrintButtonSx}
+                >
                   Print Report
                 </Button>
-                <Typography sx={{ mt: 1, fontWeight: 700 }}>Assets</Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableBody>
-                      {parseList(reportData.balance?.assets).map((line) => (
-                        <TableRow key={line.account_id || line.id}>
-                          <TableCell>{line.account_name || line.name}</TableCell>
-                          <TableCell align="right" sx={{ fontFamily: "monospace" }}>
-                            {money(line.balance || line.total || 0)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                {reportHasData.balance ? (
+                  <>
+                    <Typography sx={{ mt: 1, fontWeight: 700 }}>Assets</Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableBody>
+                          {balanceAssetRows.map((line) => (
+                            <TableRow key={line.account_id || line.id}>
+                              <TableCell>{line.account_name || line.name}</TableCell>
+                              <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+                                {money(line.balance || line.total || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
             {activeReport === "cashflow" ? (
@@ -2536,21 +2916,31 @@ const [periods, setPeriods] = useState([]);
                 <Button size="small" variant="contained" sx={{ bgcolor: accent }} onClick={() => loadReports("cashflow")}>
                   Refresh
                 </Button>
-                <Button size="small" onClick={() => window.print()} sx={{ ml: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={() => window.print()}
+                  sx={reportPrintButtonSx}
+                >
                   Print Report
                 </Button>
-                <Box sx={{ height: 240, mt: 1 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={parseList(reportData.cashflow)}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                      <RechartsTooltip />
-                      <Line dataKey="income" stroke={debitColor} />
-                      <Line dataKey="expenses" stroke={creditColor} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Box>
+                {reportHasData.cashflow ? (
+                  <Box sx={{ height: 240, mt: 1 }}>
+                    <ResponsiveContainer>
+                      <LineChart data={cashflowRows}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
+                        <RechartsTooltip />
+                        <Line dataKey="income" stroke={debitColor} />
+                        <Line dataKey="expenses" stroke={creditColor} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
             {activeReport === "trial" ? (
@@ -2559,36 +2949,46 @@ const [periods, setPeriods] = useState([]);
                 <Button size="small" variant="contained" sx={{ bgcolor: accent }} onClick={() => loadReports("trial")}>
                   Refresh
                 </Button>
-                <Button size="small" onClick={() => window.print()} sx={{ ml: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={() => window.print()}
+                  sx={reportPrintButtonSx}
+                >
                   Print Report
                 </Button>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={headerCellStyle}>Account</TableCell>
-                        <TableCell sx={headerCellStyle}>Debit</TableCell>
-                        <TableCell sx={headerCellStyle}>Credit</TableCell>
-                        <TableCell sx={headerCellStyle}>Net</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {parseList(reportData.trial).map((line) => {
-                        const debit = parseNumber(line.total_debits);
-                        const credit = parseNumber(line.total_credits);
-                        const net = parseNumber(line.net_balance ?? line.balance ?? debit - credit);
-                        return (
-                          <TableRow key={line.account_id || line.id}>
-                            <TableCell>{line.account_name || line.account?.name || "-"}</TableCell>
-                            <TableCell align="right">{money(debit)}</TableCell>
-                            <TableCell align="right">{money(credit)}</TableCell>
-                            <TableCell align="right">{money(net)}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                {reportHasData.trial ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={headerCellStyle}>Account</TableCell>
+                          <TableCell sx={headerCellStyle}>Debit</TableCell>
+                          <TableCell sx={headerCellStyle}>Credit</TableCell>
+                          <TableCell sx={headerCellStyle}>Net</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {trialRows.map((line) => {
+                          const debit = parseNumber(line.total_debits);
+                          const credit = parseNumber(line.total_credits);
+                          const net = parseNumber(line.net_balance ?? line.balance ?? debit - credit);
+                          return (
+                            <TableRow key={line.account_id || line.id}>
+                              <TableCell>{line.account_name || line.account?.name || "-"}</TableCell>
+                              <TableCell align="right">{money(debit)}</TableCell>
+                              <TableCell align="right">{money(credit)}</TableCell>
+                              <TableCell align="right">{money(net)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
             {activeReport === "gl" ? (
@@ -2597,42 +2997,52 @@ const [periods, setPeriods] = useState([]);
                 <Button size="small" onClick={() => loadReports("gl")} variant="contained" sx={{ bgcolor: accent }}>
                   Refresh
                 </Button>
-                <Button size="small" onClick={() => window.print()} sx={{ ml: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={() => window.print()}
+                  sx={reportPrintButtonSx}
+                >
                   Print Report
                 </Button>
-                <Box sx={{ mt: 1 }}>
-                  {(parseList(reportData.gl?.accounts) || []).map((section) => (
-                    <Paper sx={{ mb: 1, p: 1 }} key={section.account_id || section.id}>
-                      <Typography sx={{ fontWeight: 700, mb: 1 }}>
-                        {section.account_name || section.account?.name}
-                      </Typography>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={headerCellStyle}>Date</TableCell>
-                            <TableCell sx={headerCellStyle}>Memo</TableCell>
-                            <TableCell sx={headerCellStyle} align="right">Debit</TableCell>
-                            <TableCell sx={headerCellStyle} align="right">Credit</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {parseList(section.lines).map((line) => (
-                            <TableRow key={line.id}>
-                              <TableCell>{toDateStr(line.entry_date)}</TableCell>
-                              <TableCell>{line.memo || "-"}</TableCell>
-                              <TableCell align="right" sx={{ color: debitColor }}>
-                                {money(line.debit_amount)}
-                              </TableCell>
-                              <TableCell align="right" sx={{ color: creditColor }}>
-                                {money(line.credit_amount)}
-                              </TableCell>
+                {reportHasData.gl ? (
+                  <Box sx={{ mt: 1 }}>
+                    {(glRows || []).map((section) => (
+                      <Paper sx={{ mb: 1, p: 1 }} key={section.account_id || section.id}>
+                        <Typography sx={{ fontWeight: 700, mb: 1 }}>
+                          {section.account_name || section.account?.name}
+                        </Typography>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={headerCellStyle}>Date</TableCell>
+                              <TableCell sx={headerCellStyle}>Memo</TableCell>
+                              <TableCell sx={headerCellStyle} align="right">Debit</TableCell>
+                              <TableCell sx={headerCellStyle} align="right">Credit</TableCell>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </Paper>
-                  ))}
-                </Box>
+                          </TableHead>
+                          <TableBody>
+                            {parseList(section.lines).map((line) => (
+                              <TableRow key={line.id}>
+                                <TableCell>{toDateStr(line.entry_date)}</TableCell>
+                                <TableCell>{line.memo || "-"}</TableCell>
+                                <TableCell align="right" sx={{ color: debitColor }}>
+                                  {money(line.debit_amount)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ color: creditColor }}>
+                                  {money(line.credit_amount)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Paper>
+                    ))}
+                  </Box>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
             {activeReport === "rent" ? (
@@ -2641,7 +3051,80 @@ const [periods, setPeriods] = useState([]);
                 <Button onClick={() => loadReports("rent")} size="small" variant="contained" sx={{ bgcolor: accent, mr: 1 }}>
                   Refresh
                 </Button>
-                <Button onClick={() => window.print()} size="small">Print Report</Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={() => window.print()}
+                  sx={reportPrintButtonSx}
+                >
+                  Print Report
+                </Button>
+                {reportHasData.rent ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={headerCellStyle}>Property</TableCell>
+                          <TableCell sx={headerCellStyle}>Unit</TableCell>
+                          <TableCell sx={headerCellStyle}>Tenant</TableCell>
+                          <TableCell sx={headerCellStyle}>Monthly Rent</TableCell>
+                          <TableCell sx={headerCellStyle}>Last Payment Date</TableCell>
+                          <TableCell sx={headerCellStyle}>Days Since Payment</TableCell>
+                          <TableCell sx={headerCellStyle}>Balance Due</TableCell>
+                          <TableCell sx={headerCellStyle}>Status</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {rentRows.map((row) => {
+                          const last = row.last_payment_date || row.last_payment;
+                          const hasLast = !!last;
+                          const daysSince = hasLast
+                            ? Math.max(0, Math.floor((Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24)))
+                            : null;
+                          const hasBalanceDue = row.balance_due !== null && row.balance_due !== undefined && String(row.balance_due).trim() !== "" && String(row.balance_due).trim() !== "-";
+                          const balanceDue = hasBalanceDue ? parseNumber(row.balance_due) : null;
+                          const status = rentStatus(daysSince, hasBalanceDue ? balanceDue : 0, row.monthly_rent);
+
+                          return (
+                            <TableRow key={row.id || row.lease_id || row.lease}>
+                               <TableCell>{row.property_name || row.property?.name || row.property || "-"}</TableCell>
+                              <TableCell>{row.unit_number || row.unit_name || row.unit || row.unit?.unit_number || "-"}</TableCell>
+                              <TableCell>{row.tenant_name || row.tenant || "-"}</TableCell>
+                              <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+                                {money(row.monthly_rent)}
+                              </TableCell>
+                              <TableCell>
+                                {hasLast ? (
+                                  toDateStr(last)
+                                ) : (
+                                  <Typography sx={{ color: "text.secondary", fontStyle: "italic" }}>No payments</Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {daysSince === null ? <Typography sx={{ color: "text.secondary", fontStyle: "italic" }}>No payments</Typography> : daysSince}
+                              </TableCell>
+                              <TableCell
+                                align="right"
+                                sx={{
+                                  fontFamily: "monospace",
+                                  color: hasBalanceDue ? (balanceDue > 0 ? "#ef4444" : "#27ca40") : "text.secondary",
+                                }}
+                              >
+                                {hasBalanceDue ? money(balanceDue) : "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Chip size="small" label={status.label} sx={{ backgroundColor: status.backgroundColor, color: status.color }} />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
             {activeReport === "tax" ? (
@@ -2650,25 +3133,37 @@ const [periods, setPeriods] = useState([]);
                 <Button onClick={() => loadReports("tax")} size="small" variant="contained" sx={{ bgcolor: accent, mr: 1 }}>
                   Refresh
                 </Button>
-                <Button onClick={() => window.print()} size="small">Print Report</Button>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={headerCellStyle}>Category</TableCell>
-                        <TableCell sx={headerCellStyle} align="right">Amount</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {parseList(reportData.tax?.by_tax_category || reportData.tax).map((row) => (
-                        <TableRow key={row.tax_category || row.id || row.category}>
-                          <TableCell>{row.tax_category || row.category}</TableCell>
-                          <TableCell align="right">{money(row.total || row.amount)}</TableCell>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={() => window.print()}
+                  sx={reportPrintButtonSx}
+                >
+                  Print Report
+                </Button>
+                {reportHasData.tax ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={headerCellStyle}>Category</TableCell>
+                          <TableCell sx={headerCellStyle} align="right">Amount</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      </TableHead>
+                      <TableBody>
+                        {taxRows.map((row) => (
+                          <TableRow key={row.tax_category || row.id || row.category}>
+                            <TableCell>{row.tax_category || row.category}</TableCell>
+                            <TableCell align="right">{money(row.total || row.amount)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
             {activeReport === "owner" ? (
@@ -2706,41 +3201,53 @@ const [periods, setPeriods] = useState([]);
                         <MenuItem key={property.id} value={String(property.id)}>
                           {property.name}
                         </MenuItem>
-                      ))}
+                    ))}
                     </Select>
                   </FormControl>
                   <Button size="small" variant="contained" sx={{ bgcolor: accent }} onClick={() => loadReports("owner")}>
                     Refresh
                   </Button>
-                  <Button size="small" onClick={() => window.print()}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Print />}
+                    onClick={() => window.print()}
+                    sx={reportPrintButtonSx}
+                  >
                     Print Report
                   </Button>
                 </Box>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={headerCellStyle}>Property</TableCell>
-                        <TableCell sx={headerCellStyle} align="right">Income</TableCell>
-                        <TableCell sx={headerCellStyle} align="right">Expense</TableCell>
-                        <TableCell sx={headerCellStyle} align="right">Net</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {parseList(reportData.owner).map((statement) => {
-                        const net = parseNumber(statement.net_income || statement.net || 0) || (parseNumber(statement.total_income || 0) - parseNumber(statement.total_expense || 0));
-                        return (
-                          <TableRow key={statement.id || statement.property_id}>
-                            <TableCell>{statement.property_name || statement.property || "-"}</TableCell>
-                            <TableCell align="right">{money(statement.total_income || statement.income || 0)}</TableCell>
-                            <TableCell align="right">{money(statement.total_expense || statement.expenses || 0)}</TableCell>
-                            <TableCell align="right">{money(net)}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                {reportHasData.owner ? (
+                  <TableContainer>
+                    <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={headerCellStyle}>Property</TableCell>
+                          <TableCell sx={headerCellStyle} align="right">Income</TableCell>
+                          <TableCell sx={headerCellStyle} align="right">Expense</TableCell>
+                          <TableCell sx={headerCellStyle} align="right">Net</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {ownerRows.map((statement) => {
+                          const net =
+                            parseNumber(statement.net_income || statement.net || 0) ||
+                            (parseNumber(statement.total_income || 0) - parseNumber(statement.total_expense || 0));
+                          return (
+                            <TableRow key={statement.id || statement.property_id}>
+                              <TableCell>{statement.property_name || statement.property || "-"}</TableCell>
+                              <TableCell align="right">{money(statement.total_income || statement.income || 0)}</TableCell>
+                              <TableCell align="right">{money(statement.total_expense || statement.expenses || 0)}</TableCell>
+                              <TableCell align="right">{money(net)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  reportEmptyState()
+                )}
               </Box>
             ) : null}
           </Paper>
@@ -2760,44 +3267,39 @@ const [periods, setPeriods] = useState([]);
                   <TableCell sx={headerCellStyle}>Last Payment Date</TableCell>
                   <TableCell sx={headerCellStyle}>Days Since Payment</TableCell>
                   <TableCell sx={headerCellStyle}>Balance Due</TableCell>
-                  <TableCell sx={headerCellStyle}>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rentRoll.rows.map((row) => {
-                  const last = row.last_payment_date || row.last_payment;
-                  const daysSince = last ? Math.max(0, Math.floor((Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24))) : null;
-
-
-                  const status = rentStatus(daysSince);
-                  return (
+                    <TableCell sx={headerCellStyle}>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {formattedRentRollRows.map((row) => (
                     <TableRow
                       key={row.id}
                       hover
                       sx={{
                         "& td": { fontFamily: "monospace", fontSize: 12 },
-                        cursor: row.lease_id || row.lease ? "pointer" : "default",
+                        cursor: row.leaseId ? "pointer" : "default",
                       }}
                       onClick={() => {
-                        if (row.lease_id || row.lease) navigate(`/accounting/ledger/${row.lease_id || row.lease}`);
+                        if (row.leaseId) navigate(`/accounting/ledger/${row.leaseId}`);
                       }}
                     >
-                      <TableCell>{row.property_name || row.property || row.property?.name || "-"}</TableCell>
-                      <TableCell>{row.unit_number || row.unit_name || row.unit || row.unit?.unit_number || "-"}</TableCell>
-                      <TableCell>{row.tenant_name || "-"}</TableCell>
-                      <TableCell>{money(row.monthly_rent)}</TableCell>
-                      <TableCell>{last ? toDateStr(last) : "-"}</TableCell>
-                      <TableCell>{daysSince === null ? "-" : daysSince}</TableCell>
-                      <TableCell sx={{ color: parseNumber(row.balance_due) > 0 ? "error.main" : "success.main" }}>
-                        {money(row.balance_due || 0)}
+                      <TableCell>{row.propertyName}</TableCell>
+                      <TableCell>{row.unit}</TableCell>
+                      <TableCell>{row.tenant}</TableCell>
+                      <TableCell>{money(row.monthlyRent)}</TableCell>
+                      <TableCell>
+                        {row.lastDateText ? row.lastDateText : <Typography sx={{ color: "text.secondary", fontStyle: "italic" }}>No payments</Typography>}
                       </TableCell>
                       <TableCell>
-                        <Chip size="small" color={status.color} label={status.label} />
+                        {row.daysSince === null ? <Typography sx={{ color: "text.secondary", fontStyle: "italic" }}>No payments</Typography> : row.daysSince}
+                      </TableCell>
+                      <TableCell sx={{ color: row.hasBalanceStyle }}>{row.balanceDisplay}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={row.status.label} sx={{ backgroundColor: row.status.backgroundColor, color: row.status.color }} />
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
+                  ))}
+                </TableBody>
             </Table>
           </TableContainer>
           <Divider />
@@ -2847,7 +3349,7 @@ const [periods, setPeriods] = useState([]);
             >
               {reconciliationAccounts.map((account) => (
                 <MenuItem key={account.id} value={String(account.id)}>
-                  {account.account_code ? `${account.account_code} · ` : ""}
+                  {account.account_code ? `${account.account_code} Â· ` : ""}
                   {account.name}
                 </MenuItem>
               ))}
@@ -3651,7 +4153,7 @@ const [periods, setPeriods] = useState([]);
               <Box sx={{ display: "grid", gap: 0.5, mb: 0.5 }}>
                 {recurringQuickPresets.map((preset) => (
                   <Typography key={preset.label} variant="body2" sx={{ color: "text.secondary" }}>
-                    {`${preset.label}: ${preset.debit_account_name} → ${preset.credit_account_name}`}
+                    {`${preset.label}: ${preset.debit_account_name} â†’ ${preset.credit_account_name}`}
                   </Typography>
                 ))}
               </Box>
@@ -3786,7 +4288,7 @@ const [periods, setPeriods] = useState([]);
                       {recurringQuickPresets.map((preset) => (
                         <li key={preset.label}>
                           <Typography variant="body2">
-                            {preset.label} ({preset.frequency}): {preset.debit_account_name} → {preset.credit_account_name}
+                            {preset.label} ({preset.frequency}): {preset.debit_account_name} â†’ {preset.credit_account_name}
                           </Typography>
                         </li>
                       ))}

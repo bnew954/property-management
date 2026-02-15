@@ -488,6 +488,26 @@ function LandingPage() {
     return () => nodes.forEach((node) => observer.unobserve(node));
   }, []);
 
+  useEffect(() => {
+    if (window.location.hash === "#pricing") {
+      const timer = setTimeout(() => {
+        document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+
+    if (window.location.hash === "#faq") {
+      const timer = setTimeout(() => {
+        document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" });
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+
+    return undefined;
+  }, []);
+
   const registerSection = useCallback((id) => (node) => {
     if (node) {
       sectionRefs.current[id] = node;
@@ -768,7 +788,16 @@ function LandingPage() {
 
       <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 }, py: { xs: 8, md: 10 }, maxWidth: "1200px !important" }}>
         <SectionFadeIn id="features" visibleSections={visibleSections} ref={registerSection("features")} sx={{ mb: { xs: 8, md: 10 } }}>
-          <Typography sx={{ fontSize: { xs: 30, md: 36 }, fontWeight: 700, letterSpacing: "-0.01em", textAlign: "center", color: "#fff" }}>
+          <Typography
+            sx={{
+              mt: 3.8,
+              textAlign: "center",
+              fontSize: { xs: 30, md: 36 },
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+              color: "#fff",
+            }}
+          >
             The Future of Property Management is{" "}
             <Box
               component="span"

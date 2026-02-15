@@ -125,7 +125,7 @@ export default function WhyOnyx() {
                   }}
                 />
                 <Typography variant="subtitle1" sx={{ mt: 2, fontWeight: 700, color: "#fff" }}>
-                  AI-Native Architecture
+                  Native Agentic AI
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 1, color: mutedText, lineHeight: 1.7 }}>
                   Intelligence isn't a feature we bolt on — it's the foundation. Every workflow is designed with AI at its core.
@@ -134,19 +134,19 @@ export default function WhyOnyx() {
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
                     <CheckCircleIcon sx={{ fontSize: 16, color: "#7c5cfc", flexShrink: 0 }} />
                     <Typography variant="body2" sx={{ color: "#fff", fontWeight: 500 }}>
-                      AI leasing agent for 24/7 lead qualification
+                      AI leasing agent
                     </Typography>
                   </Box>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
                     <CheckCircleIcon sx={{ fontSize: 16, color: "#7c5cfc", flexShrink: 0 }} />
                     <Typography variant="body2" sx={{ color: "#fff", fontWeight: 500 }}>
-                      Intelligent bookkeeping with auto-classification
+                      Intelligent bookkeeping
                     </Typography>
                   </Box>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
                     <CheckCircleIcon sx={{ fontSize: 16, color: "#7c5cfc", flexShrink: 0 }} />
                     <Typography variant="body2" sx={{ color: "#fff", fontWeight: 500 }}>
-                      Maintenance triage — categorize and route automatically
+                      24/7 Maintenance triage
                     </Typography>
                   </Box>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", color: "#fff" }}>
