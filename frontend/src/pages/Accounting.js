@@ -100,6 +100,7 @@ import {
   getAccountingPnL,
   getProperties,
   getRecurringTransactions,
+  deleteRecurringTransaction,
   getTrialBalanceReport,
   lockAccountingPeriod,
   recordExpense,
@@ -118,6 +119,7 @@ import {
   excludeReconciliationItem,
   unlockAccountingPeriod,
   updateRecurringTransaction,
+  runAllRecurring,
   voidJournalEntry,
 } from "../services/api";
 import { useUser } from "../services/userContext";
@@ -136,6 +138,10 @@ const formatDisplayDate = (value) => {
   if (!value) return "";
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }).format(date);
+};
+const dateIsOverdue = (value, compareTo = toDateStr(new Date())) => {
+  if (!value) return false;
+  return String(value).split("T")[0] < compareTo;
 };
 const formatMoneyWithSign = (value) => {
   const amount = parseNumber(value);
@@ -258,6 +264,15 @@ const flattenTree = (nodes, output = []) => {
 };
 
 const clean = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v !== "" && v !== null && v !== undefined));
+const formatAccountWithCode = (account) => {
+  if (!account) return "-";
+  const code = account.account_code ? `${account.account_code}` : "";
+  return code ? `${code} \u00b7 ${account.name}` : account.name;
+};
+
+const recurringDateValue = (value) => String(value || "").split("T")[0];
+const recurringIsDue = (value, now) => recurringDateValue(value) <= recurringDateValue(now);
+const recurringIsOverdue = (value, now) => recurringDateValue(value) < recurringDateValue(now);
 
 const statusColor = (status = "") => {
   switch (String(status).toLowerCase()) {
@@ -285,6 +300,48 @@ const transferFormInitial = { amount: "", from_account_id: "", to_account_id: ""
 const journalLineInitial = { account_id: "", debit_amount: "", credit_amount: "", description: "" };
 const journalFormInitial = { memo: "", entry_date: toDateStr(new Date()), source_type: "manual", lines: [journalLineInitial, journalLineInitial] };
 const addAccountInitial = { account_code: "", name: "", account_type: "expense", normal_balance: "debit", parent_account: "", is_header: false, description: "" };
+const recurringFormInitial = {
+  name: "",
+  description: "",
+  frequency: "monthly",
+  amount: "",
+  debit_account: "",
+  credit_account: "",
+  property: "",
+  start_date: toDateStr(new Date()),
+  next_run_date: toDateStr(new Date()),
+  end_date: "",
+  is_active: true,
+};
+const recurringFrequencyLabels = {
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  annually: "Annually",
+  weekly: "Weekly",
+};
+const recurringQuickPresets = [
+  {
+    label: "Monthly mortgage payment",
+    frequency: "monthly",
+    description: "Monthly mortgage payment",
+    debit_account_name: "5010 Mortgage Interest",
+    credit_account_name: "1020 Cash in Bank",
+  },
+  {
+    label: "Monthly insurance",
+    frequency: "monthly",
+    description: "Monthly insurance",
+    debit_account_name: "5040 Insurance",
+    credit_account_name: "1020 Cash in Bank",
+  },
+  {
+    label: "Monthly rent charge",
+    frequency: "monthly",
+    description: "Monthly rent charge",
+    debit_account_name: "1100 Accounts Receivable",
+    credit_account_name: "4100 Rental Income",
+  },
+];
 const accountTypeOrder = ["asset", "liability", "equity", "revenue", "expense"];
 const classificationRuleInitial = {
   match_field: "description",
@@ -441,11 +498,27 @@ function Accounting() {
   const [reconBankSelection, setReconBankSelection] = useState([]);
   const [reconBookSelection, setReconBookSelection] = useState([]);
 
-  const [periods, setPeriods] = useState([]);
+const [periods, setPeriods] = useState([]);
   const [periodsLoading, setPeriodsLoading] = useState(false);
   const [recurringTemplates, setRecurringTemplates] = useState([]);
+  const [showRecurringManager, setShowRecurringManager] = useState(false);
+  const [showRecurringForm, setShowRecurringForm] = useState(false);
+  const [editingRecurringId, setEditingRecurringId] = useState("");
+  const [recurringForm, setRecurringForm] = useState(recurringFormInitial);
+  const [recurringLoading, setRecurringLoading] = useState(false);
+  const [recurringDeleteId, setRecurringDeleteId] = useState("");
+  const [showRecurringDeleteDialog, setShowRecurringDeleteDialog] = useState(false);
+  const [recurringDeleteName, setRecurringDeleteName] = useState("");
+  const [recurringMessage, setRecurringMessage] = useState("");
+  const [recurringFormError, setRecurringFormError] = useState("");
 
   const accountById = useMemo(() => Object.fromEntries(categoryFlat.map((a) => [String(a.id), a])), [categoryFlat]);
+  const recurringAccountLabel = (accountId) => {
+    const account = accountById[String(accountId)];
+    if (!account) return "-";
+    return formatAccountWithCode(account);
+  };
+  const recurringToday = recurringDateValue(new Date());
   const autoClassifiedIds = useMemo(
     () => new Set((activeImport?.column_mapping?.auto_classified_ids || importSummary.auto_classified_ids || []).map((id) => String(id))),
     [activeImport?.column_mapping?.auto_classified_ids, importSummary.auto_classified_ids]
@@ -603,6 +676,10 @@ function Accounting() {
     () => categoryFlat.filter((acc) => !acc.is_header && acc.is_active !== false && acc.account_type),
     [categoryFlat]
   );
+  const recurringPostingAccounts = useMemo(
+    () => allPostingAccounts.filter((account) => account.account_type),
+    [allPostingAccounts]
+  );
 
   const loadAccounts = async () => {
     const response = await getAccountingCategories();
@@ -645,11 +722,10 @@ function Accounting() {
       await loadDashboardData();
       await loadTransactions();
       await loadReports("pnl");
-      const pRes = await getAccountingPeriods();
-      const rRes = await getRecurringTransactions();
-      await loadClassificationRules();
-      setPeriods(parseList(pRes.data));
-      setRecurringTemplates(parseList(rRes.data));
+       const pRes = await getAccountingPeriods();
+       await loadClassificationRules();
+       setPeriods(parseList(pRes.data));
+       await refreshRecurringTemplates();
     } catch (err) {
       setError("Unable to load accounting dashboard.");
     } finally {
@@ -664,6 +740,235 @@ function Accounting() {
       setSelectedAccountLedger(parseList(response.data.entries));
     } else {
       setSelectedAccountLedger(parseList(response.data));
+    }
+  };
+
+  const refreshRecurringTemplates = async () => {
+    const response = await getRecurringTransactions();
+    setRecurringTemplates(parseList(response.data));
+  };
+
+  const openRecurringManager = async () => {
+    setRecurringMessage("");
+    setRecurringFormError("");
+    setShowRecurringForm(false);
+    setShowRecurringDeleteDialog(false);
+    setRecurringDeleteId("");
+    setRecurringDeleteName("");
+    setEditingRecurringId("");
+    setShowRecurringManager(true);
+    setRecurringForm(recurringFormInitial);
+    await refreshRecurringTemplates();
+  };
+
+  const closeRecurringManager = () => {
+    setShowRecurringManager(false);
+    setShowRecurringForm(false);
+    setShowRecurringDeleteDialog(false);
+    setRecurringDeleteId("");
+    setRecurringDeleteName("");
+    setEditingRecurringId("");
+    setRecurringForm(recurringFormInitial);
+    setRecurringFormError("");
+  };
+
+  const openRecurringCreateForm = () => {
+    setRecurringForm(recurringFormInitial);
+    setEditingRecurringId("");
+    setRecurringFormError("");
+    setRecurringMessage("");
+    setShowRecurringForm(true);
+  };
+
+  const openRecurringEditForm = (template) => {
+    if (!template) return;
+    setEditingRecurringId(String(template.id));
+    setRecurringForm({
+      name: template.name || template.description || "",
+      description: template.description || template.name || "",
+      frequency: template.frequency || "monthly",
+      amount: String(template.amount || ""),
+      debit_account: String(template.debit_account?.id || template.debit_account || ""),
+      credit_account: String(template.credit_account?.id || template.credit_account || ""),
+      property: String(template.property?.id || template.property || ""),
+      start_date: recurringDateValue(template.start_date),
+      end_date: recurringDateValue(template.end_date),
+      next_run_date: recurringDateValue(template.next_run_date || template.start_date),
+      is_active: template.is_active !== false,
+    });
+    setRecurringFormError("");
+    setRecurringMessage("");
+    setShowRecurringForm(true);
+  };
+
+  const closeRecurringForm = () => {
+    setShowRecurringForm(false);
+    setEditingRecurringId("");
+    setRecurringForm(recurringFormInitial);
+    setRecurringFormError("");
+  };
+
+  const saveRecurringTransaction = async () => {
+    setRecurringLoading(true);
+    setRecurringFormError("");
+    setRecurringMessage("");
+    const amountValue = parseNumber(recurringForm.amount);
+    if (!(recurringForm.name || "").trim()) {
+      setRecurringFormError("Name is required.");
+      setRecurringLoading(false);
+      return;
+    }
+    if (!recurringForm.frequency) {
+      setRecurringFormError("Frequency is required.");
+      setRecurringLoading(false);
+      return;
+    }
+    if (!amountValue || amountValue <= 0) {
+      setRecurringFormError("Amount must be greater than 0.");
+      setRecurringLoading(false);
+      return;
+    }
+    if (!recurringForm.debit_account) {
+      setRecurringFormError("Debit account is required.");
+      setRecurringLoading(false);
+      return;
+    }
+    if (!recurringForm.credit_account) {
+      setRecurringFormError("Credit account is required.");
+      setRecurringLoading(false);
+      return;
+    }
+    if (recurringForm.debit_account === recurringForm.credit_account) {
+      setRecurringFormError("Debit and credit accounts must be different.");
+      setRecurringLoading(false);
+      return;
+    }
+    if (!recurringForm.start_date) {
+      setRecurringFormError("Start date is required.");
+      setRecurringLoading(false);
+      return;
+    }
+
+    const payload = {
+      name: (recurringForm.name || "").trim(),
+      description: (recurringForm.description || "").trim(),
+      frequency: recurringForm.frequency,
+      amount: amountValue,
+      debit_account: Number(recurringForm.debit_account),
+      credit_account: Number(recurringForm.credit_account),
+      property: recurringForm.property || null,
+      start_date: recurringForm.start_date,
+      end_date: recurringForm.end_date || null,
+      next_run_date: recurringForm.next_run_date || recurringForm.start_date,
+      is_active: Boolean(recurringForm.is_active),
+    };
+
+    try {
+      if (editingRecurringId) {
+        await updateRecurringTransaction(editingRecurringId, payload);
+      } else {
+        await createRecurringTransaction(payload);
+      }
+      await refreshRecurringTemplates();
+      setRecurringMessage(
+        editingRecurringId
+          ? "Recurring transaction updated."
+          : "Recurring transaction created."
+      );
+      setShowRecurringForm(false);
+      setEditingRecurringId("");
+      setRecurringForm(recurringFormInitial);
+    } catch {
+      setRecurringFormError("Unable to save recurring transaction.");
+    } finally {
+      setRecurringLoading(false);
+    }
+  };
+
+  const runRecurringNow = async (template) => {
+    if (!template?.id) return;
+    setRecurringLoading(true);
+    setRecurringMessage("");
+    setRecurringFormError("");
+    try {
+      await runRecurringTransaction(template.id);
+      await refreshRecurringTemplates();
+      await loadTransactions();
+      setRecurringMessage("Recurring transaction run and posted.");
+    } catch {
+      setRecurringMessage("Unable to run recurring transaction.");
+    } finally {
+      setRecurringLoading(false);
+    }
+  };
+
+  const runAllDueRecurring = async () => {
+    setRecurringLoading(true);
+    setRecurringMessage("");
+    setRecurringFormError("");
+    try {
+      const response = await runAllRecurring();
+      const created = parseNumber(
+        response?.data?.count ??
+          response?.data?.created ??
+          response?.data?.entries_created ??
+          response?.data?.processed ??
+          0
+      );
+      await refreshRecurringTemplates();
+      await loadTransactions();
+      setRecurringMessage(`${created} recurring entr${created === 1 ? "y" : "ies"} created.`);
+    } catch {
+      setRecurringMessage("Unable to run all recurring transactions.");
+    } finally {
+      setRecurringLoading(false);
+    }
+  };
+
+  const toggleRecurringActive = async (template) => {
+    if (!template?.id) return;
+    setRecurringLoading(true);
+    setRecurringMessage("");
+    setRecurringFormError("");
+    try {
+      await updateRecurringTransaction(template.id, { is_active: template.is_active === false });
+      await refreshRecurringTemplates();
+      setRecurringMessage(
+        template.is_active ? "Recurring transaction paused." : "Recurring transaction resumed."
+      );
+    } catch {
+      setRecurringMessage("Unable to update recurring transaction.");
+    } finally {
+      setRecurringLoading(false);
+    }
+  };
+
+  const openRecurringDeleteConfirm = (template) => {
+    if (!template?.id) return;
+    setRecurringDeleteId(String(template.id));
+    setRecurringDeleteName(template.name || template.description || "this recurring transaction");
+    setShowRecurringDeleteDialog(true);
+  };
+
+  const closeRecurringDeleteConfirm = () => {
+    setShowRecurringDeleteDialog(false);
+    setRecurringDeleteId("");
+    setRecurringDeleteName("");
+  };
+
+  const confirmDeleteRecurring = async () => {
+    if (!recurringDeleteId) return;
+    setRecurringLoading(true);
+    setRecurringMessage("");
+    try {
+      await deleteRecurringTransaction(recurringDeleteId);
+      await refreshRecurringTemplates();
+      setRecurringMessage("Recurring transaction deleted.");
+      closeRecurringDeleteConfirm();
+    } catch {
+      setRecurringMessage("Unable to delete recurring transaction.");
+    } finally {
+      setRecurringLoading(false);
     }
   };
 
@@ -1700,6 +2005,9 @@ function Accounting() {
               </Button>
               <Button size="small" variant="outlined" color="info" onClick={openRuleManager}>
                 Manage Rules
+              </Button>
+              <Button size="small" variant="outlined" color="success" onClick={openRecurringManager}>
+                Recurring
               </Button>
               <Button size="small" variant="outlined" sx={{ borderColor: "success.main", color: "success.main" }} onClick={openReconcileStart}>
                 Reconcile
@@ -3327,6 +3635,287 @@ function Accounting() {
           <Button variant="contained" sx={{ bgcolor: accent }} onClick={saveRule} disabled={ruleLoading}>
             {ruleLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={showRecurringManager} onClose={closeRecurringManager} fullWidth maxWidth="lg">
+        <DialogTitle>{showRecurringForm ? (editingRecurringId ? "Edit Recurring Transaction" : "Create Recurring Transaction") : "Recurring Transactions"}</DialogTitle>
+        <DialogContent dividers sx={{ display: "grid", gap: 1.2 }}>
+          {recurringMessage ? <Alert severity="success">{recurringMessage}</Alert> : null}
+          {showRecurringForm ? (
+            <>
+              <Typography variant="body2" color="text.secondary">
+                Quick setup ideas:
+              </Typography>
+              <Box sx={{ display: "grid", gap: 0.5, mb: 0.5 }}>
+                {recurringQuickPresets.map((preset) => (
+                  <Typography key={preset.label} variant="body2" sx={{ color: "text.secondary" }}>
+                    {`${preset.label}: ${preset.debit_account_name} → ${preset.credit_account_name}`}
+                  </Typography>
+                ))}
+              </Box>
+              {recurringFormError ? <Alert severity="error">{recurringFormError}</Alert> : null}
+              <TextField
+                label="Name"
+                size="small"
+                value={recurringForm.name}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, name: e.target.value }))}
+              />
+              <TextField
+                label="Description"
+                size="small"
+                value={recurringForm.description}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, description: e.target.value }))}
+              />
+              <FormControl size="small">
+                <InputLabel>Frequency</InputLabel>
+                <Select
+                  value={recurringForm.frequency}
+                  label="Frequency"
+                  onChange={(e) => setRecurringForm((prev) => ({ ...prev, frequency: e.target.value }))}
+                >
+                  {Object.entries(recurringFrequencyLabels).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                label="Amount"
+                size="small"
+                type="number"
+                value={recurringForm.amount}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, amount: e.target.value }))}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                }}
+              />
+              <FormControl size="small">
+                <InputLabel>Debit Account</InputLabel>
+                <Select
+                  value={recurringForm.debit_account}
+                  label="Debit Account"
+                  onChange={(e) => setRecurringForm((prev) => ({ ...prev, debit_account: e.target.value }))}
+                >
+                  <MenuItem value="">Select account</MenuItem>
+                  {recurringPostingAccounts.map((account) => (
+                    <MenuItem key={account.id} value={String(account.id)}>
+                      {formatAccountWithCode(account)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small">
+                <InputLabel>Credit Account</InputLabel>
+                <Select
+                  value={recurringForm.credit_account}
+                  label="Credit Account"
+                  onChange={(e) => setRecurringForm((prev) => ({ ...prev, credit_account: e.target.value }))}
+                >
+                  <MenuItem value="">Select account</MenuItem>
+                  {recurringPostingAccounts.map((account) => (
+                    <MenuItem key={account.id} value={String(account.id)}>
+                      {formatAccountWithCode(account)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small">
+                <InputLabel>Property</InputLabel>
+                <Select
+                  value={recurringForm.property}
+                  label="Property"
+                  onChange={(e) => setRecurringForm((prev) => ({ ...prev, property: e.target.value }))}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {properties.map((property) => (
+                    <MenuItem key={property.id} value={String(property.id)}>
+                      {property.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                label="Start Date"
+                type="date"
+                size="small"
+                value={recurringForm.start_date}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="End Date"
+                type="date"
+                size="small"
+                value={recurringForm.end_date}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Next Run Date"
+                type="date"
+                size="small"
+                value={recurringForm.next_run_date}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, next_run_date: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={Boolean(recurringForm.is_active)}
+                    onChange={(e) => setRecurringForm((prev) => ({ ...prev, is_active: e.target.checked }))}
+                  />
+                }
+                label="Active"
+              />
+            </>
+          ) : (
+            <>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Monthly recurring entries for your organization.
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 1, mt: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      Common recurring transaction presets
+                    </Typography>
+                    <Box component="ul" sx={{ margin: 0, pl: 2, color: "text.secondary" }}>
+                      {recurringQuickPresets.map((preset) => (
+                        <li key={preset.label}>
+                          <Typography variant="body2">
+                            {preset.label} ({preset.frequency}): {preset.debit_account_name} → {preset.credit_account_name}
+                          </Typography>
+                        </li>
+                      ))}
+                    </Box>
+                  </Paper>
+                </Box>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <Button size="small" variant="outlined" onClick={runAllDueRecurring} disabled={recurringLoading}>
+                    {recurringLoading ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
+                    Run All Due
+                  </Button>
+                  <Button size="small" variant="contained" sx={{ bgcolor: accent }} onClick={openRecurringCreateForm} startIcon={<Add />}>
+                    + New Recurring
+                  </Button>
+                </Box>
+              </Box>
+
+              <Paper variant="outlined" sx={{ overflowX: "auto" }}>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={headerCellStyle}>Name</TableCell>
+                        <TableCell sx={headerCellStyle}>Frequency</TableCell>
+                        <TableCell sx={headerCellStyle} align="right">
+                          Amount
+                        </TableCell>
+                        <TableCell sx={headerCellStyle}>Debit Account</TableCell>
+                        <TableCell sx={headerCellStyle}>Credit Account</TableCell>
+                        <TableCell sx={headerCellStyle}>Next Run</TableCell>
+                        <TableCell sx={headerCellStyle}>Status</TableCell>
+                        <TableCell sx={headerCellStyle} align="right">
+                          Actions
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {parseList(recurringTemplates).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} sx={{ textAlign: "center", color: "text.secondary" }}>
+                            No recurring transactions found.
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                      {parseList(recurringTemplates).map((template) => {
+                        const isDue = recurringIsDue(template.next_run_date, recurringToday);
+                        const isOverdue = recurringIsOverdue(template.next_run_date, recurringToday);
+                        return (
+                          <TableRow key={template.id} hover>
+                            <TableCell>{template.name || template.description || "-"}</TableCell>
+                            <TableCell>{recurringFrequencyLabels[template.frequency] || template.frequency || "-"}</TableCell>
+                            <TableCell align="right">{money(template.amount)}</TableCell>
+                            <TableCell>{recurringAccountLabel(template.debit_account)}</TableCell>
+                            <TableCell>{recurringAccountLabel(template.credit_account)}</TableCell>
+                            <TableCell sx={{ color: isOverdue ? "error.main" : "text.primary", fontWeight: isOverdue ? 700 : 400 }}>
+                              {template.next_run_date ? formatDisplayDate(template.next_run_date) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                label={template.is_active ? "Active" : "Paused"}
+                                color={template.is_active ? "success" : "default"}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Button
+                                size="small"
+                                onClick={() => runRecurringNow(template)}
+                                disabled={!template.is_active || !isDue || recurringLoading}
+                              >
+                                Run Now
+                              </Button>
+                              <Button size="small" onClick={() => openRecurringEditForm(template)} disabled={recurringLoading}>
+                                Edit
+                              </Button>
+                              <Button size="small" onClick={() => toggleRecurringActive(template)} disabled={recurringLoading}>
+                                {template.is_active ? "Pause" : "Resume"}
+                              </Button>
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() => openRecurringDeleteConfirm(template)}
+                                disabled={recurringLoading}
+                              >
+                                Delete
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {showRecurringForm ? (
+            <>
+              <Button onClick={() => setShowRecurringForm(false)}>Back</Button>
+              <Button variant="contained" sx={{ bgcolor: accent }} onClick={saveRecurringTransaction} disabled={recurringLoading}>
+                {recurringLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                Save
+              </Button>
+            </>
+          ) : (
+            <Button onClick={closeRecurringManager}>Close</Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={showRecurringDeleteDialog} onClose={closeRecurringDeleteConfirm} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Recurring Transaction</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete <strong>{recurringDeleteName}</strong>? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRecurringDeleteConfirm}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={confirmDeleteRecurring}
+            disabled={recurringLoading}
+          >
+            {recurringLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

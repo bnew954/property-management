@@ -246,8 +246,11 @@ export const createRecurringTransaction = (data) =>
   api.post("accounting/recurring/", data);
 export const updateRecurringTransaction = (id, data) =>
   api.patch(`accounting/recurring/${id}/`, data);
+export const deleteRecurringTransaction = (id) =>
+  api.delete(`accounting/recurring/${id}/`);
 export const runRecurringTransaction = (id) =>
   api.post(`accounting/recurring/${id}/run/`);
+export const runAllRecurring = () => api.post("accounting/recurring/run-all/");
 
 export const getOwnerStatements = (params = {}) =>
   api.get("accounting/owner-statements/", { params });
@@ -317,7 +320,9 @@ export const getSentMessages = () => api.get("messages/sent/");
 export const getMessageRecipients = () => api.get("messages/users/");
 export const getOrganizationUsers = () => api.get("organization/users/");
 export const sendMessage = (data) => api.post("messages/", data);
+export const sendAiMessage = (data) => api.post("/api/ai/chat/", data);
 export const markMessageRead = (id) => api.patch(`messages/${id}/mark-read/`);
 export const replyMessage = (id, data) => api.post(`messages/${id}/reply/`, data);
 
 export default api;
+

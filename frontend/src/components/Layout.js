@@ -41,6 +41,7 @@ import { logout } from "../services/auth";
 import { useUser } from "../services/userContext";
 import { useThemeMode } from "../services/themeContext";
 import NotificationBell from "./NotificationBell";
+import AiAgent from "./AiAgent";
 
 const drawerWidth = 240;
 
@@ -494,9 +495,10 @@ function Layout({ children }) {
               {(user?.first_name || user?.username || "U").slice(0, 1).toUpperCase()}
             </Avatar>
           </Box>
-        </Box>
+          </Box>
         <Box sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}>{children}</Box>
       </Box>
+      <AiAgent />
     </Box>
   );
 }

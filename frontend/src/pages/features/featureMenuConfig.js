@@ -1,4 +1,4 @@
-import {
+﻿import {
   HomeWork,
   Description,
   Payment,
@@ -14,54 +14,71 @@ const featureMenuConfig = [
     icon: HomeWork,
     route: "/features/listings",
     tagline: "Fill vacancies faster with professional listing pages",
-    benefits: [
+    tabs: [
       {
-        icon: "Link",
-        title: "Auto-Generated Listing Pages",
-        description:
-          "Each vacant unit gets a professional, SEO-friendly public listing page with photos, details, and a direct application link — no manual website building needed.",
+        label: "Listing Pages",
+        mockupId: "ListingPagePreview",
+        bullets: [
+          "One-click publish for any vacant unit",
+          "Professional, mobile-friendly listing pages",
+          "Built-in application forms on every listing",
+          "Auto-generated SEO-friendly URLs",
+          "Photos, pricing, amenities, and unit details",
+        ],
       },
       {
-        icon: "Visibility",
-        title: "Public Browse Page",
-        description:
-          "All your available units appear on a single searchable browse page tenants can filter by price, bedrooms, and location.",
+        label: "Syndication",
+        mockupId: "SyndicationDashboard",
+        comingSoon: true,
+        bullets: [
+          "Push listings to Zillow, Apartments.com, and Realtor.com",
+          "Manage all syndicated listings from one dashboard",
+          "Track which platforms generate the most leads",
+          "Automatic listing updates across all platforms",
+        ],
       },
       {
-        icon: "ToggleOn",
-        title: "One-Click Publish",
-        description:
-          "Toggle any unit to listed or unlisted instantly. Listings go live immediately with auto-generated URLs and slugs.",
-      },
-    ],
-    steps: [
-      {
-        title: "Mark Unit Available",
-        description: "Toggle is_listed on any vacant unit to publish it instantly.",
-      },
-      {
-        title: "Listing Goes Live",
-        description: "A public page is auto-generated with photos, rent, and unit details.",
-      },
-      {
-        title: "Tenant Finds Listing",
-        description: "Prospective tenants browse your listings and find the right fit.",
-      },
-      {
-        title: "Application Submitted",
-        description: "Tenants apply directly from the listing page — no phone calls or emails needed.",
+        label: "Lead Management",
+        mockupId: "LeadPipeline",
+        comingSoon: true,
+        bullets: [
+          "Track inquiries from first contact to signed lease",
+          "See which listings drive the most interest",
+          "Automated follow-up sequences for prospects",
+          "Convert leads into applications automatically",
+        ],
       },
     ],
-    highlights: [
+    faqs: [
       {
-        title: "Professional Listing Pages",
-        description:
-          "Every listing gets a clean, mobile-friendly page with property details, photos, rent amount, and a built-in application button. No design work required — just toggle a unit to listed and the page creates itself.",
+        question: "How do I create a listing?",
+        answer:
+          "Navigate to any vacant unit in your portfolio and switch it on as listed. The listing page is created immediately and you can update the photos, description, and rent amount before sharing.",
       },
       {
-        title: "Centralized Vacancy Marketing",
-        description:
-          "Your browse page shows all available units across your entire portfolio in one place. Tenants can search and filter without you managing separate ads on multiple platforms.",
+        question: "Are listing pages mobile-friendly?",
+        answer:
+          "Yes. Every listing page is fully responsive and works on phones, tablets, and desktop. Tenants can browse details, upload messages, and apply directly from mobile.",
+      },
+      {
+        question: "Can tenants apply directly from the listing?",
+        answer:
+          "Absolutely. Each listing has a built-in apply button that takes prospects into the application flow and flows directly into your leasing queue.",
+      },
+      {
+        question: "What is listing syndication?",
+        answer:
+          "Syndication publishes your vacancies to major rental portals from one workspace. This keeps listing text and photos in sync while reducing manual posting work.",
+      },
+      {
+        question: "Is there a limit on how many listings I can create?",
+        answer:
+          "You can create listings for every vacant unit in your portfolio with no unit-based limit. Onyx PM scales with your portfolio growth.",
+      },
+      {
+        question: "How do I take a listing down?",
+        answer:
+          "Open the listing and switch it off from active status. This removes it from public view immediately while preserving historical data in your records.",
       },
     ],
   },
@@ -71,42 +88,68 @@ const featureMenuConfig = [
     icon: Description,
     route: "/features/leasing",
     tagline: "From application to signed lease in minutes, not weeks",
-    benefits: [
+    tabs: [
       {
-        icon: "Assignment",
-        title: "Multi-Step Applications",
-        description:
-          "Collect personal info, residence history, employment, references, and consent in a guided 6-step form that tenants complete online.",
+        label: "Applications",
+        mockupId: "ApplicationForm",
+        bullets: [
+          "Guided 6-step application form for prospects",
+          "Collect personal info, residence, employment, and references",
+          "Applications feed directly into your leasing pipeline",
+          "Review, approve, or deny with one click",
+        ],
       },
       {
-        icon: "CheckCircle",
-        title: "One-Click Approve & Lease",
-        description:
-          "Review applications, approve or deny with a click, and generate a lease directly from the approved application — no retyping data.",
+        label: "Lease Management",
+        mockupId: "LeaseWorkflow",
+        bullets: [
+          "Create leases from approved applications instantly",
+          "Visual 6-step lease workflow tracker",
+          "Auto-generated lease documents from templates",
+          "Track every lease status across your portfolio",
+        ],
       },
       {
-        icon: "Draw",
-        title: "Digital Lease Signing",
-        description:
-          "Generate lease documents and send tokenized signing links to tenants. Both parties sign electronically — no printing, scanning, or mailing.",
+        label: "E-Signatures",
+        mockupId: "LeaseSigningView",
+        bullets: [
+          "Send leases for digital signing via secure link",
+          "Tenants sign on any device — phone, tablet, or desktop",
+          "Landlord countersign to activate the lease",
+          "Complete audit trail of all signatures",
+        ],
       },
     ],
-    steps: [
-      { title: "Tenant Applies", description: "Prospective tenant fills out the multi-step application from your listing page." },
-      { title: "Review Application", description: "You review the application details, run screening, and decide to approve or deny." },
-      { title: "Generate Lease", description: "One click creates a lease from the approved application with all details pre-filled." },
-      { title: "Sign & Activate", description: "Send the lease for e-signature. Once both parties sign, the lease is active." },
-    ],
-    highlights: [
+    faqs: [
       {
-        title: "Guided Lease Workflow",
-        description:
-          "A 6-step stepper walks you through the entire lease lifecycle: created, document generated, sent for signing, tenant signed, landlord signed, and active. You always know exactly where each lease stands.",
+        question: "How do applications work?",
+        answer:
+          "Applicants start from your listing or onboarding link and complete the multi-step form. On submission, validation runs and the application enters your review queue.",
       },
       {
-        title: "Application Review Dashboard",
-        description:
-          "See all pending applications in one place with applicant details, screening status, and quick-action buttons. No more digging through emails or paper files.",
+        question: "Can I customize the application form?",
+        answer:
+          "Yes, you can customize required fields, ordering, and optional prompts so each property can collect the exact data you need. Changes stay consistent across review workflows.",
+      },
+      {
+        question: "How does the lease signing process work?",
+        answer:
+          "After approval, Onyx PM generates a lease draft from the application and sends signing links. The lease status updates as each party completes the signature.",
+      },
+      {
+        question: "Can tenants sign on their phone?",
+        answer:
+          "Yes. Signing links are fully responsive and work on modern mobile and desktop browsers. The tenant can review and sign without extra software.",
+      },
+      {
+        question: "What happens after both parties sign?",
+        answer:
+          "Onyx PM marks the lease as active and stores the final document in the property record. Payment and occupancy tasks can then start automatically.",
+      },
+      {
+        question: "Can I create a lease without an application?",
+        answer:
+          "Yes, you can create a lease directly from tenant and unit context for renewals and internal workflows while preserving an audit trail of the action.",
       },
     ],
   },
@@ -116,42 +159,68 @@ const featureMenuConfig = [
     icon: Payment,
     route: "/features/payments",
     tagline: "Get paid on time, every time",
-    benefits: [
+    tabs: [
       {
-        icon: "CreditCard",
-        title: "Online Rent Payments",
-        description:
-          "Tenants pay rent through a secure Stripe-powered portal with credit card or bank transfer. No more checks in the mail.",
+        label: "Rent Payments",
+        mockupId: "TenantPayPortal",
+        bullets: [
+          "Tenants pay rent online via Stripe — cards and bank transfers",
+          "Clean payment portal showing balance and history",
+          "Automatic payment confirmations and receipts",
+          "Track who has paid and who is overdue",
+        ],
       },
       {
-        icon: "AutoAwesome",
-        title: "Automatic Bookkeeping",
-        description:
-          "Every payment automatically creates a journal entry in your double-entry ledger — debit cash, credit rental income. Your books stay accurate without manual data entry.",
+        label: "Auto Bookkeeping",
+        mockupId: "AutoBookkeeping",
+        bullets: [
+          "Every payment auto-creates a journal entry",
+          "Debit cash, credit rental income — automatically",
+          "No manual data entry for rent payments",
+          "Full audit trail linking payments to ledger entries",
+        ],
       },
       {
-        icon: "Receipt",
-        title: "Rent Ledger & History",
-        description:
-          "A running balance for every tenant shows payments, charges, and outstanding amounts. Full payment history with dates and amounts.",
+        label: "Rent Ledger",
+        mockupId: "RentLedger",
+        bullets: [
+          "Per-tenant ledger with charges, payments, and running balance",
+          "See outstanding balances across your entire portfolio",
+          "Late fee tracking and follow-up visibility",
+          "Complete payment history with exportable records",
+        ],
       },
     ],
-    steps: [
-      { title: "Tenant Logs In", description: "Tenant accesses their portal and sees their balance and payment options." },
-      { title: "Submits Payment", description: "Tenant pays via Stripe — card or bank transfer, with instant confirmation." },
-      { title: "Ledger Updates", description: "Payment posts to the rent ledger and a journal entry is created automatically." },
-      { title: "You Get Paid", description: "Funds arrive in your bank account on Stripe's standard payout schedule." },
-    ],
-    highlights: [
+    faqs: [
       {
-        title: "Tenant Payment Portal",
-        description:
-          "A clean, simple interface where tenants see their current balance, upcoming rent, and can pay with one click. No app download required — it works in any browser.",
+        question: "How do tenants pay rent?",
+        answer:
+          "Tenants access the tenant portal, review current balance, and pay directly from a secure checkout flow. Payments are recorded and reflected in your dashboard immediately.",
       },
       {
-        title: "Automatic Double-Entry Posting",
-        description:
-          "When a tenant pays rent, the system creates a balanced journal entry: debit your cash account, credit rental income. Late fees, security deposits, and other charges follow the same pattern.",
+        question: "What payment methods are accepted?",
+        answer:
+          "Cards and ACH-style transfers are supported through your configured payment provider. Accepted methods can be adjusted in account settings by region.",
+      },
+      {
+        question: "How quickly do I receive funds?",
+        answer:
+          "Fund timing follows your payment processor settings. The dashboard shows confirmation status and payout visibility for each transaction.",
+      },
+      {
+        question: "Are payments automatically recorded in accounting?",
+        answer:
+          "Yes. Cleared payments create immediate journal entries with balanced debit and credit lines to keep your books current.",
+      },
+      {
+        question: "Can I track who hasn't paid?",
+        answer:
+          "Yes. Tenant balances and aging views identify delinquent accounts so you can prioritize collections quickly.",
+      },
+      {
+        question: "Is there a fee for online payments?",
+        answer:
+          "Provider fees vary by processor. Onyx PM does not add hidden fees beyond your selected payment workflow and processor terms.",
       },
     ],
   },
@@ -161,42 +230,68 @@ const featureMenuConfig = [
     icon: VerifiedUser,
     route: "/features/screening",
     tagline: "Make confident leasing decisions with thorough screening",
-    benefits: [
+    tabs: [
       {
-        icon: "Security",
-        title: "Consent-Based Flow",
-        description:
-          "Tenants receive a secure tokenized link to provide consent and personal information. Everything is tracked with timestamps for compliance.",
+        label: "Screening",
+        mockupId: "ScreeningDashboard",
+        bullets: [
+          "Run background and credit checks on applicants",
+          "Integrated directly with the application pipeline",
+          "View screening status across all applicants",
+          "Results delivered directly in your dashboard",
+        ],
       },
       {
-        icon: "FindInPage",
-        title: "Background & Credit Checks",
-        description:
-          "Run background and credit screenings integrated directly into your leasing pipeline. Results appear alongside the application for easy review.",
+        label: "Consent Flow",
+        mockupId: "ConsentPortal",
+        bullets: [
+          "Secure tokenized consent link sent to applicants",
+          "FCRA-compliant authorization and disclosure",
+          "Applicants submit consent on any device",
+          "Automatic timestamp and audit trail",
+        ],
       },
       {
-        icon: "Gavel",
-        title: "Compliance Built In",
-        description:
-          "The consent workflow captures authorization timestamps and tenant acknowledgments, helping you stay compliant with fair housing and screening regulations.",
+        label: "Compliance",
+        mockupId: "ComplianceLog",
+        bullets: [
+          "Complete timeline of every screening action",
+          "Consent records stored for compliance documentation",
+          "Adverse action notice support",
+          "Full audit trail for fair housing compliance",
+        ],
       },
     ],
-    steps: [
-      { title: "Request Screening", description: "From the application, initiate a screening request with one click." },
-      { title: "Tenant Consents", description: "Tenant receives a secure link, reviews the disclosure, and provides consent and SSN." },
-      { title: "Screening Runs", description: "Background and credit checks are processed and results returned." },
-      { title: "Review & Decide", description: "Results appear in the application — approve, deny, or request more information." },
-    ],
-    highlights: [
+    faqs: [
       {
-        title: "Secure Consent Portal",
-        description:
-          "Tenants access a branded consent page via a unique token link. They review disclosures, provide personal information securely, and submit consent — all tracked with timestamps.",
+        question: "How does tenant screening work?",
+        answer:
+          "After an application is started, request screening from the application workspace. Onyx PM tracks each report and keeps you informed as checks progress.",
       },
       {
-        title: "Integrated Screening Dashboard",
-        description:
-          "See all screening requests and their statuses in one place. Results are linked directly to the application so you have everything you need to make a decision.",
+        question: "What checks are included?",
+        answer:
+          "Common background and credit checks are included through configured providers, with results appearing in the application workflow and approval queue.",
+      },
+      {
+        question: "How is tenant consent handled?",
+        answer:
+          "Applicants complete consent through a secure flow before screening begins. Every action is logged with timestamps and evidence for review.",
+      },
+      {
+        question: "How long does screening take?",
+        answer:
+          "Most checks process quickly, while some may depend on provider response windows. Live status keeps you up-to-date inside Onyx PM.",
+      },
+      {
+        question: "Is screening integrated with applications?",
+        answer:
+          "Yes. Screening status and documents are linked directly to each application so review and next steps are never separated.",
+      },
+      {
+        question: "What does screening cost?",
+        answer:
+          "Screening costs depend on provider and check type. Fee details are visible when you request checks and are tracked in the request metadata.",
       },
     ],
   },
@@ -206,42 +301,68 @@ const featureMenuConfig = [
     icon: Build,
     route: "/features/maintenance",
     tagline: "Never lose track of a maintenance request again",
-    benefits: [
+    tabs: [
       {
-        icon: "ReportProblem",
-        title: "Tenant Request Portal",
-        description:
-          "Tenants submit maintenance requests online with descriptions and priority levels. No more phone calls or text messages to track.",
+        label: "Request Portal",
+        mockupId: "RequestSubmission",
+        bullets: [
+          "Tenants submit requests online with descriptions and photos",
+          "Priority and category selection for faster routing",
+          "Requests appear instantly in your management dashboard",
+          "No phone calls or emails needed",
+        ],
       },
       {
-        icon: "Assignment",
-        title: "Request Management",
-        description:
-          "View, prioritize, and manage all open requests in a dashboard. Filter by property, status, or priority to focus on what matters.",
+        label: "Management",
+        mockupId: "RequestManagement",
+        bullets: [
+          "View all requests in one centralized dashboard",
+          "Update status, assign vendors, add internal notes",
+          "Visual progress tracker from open to completed",
+          "Filter by property, priority, or status",
+        ],
       },
       {
-        icon: "Notifications",
-        title: "Status Notifications",
-        description:
-          "Tenants receive automatic notifications when their request status changes. Everyone stays informed without manual follow-up.",
+        label: "History",
+        mockupId: "MaintenanceHistory",
+        bullets: [
+          "Complete log of all past maintenance work",
+          "Track resolution times and vendor performance",
+          "Reference past issues for recurring problems",
+          "Exportable records for property documentation",
+        ],
       },
     ],
-    steps: [
-      { title: "Tenant Submits", description: "Tenant describes the issue and submits a maintenance request from their portal." },
-      { title: "You Review", description: "The request appears in your dashboard with details, priority, and tenant contact info." },
-      { title: "Assign & Track", description: "Update the status as work progresses — tenant gets notified automatically." },
-      { title: "Mark Complete", description: "Close the request when the work is done. Full history is preserved." },
-    ],
-    highlights: [
+    faqs: [
       {
-        title: "Maintenance Dashboard",
-        description:
-          "All open and closed requests across your portfolio in one view. Sort by priority, property, or status. See which requests need attention and which are resolved.",
+        question: "How do tenants submit requests?",
+        answer:
+          "Tenants submit requests through the tenant portal form, including photos and issue details. Each request gets a unique tracking reference automatically.",
       },
       {
-        title: "Communication Trail",
-        description:
-          "Every update and status change is logged. If a tenant asks about their request, you have the complete history — when it was submitted, what was done, and when it was resolved.",
+        question: "Can I prioritize requests?",
+        answer:
+          "Yes. Requests include priority levels and your team can filter and reorder queue visibility based on severity and urgency.",
+      },
+      {
+        question: "Do tenants get status updates?",
+        answer:
+          "Yes. Status updates are posted at major milestones such as submitted, in progress, and completed, reducing follow-up calls.",
+      },
+      {
+        question: "Can I track maintenance history?",
+        answer:
+          "Yes. Every request keeps a timestamped timeline with completion notes and historical visibility for operational planning.",
+      },
+      {
+        question: "Is there a mobile interface?",
+        answer:
+          "Yes. The request queue and status views are responsive for both landlord and tenant users across mobile devices.",
+      },
+      {
+        question: "Can I assign requests to vendors?",
+        answer:
+          "Yes. You can route requests internally or to external vendors and track accountability through the same request timeline.",
       },
     ],
   },
@@ -251,55 +372,68 @@ const featureMenuConfig = [
     icon: AccountBalance,
     route: "/features/accounting",
     tagline: "Real double-entry bookkeeping built for property managers",
-    benefits: [
+    tabs: [
       {
-        icon: "AccountTree",
-        title: "Full Chart of Accounts",
-        description:
-          "A hierarchical chart of accounts with asset, liability, equity, revenue, and expense categories — pre-seeded with property management defaults.",
+        label: "Chart of Accounts",
+        mockupId: "AccountingCOA",
+        bullets: [
+          "Professional chart of accounts with hierarchy",
+          "Asset, liability, equity, revenue, and expense accounts",
+          "Sub-account nesting with account codes",
+          "Seeded with property management defaults",
+        ],
       },
       {
-        icon: "Assessment",
-        title: "Financial Reports",
-        description:
-          "Generate P&L, balance sheet, trial balance, cash flow, rent roll, and tax summary reports from your actual journal entries.",
+        label: "Reports",
+        mockupId: "FinancialReports",
+        bullets: [
+          "Profit & loss, balance sheet, and trial balance",
+          "Cash flow statements and general ledger",
+          "Rent roll across your entire portfolio",
+          "Tax summary reports for Schedule E prep",
+        ],
       },
       {
-        icon: "ImportExport",
-        title: "Bank Statement Import",
-        description:
-          "Import CSV bank statements, auto-classify transactions with rules, review and book them as journal entries, then reconcile against your books.",
-      },
-    ],
-    steps: [
-      {
-        title: "Set Up Accounts",
-        description: "Start with the pre-seeded chart of accounts or customize it for your portfolio.",
-      },
-      {
-        title: "Record Transactions",
-        description:
-          "Record income, expenses, and transfers — or let the system post entries from rent payments automatically.",
-      },
-      {
-        title: "Import & Reconcile",
-        description: "Import bank statements, classify transactions, and reconcile your books against the bank.",
-      },
-      {
-        title: "Run Reports",
-        description: "Generate financial reports for tax season, investor updates, or your own analysis.",
+        label: "Bank Import",
+        mockupId: "BankImport",
+        bullets: [
+          "Import bank statements via CSV upload",
+          "Auto-classification rules match transactions to accounts",
+          "Review and approve before booking to your ledger",
+          "Bank reconciliation to verify books match statements",
+        ],
       },
     ],
-    highlights: [
+    faqs: [
       {
-        title: "Chart of Accounts with Hierarchy",
-        description:
-          "A professional COA with account codes, header accounts, and sub-accounts organized by type. Expand and collapse sections, see balances at a glance, and manage accounts from one screen.",
+        question: "What type of accounting does Onyx PM use?",
+        answer:
+          "Onyx PM uses a double-entry accounting model so every transaction has balanced debit and credit entries. This improves auditability and financial accuracy.",
       },
       {
-        title: "CSV Import with Auto-Classification",
-        description:
-          "Upload a bank statement CSV, map the columns, and the system automatically classifies transactions based on rules you define. Review, approve, and book them as journal entries in minutes.",
+        question: "What reports can I generate?",
+        answer:
+          "You can generate P&L, balance sheet, trial balance, cash flow, rent roll, and tax summary reports from your live posted entries.",
+      },
+      {
+        question: "Can I import bank statements?",
+        answer:
+          "Yes, you can import CSV statements directly into Onyx PM. The importer suggests classifications and routes transactions into your chart of accounts.",
+      },
+      {
+        question: "How does the chart of accounts work?",
+        answer:
+          "The chart is hierarchical, with parent account groups and nested child accounts for detailed line items and cleaner reporting over time.",
+      },
+      {
+        question: "Does it handle multiple properties?",
+        answer:
+          "Yes. You can segment data by property and also run consolidated reports when you need a portfolio view.",
+      },
+      {
+        question: "Can I lock accounting periods?",
+        answer:
+          "Yes. Period controls let you lock closed periods so reported values remain stable while still permitting controlled adjustments with proper logging.",
       },
     ],
   },

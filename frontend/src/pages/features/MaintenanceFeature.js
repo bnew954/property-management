@@ -1,3 +1,4 @@
+import React from "react";
 import FeaturePageTemplate from "./FeaturePageTemplate";
 import featureMenuConfig from "./featureMenuConfig";
 

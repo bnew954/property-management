@@ -85,6 +85,7 @@ export default function PublicNavBar() {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const navLinks = [
+    { label: "Why Onyx?", href: "/why-onyx" },
     { label: "Pricing", href: "#pricing" },
     { label: "FAQ", href: "#faq" },
   ];
