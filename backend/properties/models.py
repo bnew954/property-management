@@ -2,9 +2,11 @@ from django.contrib.auth.models import User
 from decimal import Decimal
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.template.defaultfilters import slugify
+from django.utils import timezone
 from django.utils.timezone import now
+from builtins import property as builtin_property
 import uuid
 import hashlib
 
@@ -839,6 +841,284 @@ class Expense(models.Model):
         return f"{self.property.name} - {self.category} - {self.amount}"
 
 
+class Vendor(models.Model):
+    VENDOR_CATEGORY_CHOICES = [
+        ("plumbing", "Plumbing"),
+        ("electrical", "Electrical"),
+        ("hvac", "HVAC"),
+        ("landscaping", "Landscaping"),
+        ("cleaning", "Cleaning"),
+        ("roofing", "Roofing"),
+        ("painting", "Painting"),
+        ("general_maintenance", "General Maintenance"),
+        ("pest_control", "Pest Control"),
+        ("insurance", "Insurance"),
+        ("mortgage", "Mortgage/Lender"),
+        ("hoa", "HOA"),
+        ("utility", "Utility Company"),
+        ("legal", "Legal"),
+        ("accounting", "Accounting"),
+        ("property_management", "Property Management"),
+        ("other", "Other"),
+    ]
+
+    organization = models.ForeignKey(
+        "Organization", on_delete=models.CASCADE, related_name="vendors"
+    )
+    user = models.OneToOneField(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vendor_profile",
+    )
+    name = models.CharField(max_length=200)
+    contact_name = models.CharField(max_length=200, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=20, blank=True, default="")
+    portal_enabled = models.BooleanField(default=False)
+    invite_token = models.CharField(max_length=64, blank=True, default="")
+    invite_sent_at = models.DateTimeField(null=True, blank=True)
+    address = models.TextField(blank=True, default="")
+    category = models.CharField(max_length=50, choices=VENDOR_CATEGORY_CHOICES, default="other")
+    tax_id = models.CharField(max_length=20, blank=True, default="", help_text="EIN or SSN for 1099")
+    is_1099_eligible = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Bill(models.Model):
+    STATUS_DRAFT = "draft"
+    STATUS_PENDING = "pending"
+    STATUS_PARTIAL = "partial"
+    STATUS_PAID = "paid"
+    STATUS_OVERDUE = "overdue"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PARTIAL, "Partially Paid"),
+        (STATUS_PAID, "Paid"),
+        (STATUS_OVERDUE, "Overdue"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    BILL_RECURRENCE_MONTHLY = "monthly"
+    BILL_RECURRENCE_QUARTERLY = "quarterly"
+    BILL_RECURRENCE_ANNUALLY = "annually"
+    BILL_RECURRING_CHOICES = [
+        (BILL_RECURRENCE_MONTHLY, "Monthly"),
+        (BILL_RECURRENCE_QUARTERLY, "Quarterly"),
+        (BILL_RECURRENCE_ANNUALLY, "Annually"),
+    ]
+
+    organization = models.ForeignKey(
+        "Organization", on_delete=models.CASCADE, related_name="bills"
+    )
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name="bills")
+    property = models.ForeignKey(
+        "Property", on_delete=models.SET_NULL, null=True, blank=True, related_name="bills"
+    )
+    unit = models.ForeignKey(
+        "Unit", on_delete=models.SET_NULL, null=True, blank=True, related_name="bills"
+    )
+    bill_number = models.CharField(max_length=50, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    category = models.ForeignKey(
+        "AccountingCategory", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="amount + tax_amount",
+    )
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    balance_due = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="total_amount - amount_paid",
+    )
+    bill_date = models.DateField()
+    due_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    is_recurring = models.BooleanField(default=False)
+    recurring_frequency = models.CharField(
+        max_length=20,
+        choices=BILL_RECURRING_CHOICES,
+        blank=True,
+        default="",
+    )
+    journal_entry = models.ForeignKey(
+        "JournalEntry", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-due_date"]
+
+    def __str__(self):
+        return f"Bill #{self.bill_number or self.id} - {self.vendor.name} - ${self.total_amount}"
+
+    def save(self, *args, **kwargs):
+        self.total_amount = self.amount + self.tax_amount
+        self.balance_due = self.total_amount - self.amount_paid
+        if self.balance_due <= 0 and self.status not in (self.STATUS_CANCELLED, self.STATUS_DRAFT):
+            self.status = self.STATUS_PAID
+        elif self.amount_paid > 0 and self.balance_due > 0:
+            self.status = self.STATUS_PARTIAL
+        super().save(*args, **kwargs)
+
+
+class BillPayment(models.Model):
+    PAYMENT_METHOD_CHECK = "check"
+    PAYMENT_METHOD_BANK_TRANSFER = "bank_transfer"
+    PAYMENT_METHOD_CREDIT_CARD = "credit_card"
+    PAYMENT_METHOD_CASH = "cash"
+    PAYMENT_METHOD_OTHER = "other"
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_METHOD_CHECK, "Check"),
+        (PAYMENT_METHOD_BANK_TRANSFER, "Bank Transfer"),
+        (PAYMENT_METHOD_CREDIT_CARD, "Credit Card"),
+        (PAYMENT_METHOD_CASH, "Cash"),
+        (PAYMENT_METHOD_OTHER, "Other"),
+    ]
+
+    organization = models.ForeignKey(
+        "Organization", on_delete=models.CASCADE, related_name="bill_payments"
+    )
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_date = models.DateField()
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default=PAYMENT_METHOD_BANK_TRANSFER)
+    check_number = models.CharField(max_length=20, blank=True, default="")
+    reference = models.CharField(max_length=100, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    journal_entry = models.ForeignKey(
+        "JournalEntry", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-payment_date"]
+
+    def __str__(self):
+        return f"Payment ${self.amount} on {self.payment_date} for Bill #{self.bill_id}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        bill = self.bill
+        bill.amount_paid = bill.payments.aggregate(total=Sum("amount"))["total"] or 0
+        bill.balance_due = bill.total_amount - bill.amount_paid
+        if bill.balance_due <= 0:
+            bill.status = bill.STATUS_PAID
+        elif bill.amount_paid > 0:
+            bill.status = bill.STATUS_PARTIAL
+        bill.save(update_fields=["amount_paid", "balance_due", "status"])
+
+
+class WorkOrder(models.Model):
+    STATUS_ASSIGNED = "assigned"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_COMPLETED = "completed"
+    STATUS_REJECTED = "rejected"
+
+    STATUS_CHOICES = [
+        (STATUS_ASSIGNED, "Assigned"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_IN_PROGRESS, "In Progress"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_REJECTED, "Rejected"),
+    ]
+
+    PRIORITY_LOW = "low"
+    PRIORITY_MEDIUM = "medium"
+    PRIORITY_HIGH = "high"
+    PRIORITY_EMERGENCY = "emergency"
+
+    PRIORITY_CHOICES = [
+        (PRIORITY_LOW, "Low"),
+        (PRIORITY_MEDIUM, "Medium"),
+        (PRIORITY_HIGH, "High"),
+        (PRIORITY_EMERGENCY, "Emergency"),
+    ]
+
+    organization = models.ForeignKey(
+        "Organization", on_delete=models.CASCADE, related_name="work_orders"
+    )
+    maintenance_request = models.ForeignKey(
+        "MaintenanceRequest", on_delete=models.CASCADE, related_name="work_orders"
+    )
+    vendor = models.ForeignKey("Vendor", on_delete=models.CASCADE, related_name="work_orders")
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default=PRIORITY_MEDIUM)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ASSIGNED)
+
+    scheduled_date = models.DateTimeField(null=True, blank=True)
+    completed_date = models.DateTimeField(null=True, blank=True)
+
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    actual_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    bill = models.ForeignKey(
+        "Bill", on_delete=models.SET_NULL, null=True, blank=True, related_name="work_orders"
+    )
+
+    property = models.ForeignKey(
+        "Property", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    unit = models.ForeignKey(
+        "Unit", on_delete=models.SET_NULL, null=True, blank=True
+    )
+
+    vendor_notes = models.TextField(blank=True, default="")
+    landlord_notes = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"WO-{self.id}: {self.title} ({self.vendor.name})"
+
+
+class WorkOrderNote(models.Model):
+    work_order = models.ForeignKey(
+        WorkOrder, on_delete=models.CASCADE, related_name="notes"
+    )
+    author = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    author_name = models.CharField(max_length=200, blank=True, default="")
+    is_vendor = models.BooleanField(default=False)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Note on WO-{self.work_order_id} by {self.author_name}"
+
+
 class RentLedgerEntry(models.Model):
     TYPE_CHARGE = "charge"
     TYPE_PAYMENT = "payment"
@@ -1589,4 +1869,320 @@ class ReconciliationMatch(models.Model):
             f"ReconciliationMatch #{self.id} (recon={self.reconciliation_id}, "
             f"type={self.match_type})"
         )
+
+
+class Lead(models.Model):
+    SOURCE_LISTING = "listing"
+    SOURCE_ZILLOW = "zillow"
+    SOURCE_APARTMENTS_COM = "apartments_com"
+    SOURCE_REALTOR_COM = "realtor_com"
+    SOURCE_REFERRAL = "referral"
+    SOURCE_WALK_IN = "walk_in"
+    SOURCE_PHONE = "phone"
+    SOURCE_EMAIL = "email"
+    SOURCE_SOCIAL_MEDIA = "social_media"
+    SOURCE_OTHER = "other"
+    SOURCE_CHOICES = [
+        (SOURCE_LISTING, "Listing Page"),
+        (SOURCE_ZILLOW, "Zillow"),
+        (SOURCE_APARTMENTS_COM, "Apartments.com"),
+        (SOURCE_REALTOR_COM, "Realtor.com"),
+        (SOURCE_REFERRAL, "Referral"),
+        (SOURCE_WALK_IN, "Walk-In"),
+        (SOURCE_PHONE, "Phone Call"),
+        (SOURCE_EMAIL, "Email"),
+        (SOURCE_SOCIAL_MEDIA, "Social Media"),
+        (SOURCE_OTHER, "Other"),
+    ]
+
+    STAGE_NEW = "new"
+    STAGE_CONTACTED = "contacted"
+    STAGE_TOUR_SCHEDULED = "tour_scheduled"
+    STAGE_TOUR_COMPLETED = "tour_completed"
+    STAGE_APPLIED = "applied"
+    STAGE_LEASED = "leased"
+    STAGE_LOST = "lost"
+    STAGE_CHOICES = [
+        (STAGE_NEW, "New"),
+        (STAGE_CONTACTED, "Contacted"),
+        (STAGE_TOUR_SCHEDULED, "Tour Scheduled"),
+        (STAGE_TOUR_COMPLETED, "Tour Completed"),
+        (STAGE_APPLIED, "Applied"),
+        (STAGE_LEASED, "Leased"),
+        (STAGE_LOST, "Lost"),
+    ]
+
+    PRIORITY_HOT = "hot"
+    PRIORITY_WARM = "warm"
+    PRIORITY_COLD = "cold"
+    PRIORITY_CHOICES = [
+        (PRIORITY_HOT, "Hot"),
+        (PRIORITY_WARM, "Warm"),
+        (PRIORITY_COLD, "Cold"),
+    ]
+
+    organization = models.ForeignKey("Organization", on_delete=models.CASCADE, related_name="leads")
+
+    # Contact info
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=20, blank=True, default="")
+
+    # Pipeline
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default=SOURCE_LISTING)
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default=STAGE_NEW)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default=PRIORITY_WARM)
+
+    # Interest
+    property = models.ForeignKey(
+        "Property",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="leads",
+    )
+    unit = models.ForeignKey(
+        "Unit",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="leads",
+    )
+    desired_move_in = models.DateField(null=True, blank=True)
+    budget_min = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    budget_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    bedrooms_needed = models.IntegerField(null=True, blank=True)
+
+    # Conversion tracking
+    application = models.ForeignKey(
+        "RentalApplication",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lead",
+    )
+    tenant = models.ForeignKey(
+        "Tenant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lead",
+    )
+
+    # Tour
+    tour_date = models.DateTimeField(null=True, blank=True)
+    tour_notes = models.TextField(blank=True, default="")
+
+    # General
+    notes = models.TextField(blank=True, default="")
+    assigned_to = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_leads",
+    )
+    lost_reason = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_contacted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.stage})"
+
+    @builtin_property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+    @builtin_property
+    def days_in_pipeline(self):
+        return (timezone.now() - self.created_at).days
+
+
+class LeadActivity(models.Model):
+    ACTIVITY_TYPE_NOTE = "note"
+    ACTIVITY_TYPE_EMAIL_SENT = "email_sent"
+    ACTIVITY_TYPE_EMAIL_RECEIVED = "email_received"
+    ACTIVITY_TYPE_PHONE_CALL = "phone_call"
+    ACTIVITY_TYPE_TOUR_SCHEDULED = "tour_scheduled"
+    ACTIVITY_TYPE_TOUR_COMPLETED = "tour_completed"
+    ACTIVITY_TYPE_TOUR_CANCELLED = "tour_cancelled"
+    ACTIVITY_TYPE_STAGE_CHANGE = "stage_change"
+    ACTIVITY_TYPE_APPLICATION_SUBMITTED = "application_submitted"
+    ACTIVITY_TYPE_FOLLOW_UP = "follow_up"
+    ACTIVITY_TYPE_SMS_SENT = "sms_sent"
+    ACTIVITY_TYPE_CHOICES = [
+        (ACTIVITY_TYPE_NOTE, "Note"),
+        (ACTIVITY_TYPE_EMAIL_SENT, "Email Sent"),
+        (ACTIVITY_TYPE_EMAIL_RECEIVED, "Email Received"),
+        (ACTIVITY_TYPE_PHONE_CALL, "Phone Call"),
+        (ACTIVITY_TYPE_TOUR_SCHEDULED, "Tour Scheduled"),
+        (ACTIVITY_TYPE_TOUR_COMPLETED, "Tour Completed"),
+        (ACTIVITY_TYPE_TOUR_CANCELLED, "Tour Cancelled"),
+        (ACTIVITY_TYPE_STAGE_CHANGE, "Stage Changed"),
+        (ACTIVITY_TYPE_APPLICATION_SUBMITTED, "Application Submitted"),
+        (ACTIVITY_TYPE_FOLLOW_UP, "Follow-Up"),
+        (ACTIVITY_TYPE_SMS_SENT, "SMS Sent"),
+    ]
+
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="activities")
+    activity_type = models.CharField(max_length=30, choices=ACTIVITY_TYPE_CHOICES)
+    description = models.TextField()
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # For email/message activities
+    subject = models.CharField(max_length=200, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "Lead activities"
+
+    def __str__(self):
+        return f"{self.activity_type}: {self.description[:50]}"
+
+
+class AgentSkill(models.Model):
+    SKILL_CHOICES = [
+        ("leasing", "Leasing Agent"),
+        ("collections", "Collections Agent"),
+        ("maintenance", "Maintenance Triage"),
+        ("bookkeeping", "Bookkeeping Agent"),
+        ("compliance", "Compliance Monitor"),
+        ("rent_optimizer", "Rent Optimizer"),
+    ]
+
+    STATUS_ACTIVE = "active"
+    STATUS_PAUSED = "paused"
+    STATUS_DISABLED = "disabled"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_PAUSED, "Paused"),
+        (STATUS_DISABLED, "Disabled"),
+    ]
+
+    organization = models.ForeignKey(
+        "Organization", on_delete=models.CASCADE, related_name="agent_skills"
+    )
+    skill_type = models.CharField(max_length=30, choices=SKILL_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    tasks_completed = models.IntegerField(default=0)
+    tasks_pending = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["skill_type"]
+        unique_together = [["organization", "skill_type"]]
+
+    def __str__(self):
+        return f"{self.get_skill_type_display()} ({self.organization.name})"
+
+
+class AgentTask(models.Model):
+    TASK_TYPE_CHOICES = [
+        ("lead_follow_up", "Follow Up With Lead"),
+        ("tour_reminder", "Tour Reminder"),
+        ("application_review", "Review Application"),
+        ("rent_overdue", "Rent Overdue"),
+        ("payment_reminder", "Send Payment Reminder"),
+        ("late_fee_apply", "Apply Late Fee"),
+        ("maintenance_triage", "Triage Maintenance Request"),
+        ("vendor_assignment", "Assign Vendor"),
+        ("work_order_follow_up", "Follow Up on Work Order"),
+        ("categorize_transaction", "Categorize Transaction"),
+        ("reconciliation_needed", "Reconciliation Needed"),
+        ("anomaly_detected", "Anomaly Detected"),
+        ("lease_expiring", "Lease Expiring Soon"),
+        ("insurance_renewal", "Insurance Renewal Due"),
+        ("inspection_due", "Inspection Due"),
+        ("rent_adjustment", "Rent Adjustment Suggested"),
+        ("market_alert", "Market Rate Alert"),
+    ]
+
+    PRIORITY_LOW = "low"
+    PRIORITY_MEDIUM = "medium"
+    PRIORITY_HIGH = "high"
+    PRIORITY_URGENT = "urgent"
+    PRIORITY_CHOICES = [
+        (PRIORITY_LOW, "Low"),
+        (PRIORITY_MEDIUM, "Medium"),
+        (PRIORITY_HIGH, "High"),
+        (PRIORITY_URGENT, "Urgent"),
+    ]
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_DISMISSED = "dismissed"
+    STATUS_AUTO_RESOLVED = "auto_resolved"
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending Review"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_DISMISSED, "Dismissed"),
+        (STATUS_AUTO_RESOLVED, "Auto-Resolved"),
+        (STATUS_IN_PROGRESS, "In Progress"),
+    ]
+
+    organization = models.ForeignKey(
+        "Organization", on_delete=models.CASCADE, related_name="agent_tasks"
+    )
+    skill = models.ForeignKey(AgentSkill, on_delete=models.CASCADE, related_name="tasks")
+
+    task_type = models.CharField(max_length=40, choices=TASK_TYPE_CHOICES)
+    title = models.CharField(max_length=300)
+    description = models.TextField()
+    priority = models.CharField(
+        max_length=10, choices=PRIORITY_CHOICES, default=PRIORITY_MEDIUM
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
+
+    related_tenant = models.ForeignKey(
+        "Tenant", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    related_lease = models.ForeignKey(
+        "Lease", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    related_property = models.ForeignKey(
+        "Property", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    related_unit = models.ForeignKey("Unit", on_delete=models.SET_NULL, null=True, blank=True)
+    related_maintenance = models.ForeignKey(
+        "MaintenanceRequest", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    related_lead = models.ForeignKey("Lead", on_delete=models.SET_NULL, null=True, blank=True)
+    related_bill = models.ForeignKey("Bill", on_delete=models.SET_NULL, null=True, blank=True)
+
+    recommended_action = models.TextField(blank=True, default="")
+    confidence = models.FloatField(
+        default=0.8, help_text="0.0-1.0 confidence score"
+    )
+
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    resolution_note = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.get_task_type_display()}] {self.title}"
 

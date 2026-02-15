@@ -14,6 +14,13 @@ class IsLandlord(BasePermission):
         )
 
 
+class IsVendor(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return hasattr(request.user, "vendor_profile") and request.user.vendor_profile is not None
+
+
 class IsOrgAdmin(BasePermission):
     def has_permission(self, request, view):
         profile = getattr(request.user, "profile", None)

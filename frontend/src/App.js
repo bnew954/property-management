@@ -23,6 +23,7 @@ import LeaseList from "./pages/LeaseList";
 import Login from "./pages/Login";
 import Messages from "./pages/Messages";
 import MyLease from "./pages/MyLease";
+import BillsAndVendors from "./pages/BillsAndVendors";
 import PaymentForm from "./pages/PaymentForm";
 import PaymentsList from "./pages/PaymentsList";
 import PayRent from "./pages/PayRent";
@@ -48,6 +49,9 @@ import MyListings from "./pages/MyListings";
 import UnitForm from "./pages/UnitForm";
 import ListingApply from "./pages/ListingApply";
 import LeaseSigning from "./pages/LeaseSigning";
+import Leads from "./pages/Leads";
+import VendorPortal from "./pages/VendorPortal";
+import VendorRegister from "./pages/VendorRegister";
 import LandingPage from "./pages/LandingPage";
 import ListingsFeature from "./pages/features/ListingsFeature";
 import LeasingFeature from "./pages/features/LeasingFeature";
@@ -240,6 +244,7 @@ function AppContent() {
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/vendor/register/:token" element={<VendorRegister />} />
                 <Route path="/listing/:slug" element={<ListingPublic />} />
                 <Route path="/listing/:slug/apply" element={<ListingApply />} />
                 <Route path="/browse-listings" element={<ListingsIndex />} />
@@ -264,9 +269,11 @@ function AppContent() {
                     </Layout>
                   </ProtectedRoute>
                 }
-              >
+                >
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/vendor-portal/*" element={<VendorPortal />} />
                 <Route path="/welcome" element={<Welcome />} />
+                <Route path="/leads" element={<Leads />} />
                 <Route path="/properties" element={<PropertyList />} />
                 <Route path="/properties/new" element={<PropertyForm />} />
                 <Route path="/properties/:id" element={<PropertyDetail />} />
@@ -277,6 +284,7 @@ function AppContent() {
                 <Route path="/tenants/new" element={<TenantForm />} />
                 <Route path="/tenants/:id/edit" element={<TenantForm />} />
                 <Route path="/listings" element={<MyListings />} />
+                <Route path="/screening" element={<Navigate to="/screenings" replace />} />
                 <Route path="/screenings" element={<ScreeningList />} />
                 <Route path="/screenings/new" element={<ScreeningRequest />} />
                 <Route path="/screenings/:id" element={<ScreeningDetail />} />
@@ -302,6 +310,7 @@ function AppContent() {
                 <Route path="/payments" element={<PaymentsList />} />
                 <Route path="/payments/new" element={<PaymentForm />} />
                 <Route path="/payments/:id/edit" element={<PaymentForm />} />
+                <Route path="/bills" element={<BillsAndVendors />} />
                 <Route path="/accounting" element={<Accounting />} />
                 <Route path="/accounting/ledger/:leaseId" element={<RentLedger />} />
                 <Route path="/accounting/expenses/new" element={<ExpenseForm />} />

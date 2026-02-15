@@ -60,7 +60,18 @@ from .views import (
     BlogPostDetailView,
     BlogPostListView,
 )
+from .bill_views import BillPaymentViewSet, BillViewSet, VendorViewSet
+from .vendor_portal_views import (
+    VendorInviteView,
+    VendorPortalDashboardView,
+    VendorPortalProfileView,
+    VendorPortalWorkOrderViewSet,
+    VendorRegisterView,
+)
+from .workorder_views import WorkOrderViewSet
+from .lead_views import LeadViewSet
 from .ai_views import AiChatView
+from .agent_views import AgentSkillViewSet, AgentTaskViewSet
 
 router = DefaultRouter()
 router.register("properties", PropertyViewSet, basename="property")
@@ -93,11 +104,23 @@ router.register("documents", DocumentViewSet, basename="document")
 router.register("expenses", ExpenseViewSet, basename="expense")
 router.register("rent-ledger", RentLedgerEntryViewSet, basename="rent-ledger")
 router.register("accounting/late-fee-rules", LateFeeRuleViewSet, basename="late-fee-rule")
+router.register("vendors", VendorViewSet, basename="vendor")
+router.register("bills", BillViewSet, basename="bill")
+router.register("bill-payments", BillPaymentViewSet, basename="bill-payment")
+router.register("leads", LeadViewSet, basename="lead")
 router.register(
     "maintenance-requests",
     MaintenanceRequestViewSet,
     basename="maintenance-request",
 )
+router.register("work-orders", WorkOrderViewSet, basename="work-order")
+router.register(
+    "vendor-portal/work-orders",
+    VendorPortalWorkOrderViewSet,
+    basename="vendor-portal-work-order",
+)
+router.register("agent-skills", AgentSkillViewSet, basename="agent-skill")
+router.register("agent-tasks", AgentTaskViewSet, basename="agent-task")
 
 urlpatterns = [
     path(
@@ -231,6 +254,26 @@ urlpatterns = [
         "accounting/owner-statements/generate/",
         GenerateOwnerStatementView.as_view(),
         name="accounting-generate-owner-statement",
+    ),
+    path(
+        "api/vendor-portal/profile/",
+        VendorPortalProfileView.as_view(),
+        name="vendor-portal-profile",
+    ),
+    path(
+        "api/vendor-portal/dashboard/",
+        VendorPortalDashboardView.as_view(),
+        name="vendor-portal-dashboard",
+    ),
+    path(
+        "api/vendors/<int:pk>/invite/",
+        VendorInviteView.as_view(),
+        name="vendor-invite",
+    ),
+    path(
+        "api/vendor/register/<str:token>/",
+        VendorRegisterView.as_view(),
+        name="vendor-register",
     ),
     path("api/ai/chat/", AiChatView.as_view(), name="ai-chat"),
     path("ai/chat/", AiChatView.as_view(), name="ai-chat-nested"),

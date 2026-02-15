@@ -1,5 +1,7 @@
 from django.contrib.auth.models import User
-from django.db.models import Sum
+from django.db.models import Sum, Count
+from django.utils import timezone
+from datetime import timedelta
 from decimal import Decimal
 from rest_framework import serializers
 
@@ -17,6 +19,9 @@ from .models import (
     Tenant,
     Unit,
     UserProfile,
+    Vendor,
+    Bill,
+    BillPayment,
     Document,
     Expense,
     RentLedgerEntry,
@@ -34,7 +39,14 @@ from .models import (
     AccountingPeriod,
     RecurringTransaction,
     BlogPost,
+    Lead,
+    LeadActivity,
+    WorkOrder,
+    WorkOrderNote,
+    AgentSkill,
+    AgentTask,
 )
+from .mixins import resolve_request_organization
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
@@ -437,6 +449,457 @@ class ExpenseSerializer(serializers.ModelSerializer):
         model = Expense
         fields = "__all__"
         read_only_fields = ["created_by", "organization"]
+
+
+class BillPaymentSerializer(serializers.ModelSerializer):
+    bill_vendor_name = serializers.CharField(source="bill.vendor.name", read_only=True)
+    bill_description = serializers.CharField(source="bill.description", read_only=True)
+
+    class Meta:
+        model = BillPayment
+        fields = [
+            "id",
+            "organization",
+            "bill",
+            "bill_vendor_name",
+            "bill_description",
+            "amount",
+            "payment_date",
+            "payment_method",
+            "check_number",
+            "reference",
+            "notes",
+            "journal_entry",
+            "created_at",
+        ]
+        read_only_fields = ["organization", "journal_entry", "bill_vendor_name", "bill_description"]
+
+
+class BillSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source="vendor.name", read_only=True)
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    unit_number = serializers.CharField(source="unit.unit_number", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    payments = BillPaymentSerializer(source="payments", many=True, read_only=True)
+
+    class Meta:
+        model = Bill
+        fields = [
+            "id",
+            "organization",
+            "vendor",
+            "vendor_name",
+            "property",
+            "property_name",
+            "unit",
+            "unit_number",
+            "bill_number",
+            "description",
+            "category",
+            "category_name",
+            "amount",
+            "tax_amount",
+            "total_amount",
+            "amount_paid",
+            "balance_due",
+            "bill_date",
+            "due_date",
+            "status",
+            "is_recurring",
+            "recurring_frequency",
+            "journal_entry",
+            "notes",
+            "created_at",
+            "updated_at",
+            "payments",
+        ]
+        read_only_fields = ["organization", "total_amount", "amount_paid", "balance_due", "updated_at"]
+
+
+class BillListSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source="vendor.name", read_only=True)
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    unit_number = serializers.CharField(source="unit.unit_number", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = Bill
+        fields = [
+            "id",
+            "vendor",
+            "vendor_name",
+            "bill_number",
+            "description",
+            "total_amount",
+            "amount_paid",
+            "balance_due",
+            "bill_date",
+            "due_date",
+            "status",
+            "property_name",
+            "unit_number",
+            "category_name",
+        ]
+
+
+class BillPaymentCreateSerializer(serializers.ModelSerializer):
+    bill = serializers.PrimaryKeyRelatedField(queryset=Bill.objects.all())
+
+    class Meta:
+        model = BillPayment
+        fields = [
+            "bill",
+            "amount",
+            "payment_date",
+            "payment_method",
+            "check_number",
+            "reference",
+            "notes",
+        ]
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+
+    def validate(self, attrs):
+        bill = attrs.get("bill")
+        amount = attrs.get("amount")
+        if bill and bill.balance_due < amount:
+            raise serializers.ValidationError({"amount": "Payment amount exceeds outstanding balance."})
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        organization = resolve_request_organization(request)
+        if not organization:
+            raise serializers.ValidationError("Authenticated user must belong to an organization.")
+        validated_data["organization"] = organization
+        return super().create(validated_data)
+
+
+class BillCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bill
+        fields = [
+            "vendor",
+            "property",
+            "unit",
+            "bill_number",
+            "description",
+            "category",
+            "amount",
+            "tax_amount",
+            "bill_date",
+            "due_date",
+            "is_recurring",
+            "recurring_frequency",
+            "notes",
+        ]
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+
+    def validate(self, attrs):
+        bill_date = attrs.get("bill_date")
+        due_date = attrs.get("due_date")
+        if bill_date and due_date and due_date < bill_date:
+            raise serializers.ValidationError({"due_date": "due_date must be greater than or equal to bill_date."})
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        organization = resolve_request_organization(request)
+        if not organization:
+            raise serializers.ValidationError("Authenticated user must belong to an organization.")
+        bill = Bill(organization=organization, **validated_data)
+        bill.total_amount = bill.amount + bill.tax_amount
+        bill.balance_due = bill.total_amount - bill.amount_paid
+        bill.save()
+        return bill
+
+
+class VendorListSerializer(serializers.ModelSerializer):
+    total_bills = serializers.SerializerMethodField(read_only=True)
+    outstanding_balance = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Vendor
+        fields = [
+            "id",
+            "name",
+            "contact_name",
+            "email",
+            "phone",
+            "category",
+            "is_1099_eligible",
+            "is_active",
+            "total_bills",
+            "outstanding_balance",
+        ]
+        read_only_fields = ["organization"]
+
+    def get_total_bills(self, obj):
+        return obj.bills.count()
+
+    def get_outstanding_balance(self, obj):
+        return obj.bills.filter(status__in=[Bill.STATUS_PENDING, Bill.STATUS_PARTIAL, Bill.STATUS_OVERDUE]).aggregate(
+            total=Sum("balance_due")
+        )["total"] or 0
+
+
+class VendorSerializer(serializers.ModelSerializer):
+    total_bills = serializers.SerializerMethodField(read_only=True)
+    total_paid = serializers.SerializerMethodField(read_only=True)
+    outstanding_balance = serializers.SerializerMethodField(read_only=True)
+    bill_count_by_status = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Vendor
+        fields = [
+            "id",
+            "organization",
+            "name",
+            "contact_name",
+            "email",
+            "phone",
+            "address",
+            "category",
+            "tax_id",
+            "is_1099_eligible",
+            "notes",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "total_bills",
+            "total_paid",
+            "outstanding_balance",
+            "bill_count_by_status",
+        ]
+        read_only_fields = ["organization"]
+
+    def get_total_bills(self, obj):
+        return obj.bills.count()
+
+    def get_total_paid(self, obj):
+        return obj.bills.aggregate(
+            total=Sum("payments__amount")
+        )["total"] or 0
+
+    def get_outstanding_balance(self, obj):
+        return obj.bills.filter(
+            status__in=[Bill.STATUS_PENDING, Bill.STATUS_PARTIAL, Bill.STATUS_OVERDUE]
+        ).aggregate(total=Sum("balance_due"))["total"] or 0
+
+    def get_bill_count_by_status(self, obj):
+        counts = dict(
+            obj.bills.values("status").annotate(count=Count("id")).values_list("status", "count")
+        )
+        return {
+            Bill.STATUS_DRAFT: counts.get(Bill.STATUS_DRAFT, 0),
+            Bill.STATUS_PENDING: counts.get(Bill.STATUS_PENDING, 0),
+            Bill.STATUS_PARTIAL: counts.get(Bill.STATUS_PARTIAL, 0),
+            Bill.STATUS_PAID: counts.get(Bill.STATUS_PAID, 0),
+            Bill.STATUS_OVERDUE: counts.get(Bill.STATUS_OVERDUE, 0),
+            Bill.STATUS_CANCELLED: counts.get(Bill.STATUS_CANCELLED, 0),
+        }
+
+
+class WorkOrderNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkOrderNote
+        fields = [
+            "id",
+            "work_order",
+            "author",
+            "author_name",
+            "is_vendor",
+            "message",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "work_order",
+            "author",
+            "author_name",
+            "is_vendor",
+            "message",
+            "created_at",
+        ]
+
+
+class WorkOrderSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source="vendor.name", read_only=True)
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    unit_number = serializers.CharField(source="unit.unit_number", read_only=True)
+    maintenance_title = serializers.CharField(source="maintenance_request.title", read_only=True)
+    notes = WorkOrderNoteSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = "__all__"
+        read_only_fields = [
+            "vendor_name",
+            "property_name",
+            "unit_number",
+            "maintenance_title",
+            "notes",
+            "id",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class WorkOrderListSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source="vendor.name", read_only=True)
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    unit_number = serializers.CharField(source="unit.unit_number", read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = [
+            "id",
+            "title",
+            "vendor_name",
+            "status",
+            "priority",
+            "property_name",
+            "unit_number",
+            "scheduled_date",
+            "estimated_cost",
+            "actual_cost",
+            "created_at",
+        ]
+
+
+class WorkOrderCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkOrder
+        fields = [
+            "maintenance_request",
+            "vendor",
+            "title",
+            "description",
+            "priority",
+            "scheduled_date",
+            "estimated_cost",
+            "landlord_notes",
+        ]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        maintenance_request = validated_data.get("maintenance_request")
+        if not maintenance_request:
+            raise serializers.ValidationError({"maintenance_request": "maintenance_request is required."})
+        user_profile = getattr(request.user, "profile", None)
+        if user_profile and user_profile.organization_id != maintenance_request.organization_id:
+            raise serializers.ValidationError(
+                {"maintenance_request": "maintenance_request does not belong to your organization."}
+            )
+        validated_data["organization"] = maintenance_request.organization
+        if maintenance_request.unit_id:
+            validated_data["property"] = maintenance_request.unit.property
+            validated_data["unit"] = maintenance_request.unit
+        else:
+            validated_data["property"] = None
+            validated_data["unit"] = None
+        return super().create(validated_data)
+
+
+class VendorWorkOrderSerializer(serializers.ModelSerializer):
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    unit_number = serializers.CharField(source="unit.unit_number", read_only=True)
+    notes = WorkOrderNoteSerializer(source="notes", many=True, read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = [
+            "id",
+            "title",
+            "description",
+            "priority",
+            "status",
+            "property_name",
+            "unit_number",
+            "scheduled_date",
+            "estimated_cost",
+            "actual_cost",
+            "vendor_notes",
+            "landlord_notes",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "title",
+            "description",
+            "priority",
+            "property_name",
+            "unit_number",
+            "scheduled_date",
+            "estimated_cost",
+            "landlord_notes",
+            "notes",
+            "created_at",
+        ]
+
+    def update(self, instance, validated_data):
+        if not validated_data:
+            return instance
+        for field, value in validated_data.items():
+            if field not in {"status", "vendor_notes", "actual_cost"}:
+                raise serializers.ValidationError(
+                    {"fields": "Only status, vendor_notes, and actual_cost can be updated."}
+                )
+            setattr(instance, field, value)
+        instance.save(update_fields=[*validated_data.keys(), "updated_at"])
+        return instance
+
+
+class VendorInvoiceSerializer(serializers.Serializer):
+    work_order = serializers.PrimaryKeyRelatedField(queryset=WorkOrder.objects.all())
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("amount must be greater than 0.")
+        return value
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        work_order = validated_data["work_order"]
+        vendor = request.user.vendor_profile
+        if work_order.vendor_id != vendor.id:
+            raise serializers.ValidationError({"work_order": "You can only submit invoices for your assigned work orders."})
+
+        bill_date = timezone.now().date()
+        amount = validated_data["amount"]
+        description = validated_data.get("description") or f"Work order invoice for {work_order.title}"
+        notes = validated_data.get("notes", "")
+        bill = Bill.objects.create(
+            organization=vendor.organization,
+            vendor=vendor,
+            property=work_order.property,
+            unit=work_order.unit,
+            bill_number=f"WO-{work_order.id}-{bill_date:%Y%m%d}",
+            description=description,
+            amount=amount,
+            tax_amount=Decimal("0.00"),
+            total_amount=amount,
+            amount_paid=Decimal("0.00"),
+            balance_due=amount,
+            bill_date=bill_date,
+            due_date=bill_date + timedelta(days=14),
+            notes=notes,
+            status=Bill.STATUS_PENDING,
+        )
+        work_order.bill = bill
+        work_order.save(update_fields=["bill"])
+        return bill
 
 
 class RentLedgerEntrySerializer(serializers.ModelSerializer):
@@ -1023,4 +1486,229 @@ class OwnerStatementSerializer(serializers.ModelSerializer):
         model = OwnerStatement
         fields = "__all__"
         read_only_fields = ["organization", "generated_at", "generated_by"]
+
+
+class LeadActivitySerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = LeadActivity
+        fields = [
+            "id",
+            "lead",
+            "activity_type",
+            "description",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "subject",
+            "body",
+        ]
+        read_only_fields = ["id", "lead", "created_by", "created_by_name", "created_at"]
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return (obj.created_by.get_full_name() or "").strip() or obj.created_by.username
+
+
+class LeadListSerializer(serializers.ModelSerializer):
+    property_name = serializers.CharField(source="property.name", read_only=True)
+    unit_number = serializers.CharField(source="unit.unit_number", read_only=True)
+    activity_count = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Lead
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "phone",
+            "source",
+            "stage",
+            "priority",
+            "property",
+            "property_name",
+            "unit",
+            "unit_number",
+            "desired_move_in",
+            "tour_date",
+            "days_in_pipeline",
+            "last_contacted_at",
+            "created_at",
+            "activity_count",
+        ]
+        read_only_fields = fields
+
+    def get_activity_count(self, obj):
+        return obj.activities.count()
+
+
+class LeadDetailSerializer(LeadListSerializer):
+    activities = LeadActivitySerializer(many=True, read_only=True)
+
+    class Meta(LeadListSerializer.Meta):
+        fields = LeadListSerializer.Meta.fields + [
+            "budget_min",
+            "budget_max",
+            "bedrooms_needed",
+            "application",
+            "tenant",
+            "tour_notes",
+            "notes",
+            "assigned_to",
+            "lost_reason",
+            "updated_at",
+            "activities",
+        ]
+
+
+class LeadCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lead
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "source",
+            "stage",
+            "priority",
+            "property",
+            "unit",
+            "desired_move_in",
+            "budget_min",
+            "budget_max",
+            "bedrooms_needed",
+            "tour_date",
+            "tour_notes",
+            "notes",
+            "assigned_to",
+        ]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        organization = resolve_request_organization(request)
+        if not organization:
+            raise serializers.ValidationError("Authenticated user must belong to an organization.")
+        validated_data["organization"] = organization
+        return super().create(validated_data)
+
+
+class LeadActivityCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadActivity
+        fields = ["activity_type", "description", "subject", "body"]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        user = request.user if request and request.user and request.user.is_authenticated else None
+        validated_data["created_by"] = user
+        return super().create(validated_data)
+
+
+class AgentSkillSerializer(serializers.ModelSerializer):
+    skill_label = serializers.CharField(source="get_skill_type_display", read_only=True)
+    pending_count = serializers.SerializerMethodField(read_only=True)
+    recent_tasks = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = AgentSkill
+        fields = [
+            "id",
+            "organization",
+            "skill_type",
+            "skill_label",
+            "status",
+            "tasks_completed",
+            "tasks_pending",
+            "last_run_at",
+            "created_at",
+            "pending_count",
+            "recent_tasks",
+        ]
+        read_only_fields = [
+            "id",
+            "skill_label",
+            "pending_count",
+            "recent_tasks",
+            "created_at",
+        ]
+
+    def get_pending_count(self, obj):
+        return obj.tasks.filter(status=AgentTask.STATUS_PENDING).count()
+
+    def get_recent_tasks(self, obj):
+        tasks = obj.tasks.order_by("-created_at")[:3]
+        return AgentTaskListSerializer(tasks, many=True, read_only=True).data
+
+
+class AgentTaskListSerializer(serializers.ModelSerializer):
+    skill = serializers.PrimaryKeyRelatedField(source="skill", read_only=True)
+    skill_type = serializers.CharField(source="skill.skill_type", read_only=True)
+    related_property_name = serializers.CharField(
+        source="related_property.name", read_only=True
+    )
+    related_unit_number = serializers.CharField(
+        source="related_unit.unit_number", read_only=True
+    )
+    related_tenant_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = AgentTask
+        fields = [
+            "id",
+            "task_type",
+            "title",
+            "description",
+            "priority",
+            "status",
+            "confidence",
+            "skill",
+            "skill_type",
+            "related_property_name",
+            "related_unit_number",
+            "related_tenant_name",
+            "recommended_action",
+            "created_at",
+            "expires_at",
+        ]
+
+    def get_related_tenant_name(self, obj):
+        if not obj.related_tenant:
+            return None
+        return f"{obj.related_tenant.first_name} {obj.related_tenant.last_name}".strip()
+
+
+class AgentTaskDetailSerializer(AgentTaskListSerializer):
+    related_property = serializers.PrimaryKeyRelatedField(
+        source="related_property", read_only=True
+    )
+    related_unit = serializers.PrimaryKeyRelatedField(source="related_unit", read_only=True)
+    related_lease = serializers.PrimaryKeyRelatedField(source="related_lease", read_only=True)
+    related_maintenance = serializers.PrimaryKeyRelatedField(
+        source="related_maintenance", read_only=True
+    )
+    related_lead = serializers.PrimaryKeyRelatedField(source="related_lead", read_only=True)
+    related_bill = serializers.PrimaryKeyRelatedField(source="related_bill", read_only=True)
+    resolved_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    full_description = serializers.CharField(source="description", read_only=True)
+
+    class Meta(AgentTaskListSerializer.Meta):
+        fields = AgentTaskListSerializer.Meta.fields + [
+            "organization",
+            "related_property",
+            "related_unit",
+            "related_lease",
+            "related_maintenance",
+            "related_lead",
+            "related_bill",
+            "resolved_at",
+            "resolved_by",
+            "resolution_note",
+            "updated_at",
+            "full_description",
+        ]
 

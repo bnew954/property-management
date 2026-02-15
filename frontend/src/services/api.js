@@ -92,6 +92,30 @@ export const createUnit = (data) => api.post("units/", data);
 export const updateUnit = (id, data) => api.put(`units/${id}/`, data);
 export const deleteUnit = (id) => api.delete(`units/${id}/`);
 
+export const getAgentSkills = () => api.get("agent-skills/");
+export const toggleAgentSkill = (id) => api.post(`agent-skills/${id}/toggle/`);
+export const runAgentSkill = (id) => api.post(`agent-skills/${id}/run/`);
+export const getAgentTasks = (params = {}) => api.get("agent-tasks/", { params });
+export const getAgentTaskFeed = () => api.get("agent-tasks/feed/");
+export const getAgentTaskSummary = () => api.get("agent-tasks/summary/");
+export const previewAgentTask = (id) => api.get(`agent-tasks/${id}/preview/`);
+export const executeAgentTask = (id) => api.post(`agent-tasks/${id}/execute/`);
+export const approveAgentTask = (id, data) => api.post(`agent-tasks/${id}/approve/`, data);
+export const dismissAgentTask = (id, data) => api.post(`agent-tasks/${id}/dismiss/`, data);
+
+export const getLeads = (params = {}) => api.get("leads/", { params });
+export const getLead = (id) => api.get(`leads/${id}/`);
+export const createLead = (data) => api.post("leads/", data);
+export const updateLead = (id, data) => api.patch(`leads/${id}/`, data);
+export const deleteLead = (id) => api.delete(`leads/${id}/`);
+export const addLeadActivity = (id, data) => api.post(`leads/${id}/add_activity/`, data);
+export const scheduleTour = (id, data) => api.post(`leads/${id}/schedule_tour/`, data);
+export const completeTour = (id, data) => api.post(`leads/${id}/complete_tour/`, data);
+export const markLeadLost = (id, data) => api.post(`leads/${id}/mark_lost/`, data);
+export const convertLeadToApplication = (id) => api.post(`leads/${id}/convert_to_application/`);
+export const getLeadSummary = () => api.get("leads/summary/");
+export const getLeadPipeline = () => api.get("leads/pipeline/");
+
 export const getTenants = () => api.get("tenants/");
 export const getTenant = (id) => api.get(`tenants/${id}/`);
 export const createTenant = (data) => api.post("tenants/", data);
@@ -270,6 +294,27 @@ export const confirmStripePayment = (data) =>
   api.post("payments/confirm/", data);
 export const getPaymentHistory = () => api.get("payments/history/");
 
+export const getVendors = () => api.get("/api/vendors/");
+export const getVendor = (id) => api.get(`/api/vendors/${id}/`);
+export const createVendor = (data) => api.post("/api/vendors/", data);
+export const updateVendor = (id, data) => api.patch(`/api/vendors/${id}/`, data);
+export const deleteVendor = (id) => api.delete(`/api/vendors/${id}/`);
+export const inviteVendor = (vendorId) => api.post(`/vendors/${vendorId}/invite/`);
+export const getVendorBills = (id) => api.get(`/api/vendors/${id}/bills/`);
+export const getVendorSummary = () => api.get("/api/vendors/summary/");
+
+export const getBills = (params) => api.get("/api/bills/", { params });
+export const getBill = (id) => api.get(`/api/bills/${id}/`);
+export const createBill = (data) => api.post("/api/bills/", data);
+export const updateBill = (id, data) => api.patch(`/api/bills/${id}/`, data);
+export const deleteBill = (id) => api.delete(`/api/bills/${id}/`);
+export const payBill = (id, data) => api.post(`/api/bills/${id}/pay/`, data);
+export const cancelBill = (id, data) => api.post(`/api/bills/${id}/cancel/`, data);
+export const getBillSummary = () => api.get("/api/bills/summary/");
+export const getBillAging = () => api.get("/api/bills/aging/");
+
+export const getBillPayments = (params) => api.get("/api/bill-payments/", { params });
+
 export const generateLeaseDocument = (id) => api.post(`leases/${id}/generate-document/`);
 export const sendLeaseForSigning = (id) => api.post(`leases/${id}/send-for-signing/`);
 export const landlordSignLease = (id, payload) =>
@@ -289,6 +334,29 @@ export const patchMaintenanceRequest = (id, data) =>
   api.patch(`maintenance-requests/${id}/`, data);
 export const deleteMaintenanceRequest = (id) =>
   api.delete(`maintenance-requests/${id}/`);
+
+export const getWorkOrders = (params = {}) => api.get("work-orders/", { params });
+export const getWorkOrder = (id) => api.get(`work-orders/${id}/`);
+export const createWorkOrder = (data) => api.post("work-orders/", data);
+export const updateWorkOrder = (id, data) => api.patch(`work-orders/${id}/`, data);
+export const deleteWorkOrder = (id) => api.delete(`work-orders/${id}/`);
+export const addWorkOrderNote = (id, data) => api.post(`work-orders/${id}/add_note/`, data);
+export const getWorkOrderSummary = () => api.get("work-orders/summary/");
+
+export const getVendorPortalWorkOrders = () => api.get("vendor-portal/work-orders/");
+export const getVendorPortalWorkOrder = (id) => api.get(`vendor-portal/work-orders/${id}/`);
+export const vendorAcceptWorkOrder = (id) => api.post(`vendor-portal/work-orders/${id}/accept/`);
+export const vendorStartWork = (id) => api.post(`vendor-portal/work-orders/${id}/start_work/`);
+export const vendorCompleteWork = (id, data) => api.post(`vendor-portal/work-orders/${id}/complete/`, data);
+export const vendorRejectWorkOrder = (id, data) => api.post(`vendor-portal/work-orders/${id}/reject/`, data);
+export const updateVendorPortalWorkOrder = (id, data) => api.patch(`vendor-portal/work-orders/${id}/`, data);
+export const vendorAddNote = (id, data) => api.post(`vendor-portal/work-orders/${id}/add_note/`, data);
+export const vendorSubmitInvoice = (id, data) => api.post(`vendor-portal/work-orders/${id}/submit_invoice/`, data);
+export const getVendorPortalProfile = () => api.get("vendor-portal/profile/");
+export const updateVendorPortalProfile = (data) => api.patch("vendor-portal/profile/", data);
+export const getVendorPortalDashboard = () => api.get("vendor-portal/dashboard/");
+
+export const vendorRegister = (token, data) => api.post(`vendor-portal/register/${token}/`, data);
 
 export const getListings = (params = {}) => api.get("listings/", { params });
 export const getListingBySlug = (slug) => api.get(`listings/${slug}/`);

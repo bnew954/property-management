@@ -51,6 +51,7 @@ export function UserProvider({ children }) {
       clearUser,
       organization: user?.organization || null,
       role: user?.role || null,
+      isVendor: user?.vendor_profile !== undefined && user?.vendor_profile !== null,
       isTenant: user?.role === "tenant",
       isLandlord: user?.role === "landlord",
       isOrgAdmin: Boolean(user?.is_org_admin),

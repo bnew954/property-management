@@ -4,6 +4,11 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   Chip,
   CircularProgress,
   Drawer,
@@ -34,9 +39,12 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
+  createWorkOrder,
   deleteMaintenanceRequest,
   getMaintenanceRequests,
   getTenants,
+  getVendors,
+  getWorkOrders,
   patchMaintenanceRequest,
 } from "../services/api";
 import { useUser } from "../services/userContext";
@@ -81,6 +89,20 @@ const statusChipStyles = {
     backgroundColor: "rgba(156,163,175,0.15)",
     color: "#9ca3af",
   },
+};
+
+const parseList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const toInputDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
 };
 
 const toTitle = (value = "") =>
@@ -200,6 +222,19 @@ function MaintenanceList() {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuRequest, setMenuRequest] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [vendors, setVendors] = useState([]);
+  const [requestWorkOrders, setRequestWorkOrders] = useState([]);
+  const [requestWorkOrdersLoading, setRequestWorkOrdersLoading] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assigningWorkOrder, setAssigningWorkOrder] = useState(false);
+  const [assignWorkOrderForm, setAssignWorkOrderForm] = useState({
+    vendor_id: "",
+    title: "",
+    description: "",
+    priority: "medium",
+    scheduled_date: "",
+    estimated_cost: "",
+  });
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -211,13 +246,13 @@ function MaintenanceList() {
           getTenants(),
         ]);
         const tenantId = (tenantsRes.data || [])[0]?.id;
-        return (requestsRes.data || []).filter((item) => {
+        return parseList(requestsRes.data || []).filter((item) => {
           const requestTenantId = item.tenant_detail?.id ?? item.tenant;
           return !tenantId || requestTenantId === tenantId;
         });
       }
 
-      return (await getMaintenanceRequests()).data || [];
+      return parseList((await getMaintenanceRequests()).data);
     } catch (err) {
       setError("Unable to load maintenance requests.");
       return [];
@@ -226,20 +261,142 @@ function MaintenanceList() {
     }
   }, [role]);
 
+  const loadVendors = useCallback(async () => {
+    if (role === "tenant") {
+      return;
+    }
+
+    try {
+      const vendorsRes = await getVendors();
+      setVendors(parseList(vendorsRes.data || []));
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Unable to load vendors for assignment.",
+        severity: "warning",
+      });
+    }
+  }, [role]);
+
+  const loadWorkOrdersForRequest = useCallback(async (requestId) => {
+    if (!requestId || role === "tenant") {
+      setRequestWorkOrders([]);
+      return [];
+    }
+
+    setRequestWorkOrdersLoading(true);
+    try {
+      const workOrdersRes = await getWorkOrders({ maintenance_request: requestId });
+      const workOrdersData = parseList(workOrdersRes.data || []);
+      setRequestWorkOrders(workOrdersData);
+      return workOrdersData;
+    } catch {
+      setRequestWorkOrders([]);
+      setSnackbar({
+        open: true,
+        message: "Unable to load work orders for this request.",
+        severity: "error",
+      });
+      return [];
+    } finally {
+      setRequestWorkOrdersLoading(false);
+    }
+  }, [role]);
+
+  const openAssignWorkOrderDialog = () => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    setAssignWorkOrderForm({
+      vendor_id: "",
+      title: selectedRequest.title || "",
+      description: selectedRequest.description || "",
+      priority: selectedRequest.priority || "medium",
+      scheduled_date: toInputDate(selectedRequest.scheduled_date),
+      estimated_cost: "",
+    });
+    setAssignDialogOpen(true);
+  };
+
+  const closeAssignWorkOrderDialog = () => {
+    setAssignDialogOpen(false);
+    setAssignWorkOrderForm({
+      vendor_id: "",
+      title: "",
+      description: "",
+      priority: "medium",
+      scheduled_date: "",
+      estimated_cost: "",
+    });
+  };
+
+  const handleAssignWorkOrder = async () => {
+    if (!selectedRequest?.id) {
+      return;
+    }
+
+    if (!assignWorkOrderForm.vendor_id) {
+      setSnackbar({
+        open: true,
+        message: "Please select a vendor first.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    setAssigningWorkOrder(true);
+    try {
+      const estimatedCost = Number(assignWorkOrderForm.estimated_cost);
+      const payload = {
+        maintenance_request: selectedRequest.id,
+        vendor: assignWorkOrderForm.vendor_id,
+        title: assignWorkOrderForm.title,
+        description: assignWorkOrderForm.description,
+        priority: assignWorkOrderForm.priority,
+      };
+
+      if (assignWorkOrderForm.scheduled_date) {
+        payload.scheduled_date = assignWorkOrderForm.scheduled_date;
+      }
+      if (Number.isFinite(estimatedCost) && estimatedCost > 0) {
+        payload.estimated_cost = estimatedCost;
+      }
+
+      await createWorkOrder(payload);
+      setSnackbar({ open: true, message: "Work order assigned successfully.", severity: "success" });
+      closeAssignWorkOrderDialog();
+      const refreshedRequests = await loadRequests();
+      setRequests(refreshedRequests);
+      await loadWorkOrdersForRequest(selectedRequest.id);
+    } catch {
+      setSnackbar({ open: true, message: "Unable to assign work order.", severity: "error" });
+    } finally {
+      setAssigningWorkOrder(false);
+    }
+  };
+
   const openDrawer = (request) => {
     setSelectedRequest(request);
     setDrawerOpen(true);
+    if (role !== "tenant") {
+      loadWorkOrdersForRequest(request?.id);
+    }
   };
 
   const closeDrawer = () => {
     setDrawerOpen(false);
     setSelectedRequest(null);
+    setRequestWorkOrders([]);
   };
   const loadAndSetRequests = useCallback(async () => {
     const data = await loadRequests();
+    if (role !== "tenant") {
+      await loadVendors();
+    }
     setRequests(data);
     return data;
-  }, [loadRequests]);
+  }, [loadRequests, loadVendors, role]);
 
   const handleDelete = async (requestId) => {
     try {
@@ -250,6 +407,7 @@ function MaintenanceList() {
       if (selectedRequest && selectedRequest.id === requestId) {
         setSelectedRequest(null);
         setDrawerOpen(false);
+        setRequestWorkOrders([]);
       }
     } catch {
       setSnackbar({ open: true, message: "Failed to delete maintenance request.", severity: "error" });
@@ -398,11 +556,15 @@ function MaintenanceList() {
       const data = await loadAndSetRequests();
       setSelectedRequest((current) => {
         if (!current) return current;
-        return data.find((item) => item.id === current.id) || current;
+        const refreshed = data.find((item) => item.id === current.id);
+        if (refreshed && role !== "tenant") {
+          loadWorkOrdersForRequest(refreshed.id);
+        }
+        return refreshed || current;
       });
     };
     load();
-  }, [loadAndSetRequests]);
+  }, [loadAndSetRequests, loadWorkOrdersForRequest, role]);
 
   useEffect(() => {
     if (location.state?.snackbar?.message) {
@@ -923,16 +1085,104 @@ function MaintenanceList() {
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.8 }}>
                 Date Completed
               </Typography>
-              <Typography sx={{ color: "text.primary" }}>
-                {selectedRequest.status === "completed"
-                  ? formatDate(selectedRequest.updated_at || selectedRequest.created_at)
-                  : "Pending"}
-              </Typography>
-            </Box>
+            <Typography sx={{ color: "text.primary" }}>
+              {selectedRequest.status === "completed"
+                ? formatDate(selectedRequest.updated_at || selectedRequest.created_at)
+                : "Pending"}
+            </Typography>
+          </Box>
 
-            <Box sx={{ p: 3, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <Typography sx={{ color: "text.primary", fontWeight: 600, mb: 2 }}>
-                Status Timeline
+          <Divider />
+          <Box sx={{ p: 3, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.6 }}>
+              <Typography sx={{ color: "text.primary", fontWeight: 600 }}>Work Orders</Typography>
+              {role === "tenant" ? null : (
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={openAssignWorkOrderDialog}
+                  startIcon={<AddRoundedIcon sx={{ fontSize: 16 }} />}
+                >
+                  + Assign Vendor
+                </Button>
+              )}
+            </Stack>
+
+            {requestWorkOrdersLoading ? <CircularProgress size={20} /> : null}
+
+            {!requestWorkOrdersLoading && requestWorkOrders.length === 0 ? (
+              <Typography sx={{ color: "text.secondary" }}>No assigned work orders yet.</Typography>
+            ) : null}
+
+            {requestWorkOrders.map((order) => {
+              const priorityStyles =
+                priorityChipStyles[order.priority] || {
+                  backgroundColor: "rgba(148,163,184,0.16)",
+                  color: "#9ca3af",
+                };
+              const statusStyles =
+                statusChipStyles[order.status] || {
+                  backgroundColor: "rgba(148,163,184,0.16)",
+                  color: "#9ca3af",
+                };
+
+              return (
+                <Paper
+                  key={order.id}
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mb: 1.6,
+                    borderRadius: "12px",
+                    backgroundColor: "rgba(255,255,255,0.02)",
+                    borderColor: "rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ mb: 0.8, alignItems: "center", flexWrap: "wrap" }}>
+                    <Typography sx={{ color: "white", fontWeight: 700 }}>{order.title || "Work Order"}</Typography>
+                    <Chip
+                      size="small"
+                      label={(order.priority || "low").toUpperCase()}
+                      sx={{
+                        ...priorityStyles,
+                        textTransform: "capitalize",
+                        fontWeight: 500,
+                        fontSize: "11px",
+                        height: 22,
+                      }}
+                    />
+                    <Chip
+                      size="small"
+                      label={order.status || "Unknown"}
+                      sx={{
+                        ...statusStyles,
+                        textTransform: "capitalize",
+                        fontWeight: 500,
+                        fontSize: "11px",
+                        height: 22,
+                      }}
+                    />
+                  </Stack>
+                  <Typography sx={{ color: "rgba(255,255,255,0.72)", fontSize: 13 }}>
+                    {order.description || "No description provided."}
+                  </Typography>
+                  <Typography sx={{ color: "text.secondary", mt: 1, fontSize: 12 }}>
+                    Vendor: {order.vendor_name || "Unassigned"}
+                  </Typography>
+                  <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
+                    Scheduled: {formatDate(order.scheduled_date)}
+                  </Typography>
+                  <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
+                    Estimated cost: {order.estimated_cost ? `$${order.estimated_cost}` : "—"}
+                  </Typography>
+                </Paper>
+              );
+            })}
+          </Box>
+
+          <Box sx={{ p: 3, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <Typography sx={{ color: "text.primary", fontWeight: 600, mb: 2 }}>
+              Status Timeline
               </Typography>
               <Box sx={{ position: "relative", pl: 2.8 }}>
                 <Box
@@ -1109,6 +1359,76 @@ function MaintenanceList() {
           </Box>
         ) : null}
       </Drawer>
+
+      <Dialog open={assignDialogOpen} onClose={closeAssignWorkOrderDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Assign Vendor</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              select
+              fullWidth
+              label="Vendor"
+              value={assignWorkOrderForm.vendor_id}
+              onChange={(event) => setAssignWorkOrderForm((previous) => ({ ...previous, vendor_id: event.target.value }))}
+            >
+              <MenuItem value="">Select vendor</MenuItem>
+              {vendors.map((vendor) => (
+                <MenuItem key={vendor.id} value={vendor.id}>
+                  {vendor.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              fullWidth
+              label="Title"
+              value={assignWorkOrderForm.title}
+              onChange={(event) => setAssignWorkOrderForm((previous) => ({ ...previous, title: event.target.value }))}
+            />
+            <TextField
+              fullWidth
+              label="Description"
+              multiline
+              minRows={3}
+              value={assignWorkOrderForm.description}
+              onChange={(event) => setAssignWorkOrderForm((previous) => ({ ...previous, description: event.target.value }))}
+            />
+            <TextField
+              select
+              fullWidth
+              label="Priority"
+              value={assignWorkOrderForm.priority}
+              onChange={(event) => setAssignWorkOrderForm((previous) => ({ ...previous, priority: event.target.value }))}
+            >
+              <MenuItem value="low">Low</MenuItem>
+              <MenuItem value="medium">Medium</MenuItem>
+              <MenuItem value="high">High</MenuItem>
+              <MenuItem value="emergency">Emergency</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              type="date"
+              label="Scheduled Date"
+              value={assignWorkOrderForm.scheduled_date}
+              onChange={(event) => setAssignWorkOrderForm((previous) => ({ ...previous, scheduled_date: event.target.value }))}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              fullWidth
+              type="number"
+              label="Estimated Cost"
+              value={assignWorkOrderForm.estimated_cost}
+              onChange={(event) => setAssignWorkOrderForm((previous) => ({ ...previous, estimated_cost: event.target.value }))}
+              inputProps={{ min: 0, step: 0.01 }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeAssignWorkOrderDialog}>Cancel</Button>
+          <Button onClick={handleAssignWorkOrder} variant="contained" disabled={assigningWorkOrder}>
+            Assign
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}

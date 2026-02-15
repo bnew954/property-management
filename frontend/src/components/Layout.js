@@ -1,6 +1,4 @@
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import ApartmentIcon from "@mui/icons-material/Apartment";
-import AssignmentIcon from "@mui/icons-material/Assignment";
 import BuildIcon from "@mui/icons-material/Build";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -10,16 +8,22 @@ import KeyIcon from "@mui/icons-material/Key";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import GavelIcon from "@mui/icons-material/Gavel";
+import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
+import ShareIcon from "@mui/icons-material/Share";
 import FolderIcon from "@mui/icons-material/Folder";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaymentIcon from "@mui/icons-material/Payment";
 import PeopleIcon from "@mui/icons-material/People";
+import Receipt from "@mui/icons-material/Receipt";
+import Person from "@mui/icons-material/Person";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import {
   Avatar,
+  Chip,
   Box,
   Collapse,
   Divider,
@@ -117,15 +121,23 @@ const tenantNavItems = [
 
 const landlordGroups = [
   {
-    key: "leasing",
-    label: "Leasing",
+    key: "marketing",
+    label: "Marketing",
     headerIcon: <KeyIcon />,
     items: [
       { label: "Listings", path: "/listings", icon: <HomeWorkIcon /> },
-      { label: "Applications", path: "/applications", icon: <AssignmentIcon /> },
-      { label: "Screening", path: "/screenings", icon: <VerifiedUserIcon /> },
-      { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
-      { label: "Leases", path: "/leases", icon: <DescriptionIcon /> },
+      { label: "Syndication", path: "/syndication", icon: <ShareIcon />, comingSoon: true },
+      { label: "Leads", path: "/leads", icon: <PeopleOutlineIcon /> },
+    ],
+  },
+  {
+    key: "leasingPipeline",
+      label: "Leasing",
+    headerIcon: <KeyIcon />,
+    items: [
+      { label: "Applications", path: "/applications", icon: <DescriptionIcon /> },
+      { label: "Screening", path: "/screening", icon: <VerifiedUserIcon /> },
+      { label: "Leases", path: "/leases", icon: <GavelIcon /> },
     ],
   },
   {
@@ -133,7 +145,7 @@ const landlordGroups = [
     label: "Operations",
     headerIcon: <SettingsSuggestIcon />,
     items: [
-      { label: "Properties", path: "/properties", icon: <ApartmentIcon /> },
+      { label: "Tenants", path: "/tenants", icon: <PeopleIcon /> },
       { label: "Maintenance", path: "/maintenance", icon: <BuildIcon /> },
       { label: "Documents", path: "/documents", icon: <FolderIcon /> },
       { label: "Messages", path: "/messages", icon: <ChatBubbleOutlineIcon /> },
@@ -145,21 +157,40 @@ const landlordGroups = [
     headerIcon: <CurrencyExchangeIcon />,
     items: [
       { label: "Payments", path: "/payments", icon: <PaymentIcon /> },
+      { label: "Bills & Vendors", path: "/bills", icon: <Receipt /> },
       { label: "Accounting", path: "/accounting", icon: <AccountBalanceIcon /> },
     ],
   },
 ];
 
+const getSectionTitle = (pathname) => {
+  if (pathname.startsWith("/vendor-portal")) return "Vendor Portal";
+  const marketing = ["/listings", "/syndication", "/leads"];
+  const leasing = ["/applications", "/screening", "/leases"];
+  const operations = ["/tenants", "/maintenance", "/documents", "/messages"];
+  const finance = ["/payments", "/bills", "/accounting"];
+
+  if (pathname === "/dashboard") return "Dashboard";
+  if (marketing.some((path) => pathname.startsWith(path))) return "Marketing";
+  if (leasing.some((path) => pathname.startsWith(path))) return "Leasing";
+  if (operations.some((path) => pathname.startsWith(path))) return "Operations";
+  if (finance.some((path) => pathname.startsWith(path))) return "Finance";
+  if (pathname.startsWith("/properties")) return "Properties";
+  if (pathname.startsWith("/settings")) return "Settings";
+  return "";
+};
+
 function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, toggleTheme } = useThemeMode();
-  const { role, user, clearUser, organization } = useUser();
+  const { role, user, clearUser, organization, isVendor } = useUser();
   const isDark = mode === "dark";
   const theme = useTheme();
   const [expandedGroups, setExpandedGroups] = useState(() => {
     const initial = {
-      leasing: false,
+      marketing: false,
+      leasingPipeline: false,
       operations: false,
       finance: false,
     };
@@ -181,24 +212,7 @@ function Layout({ children }) {
     return location.pathname.startsWith(path);
   };
 
-  const pageTitle = (() => {
-    if (location.pathname.startsWith("/dashboard")) return "Dashboard";
-    if (location.pathname.startsWith("/properties")) return "Properties";
-    if (location.pathname.startsWith("/tenants")) return "Tenants";
-    if (location.pathname.startsWith("/screenings")) return "Screening";
-    if (location.pathname.startsWith("/leases")) return "Leases";
-    if (location.pathname.startsWith("/payments")) return "Payments";
-    if (location.pathname.startsWith("/accounting")) return "Accounting";
-    if (location.pathname.startsWith("/pay-rent")) return "Pay Rent";
-    if (location.pathname.startsWith("/my-lease")) return "My Lease";
-    if (location.pathname.startsWith("/maintenance")) return "Maintenance";
-    if (location.pathname.startsWith("/listings")) return "Listings";
-    if (location.pathname.startsWith("/applications")) return "Applications";
-    if (location.pathname.startsWith("/documents")) return "Documents";
-    if (location.pathname.startsWith("/templates")) return "Templates";
-    if (location.pathname.startsWith("/messages")) return "Messages";
-    return "Onyx";
-  })();
+  const pageTitle = getSectionTitle(location.pathname);
 
   const toggleGroup = (key) => {
     setExpandedGroups((current) => ({
@@ -258,6 +272,77 @@ function Layout({ children }) {
     lineHeight: 1.2,
   };
 
+  const renderGroupNavItem = (item) => {
+    const isComingSoon = !!item.comingSoon;
+    const active = isComingSoon ? false : isActive(item.path);
+    const mutedColor = "rgba(255,255,255,0.25)";
+
+    return (
+      <ListItem key={item.path} disablePadding sx={{ px: 0, py: 0 }}>
+        <ListItemButton
+          {...(!isComingSoon ? { component: Link, to: item.path } : { component: "div", disableRipple: true })}
+          sx={{
+            ...navItemSx(active),
+            pl: "40px",
+            ...(isComingSoon
+              ? {
+                  cursor: "default",
+                  "& .MuiListItemIcon-root": { color: mutedColor },
+                  "& .MuiTypography-root": { color: mutedColor },
+                  "&:hover": {
+                    backgroundColor: "transparent",
+                    "& .MuiListItemIcon-root": { color: mutedColor },
+                    "& .MuiTypography-root": { color: mutedColor },
+                  },
+                }
+              : {}),
+          }}
+        >
+          <ListItemIcon
+            sx={{
+              color: active ? "text.primary" : isComingSoon ? mutedColor : "text.secondary",
+              minWidth: 24,
+              "& svg": { fontSize: 24 },
+            }}
+          >
+            {item.icon}
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
+                <Typography
+                  sx={{
+                    ...subItemTextTypographyProps,
+                    color: isComingSoon ? mutedColor : active ? "#fff" : "#878C9E",
+                    fontWeight: active ? 500 : 400,
+                  }}
+                >
+                  {item.label}
+                </Typography>
+                {isComingSoon && (
+                  <Chip
+                    size="small"
+                    label="Soon"
+                    sx={{
+                      ml: 1,
+                      height: 16,
+                      "& .MuiChip-label": {
+                        px: 0.75,
+                        fontSize: "0.55rem",
+                      },
+                      backgroundColor: "rgba(124,92,252,0.15)",
+                      color: "#7C5CFC",
+                    }}
+                  />
+                )}
+              </Box>
+            }
+          />
+        </ListItemButton>
+      </ListItem>
+    );
+  };
+
   const renderNavItem = (item) => {
     const active = isActive(item.path);
     return (
@@ -284,10 +369,39 @@ function Layout({ children }) {
     );
   };
 
-  const userRoleText = role === "tenant" ? "Tenant" : "Landlord";
+  const renderVendorNavItem = (path, Icon, label) => {
+    const active = isActive(path);
+    return (
+      <ListItem disablePadding sx={{ px: 0, py: 0 }}>
+        <ListItemButton onClick={() => navigate(path)} sx={navItemSx(active)}>
+          <ListItemIcon
+            sx={{
+              color: active ? "text.primary" : "text.secondary",
+              minWidth: 24,
+              "& svg": { fontSize: 24 },
+            }}
+          >
+            {Icon}
+          </ListItemIcon>
+          <ListItemText
+            primary={label}
+            primaryTypographyProps={{
+              ...navTextTypographyProps,
+              color: active ? "text.primary" : "text.secondary",
+            }}
+          />
+        </ListItemButton>
+      </ListItem>
+    );
+  };
+
+  const vendorName = user?.vendor_profile?.name || user?.vendor_profile?.vendor_name || "";
+  const userRoleText = isVendor ? "Vendor" : role === "tenant" ? "Tenant" : "Landlord";
   const firstName = (user?.first_name || "").trim();
   const fullName = firstName ? `${firstName} ${user?.last_name || ""}`.trim() : user?.username || "User";
-  const orgName = organization?.name || "";
+  const orgName = isVendor
+    ? `${vendorName ? `${vendorName} ` : ""}Vendor Portal`
+    : organization?.name || "";
 
   return (
     <Box
@@ -335,12 +449,21 @@ function Layout({ children }) {
           </Toolbar>
           <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
             <List sx={{ py: 0, minHeight: 0 }}>
-              {role === "tenant"
-                ? [topNavItems[0], ...tenantNavItems].map((item) => renderNavItem(item))
-                : [topNavItems[0]].map((item) => renderNavItem(item))}
+              {isVendor
+                ? (
+                  <>
+                    {renderVendorNavItem("/vendor-portal", <DashboardIcon />, "Dashboard")}
+                    {renderVendorNavItem("/vendor-portal/work-orders", <BuildIcon />, "Work Orders")}
+                    {renderVendorNavItem("/vendor-portal/invoices", <Receipt />, "Invoices")}
+                    {renderVendorNavItem("/vendor-portal/profile", <Person />, "Profile")}
+                  </>
+                )
+                : role === "tenant"
+                  ? [topNavItems[0], ...tenantNavItems].map((item) => renderNavItem(item))
+                  : [topNavItems[0]].map((item) => renderNavItem(item))}
             </List>
 
-            {role === "tenant" ? null : (
+            {role === "tenant" || isVendor ? null : (
               <>
                 {landlordGroups.map((group) => {
                 const isExpanded = expandedGroups[group.key];
@@ -377,36 +500,7 @@ function Layout({ children }) {
                       </ListItem>
                       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                         <List disablePadding>
-                          {group.items.map((item) => {
-                            const active = isActive(item.path);
-                            return (
-                              <ListItem key={item.path} disablePadding sx={{ px: 0, py: 0 }}>
-                                <ListItemButton
-                                  component={Link}
-                                  to={item.path}
-                                  sx={{ ...navItemSx(active), pl: "40px" }}
-                                >
-                                  <ListItemIcon
-                                    sx={{
-                                      color: active ? "text.primary" : "text.secondary",
-                                      minWidth: 24,
-                                      "& svg": { fontSize: 24 },
-                                    }}
-                                  >
-                                    {item.icon}
-                                  </ListItemIcon>
-                                  <ListItemText
-                                    primary={item.label}
-                                    primaryTypographyProps={{
-                                      ...subItemTextTypographyProps,
-                                      color: active ? "#fff" : "#878C9E",
-                                      fontWeight: active ? 500 : 400,
-                                    }}
-                                  />
-                                </ListItemButton>
-                              </ListItem>
-                            );
-                          })}
+                          {group.items.map((item) => renderGroupNavItem(item))}
                         </List>
                       </Collapse>
                     </List>
