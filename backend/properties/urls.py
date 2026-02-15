@@ -58,6 +58,7 @@ from .views import (
     ClassificationRuleViewSet,
     BankReconciliationViewSet,
 )
+from .ai_views import AiChatView
 
 router = DefaultRouter()
 router.register("properties", PropertyViewSet, basename="property")
@@ -209,6 +210,8 @@ urlpatterns = [
         GenerateOwnerStatementView.as_view(),
         name="accounting-generate-owner-statement",
     ),
+    path("api/ai/chat/", AiChatView.as_view(), name="ai-chat"),
+    path("ai/chat/", AiChatView.as_view(), name="ai-chat-nested"),
 ]
 router.register("applications", RentalApplicationViewSet, basename="rental-application")
 urlpatterns += router.urls
